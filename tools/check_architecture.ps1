@@ -65,7 +65,7 @@ Write-Host "============================================================" -Foreg
 $BASELINES = @{
     GlobalsIncluders        = 19
     GlobalsExterns          = 91
-    MainLines               = 2758
+    MainLines               = 235
     SettingsLines           = 4405
     LayerViolations         = 32
     GlobalsCrossLayerHeader = 0

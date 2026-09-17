@@ -104,10 +104,6 @@ constexpr float kHudWaveWidth = 52.0f;
 constexpr float kHudGap = 14.0f;
 constexpr float kHudRightPad = 22.0f;
 constexpr float kHudTextSlack = 18.0f;
-constexpr float kStreamingPartialHudMaxWidthDip = 900.0f;
-constexpr float kStreamingPartialHudMaxScreenFraction = 0.75f;
-constexpr int kStreamingPartialHudMaxLines = 4;
-constexpr size_t kStreamingPartialHudTailChars = 132;
 
 namespace UiStyle {
 constexpr int SettingsWindowW = 850;

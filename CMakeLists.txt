@@ -34,6 +34,10 @@ set(OPUS_DIR "${CMAKE_SOURCE_DIR}/third_party/opus")
 
 add_executable(VoxType WIN32
     src/app/main.cpp
+    src/app/main_window.cpp
+    src/app/recording_session_controller.cpp
+    src/app/asr_attempt_manager.cpp
+    src/ui/hud_pagination.cpp
     src/app/resources.rc
     src/core/path_service.cpp
     src/core/debug_logger.cpp
@@ -235,6 +239,22 @@ set_target_properties(asr_json_protocol_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
 add_test(NAME asr_json_protocol_test COMMAND asr_json_protocol_test)
+
+add_executable(hud_pagination_test
+    tests/hud_pagination_test.cpp
+    src/ui/hud_pagination.cpp
+)
+target_include_directories(hud_pagination_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/ui"
+    "${CMAKE_SOURCE_DIR}/src/core"
+)
+if(MSVC)
+    target_compile_options(hud_pagination_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(hud_pagination_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME hud_pagination_test COMMAND hud_pagination_test)
 
 # Developer-only diagnostic replay utility. It reuses the production ASR
 # sessions but remains outside the canonical runtime payload and normal build.
