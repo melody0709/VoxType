@@ -406,7 +406,7 @@ void WasapiCapture::CaptureThread() {
                             floatBuf[i] = static_cast<float>(out[i]) / 32768.0f;
 
                         IVadDetector* vad = GetActiveVadDetector();
-                        bool hasVoice = vad ? vad->DetectSpeech(floatBuf.data(), floatBuf.size(), g_config.vadModel) : false;
+                        bool hasVoice = vad ? vad->DetectSpeech(floatBuf, g_config.vadModel) : false;
                         if (hasVoice) g_vadDetectedVoice.store(true);
                     }
 

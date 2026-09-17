@@ -42,7 +42,7 @@ public:
     VadResult ApplyVad(const std::vector<float>& samples, const Config& config, int threads);
     bool EnsureVadForConfig(const Config& config, int threads) override;
     void ResetVad(const std::wstring& vadModel) override;
-    bool DetectSpeech(const float* samples, size_t count, const std::wstring& vadModel) override;
+    bool DetectSpeech(std::span<const float> samples, const std::wstring& vadModel) override;
     std::wstring Recognize(const std::vector<float>& samples, int sampleRate, const Config& config);
     void Reload();
 

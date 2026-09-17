@@ -66,7 +66,7 @@ bool StreamingVadTrimmer::DetectVoice(const int16_t* samples, size_t sampleCount
         floatBuf[i] = static_cast<float>(samples[i]) / 32768.0f;
     }
 
-    return engine_->DetectSpeech(floatBuf.data(), floatBuf.size(), vadModel_);
+    return engine_->DetectSpeech(floatBuf, vadModel_);
 }
 
 void StreamingVadTrimmer::ProcessPcm16(const BYTE* data, size_t bytes, std::vector<std::vector<BYTE>>& outputs) {

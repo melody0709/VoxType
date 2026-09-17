@@ -12,6 +12,7 @@
 #include "utils.h"
 #include <atomic>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -31,7 +32,10 @@ struct AudioCaptureStartFailure {
     bool nativeIsFloat = false;
 };
 
-float CalculateAudioLevel(const BYTE* data, DWORD bytes);
+float CalculateAudioLevel(std::span<const BYTE> data);
+inline float CalculateAudioLevel(const BYTE* data, DWORD bytes) {
+    return data ? CalculateAudioLevel(std::span<const BYTE>(data, bytes)) : 0.0f;
+}
 void CALLBACK WaveInProc(HWAVEIN waveIn, UINT msg, DWORD_PTR, DWORD_PTR param1, DWORD_PTR);
 bool StartAudioCapture(std::wstring& error, AudioCaptureStartFailure* failure = nullptr);
 std::vector<BYTE> StopAudioCapture();

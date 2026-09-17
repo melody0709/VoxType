@@ -124,10 +124,9 @@ VadResult AsrEngine::ApplyVad(const std::vector<float>& samples, const Config& c
     if (config.vadModel == L"firered") {
         if (!EnsureFireRedVad(config)) return result;
         fireRedVad->Reset();
-        int nSamples = static_cast<int>(samples.size());
-        fireRedVad->Process(samples.data(), nSamples);
+        fireRedVad->Process(samples);
         fireRedVad->Flush();
-        auto concat = fireRedVad->GetConcatenatedSamples(samples.data(), nSamples);
+        auto concat = fireRedVad->GetConcatenatedSamples(samples);
         if (!concat.empty()) {
             result.hasSpeech = true;
             result.samples = std::move(concat);
@@ -166,16 +165,16 @@ void AsrEngine::ResetVad(const std::wstring& vadModel) {
     }
 }
 
-bool AsrEngine::DetectSpeech(const float* samples, size_t count, const std::wstring& vadModel) {
-    if (!samples || count == 0) return false;
+bool AsrEngine::DetectSpeech(std::span<const float> samples, const std::wstring& vadModel) {
+    if (samples.empty()) return false;
     std::lock_guard<std::mutex> lk(lock_);
     if (vadModel == L"firered") {
         if (!fireRedVad) return false;
-        fireRedVad->Process(samples, static_cast<int>(count));
+        fireRedVad->Process(samples);
         return fireRedVad->IsInSpeech();
     } else {
         if (!vad) return false;
-        vad->AcceptWaveform(samples, static_cast<int32_t>(count));
+        vad->AcceptWaveform(samples.data(), static_cast<int32_t>(samples.size()));
         return vad->IsDetected();
     }
 }

@@ -535,7 +535,7 @@ void StartRecordingSession() {
                     floatBuf[i] = static_cast<float>(pcm16[i]) / 32768.0f;
                 }
                 if (attemptConfig.vadModel == L"firered") {
-                    g_asrEngine.fireRedVad->Process(floatBuf.data(), static_cast<int>(floatBuf.size()));
+                    g_asrEngine.fireRedVad->Process(floatBuf);
                 } else {
                     g_asrEngine.vad->AcceptWaveform(floatBuf.data(), static_cast<int32_t>(floatBuf.size()));
                 }
@@ -687,7 +687,7 @@ void StopRecordingSession() {
         if (recordingConfig.vadModel == L"firered") {
             g_asrEngine.fireRedVad->Flush();
             auto samples = PcmToFloat(pcm);
-            auto concat = g_asrEngine.fireRedVad->GetConcatenatedSamples(samples.data(), static_cast<int>(samples.size()));
+            auto concat = g_asrEngine.fireRedVad->GetConcatenatedSamples(samples);
             if (!concat.empty()) {
                 g_streamingVadSamples = std::move(concat);
             }

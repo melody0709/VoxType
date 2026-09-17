@@ -46,11 +46,11 @@ void SetActiveVadDetector(IVadDetector* detector) {
     s_activeVadDetector.store(detector, std::memory_order_release);
 }
 
-float CalculateAudioLevel(const BYTE* data, DWORD bytes) {
-    if (!data || bytes < sizeof(int16_t)) return 0.0f;
+float CalculateAudioLevel(std::span<const BYTE> data) {
+    if (data.size() < sizeof(int16_t)) return 0.0f;
 
-    const auto* samples = reinterpret_cast<const int16_t*>(data);
-    const size_t count = bytes / sizeof(int16_t);
+    const auto* samples = reinterpret_cast<const int16_t*>(data.data());
+    const size_t count = data.size() / sizeof(int16_t);
     double sum = 0.0;
     for (size_t i = 0; i < count; ++i) {
         const double v = static_cast<double>(samples[i]) / 32768.0;
@@ -72,7 +72,7 @@ void CALLBACK WaveInProc(HWAVEIN waveIn, UINT msg, DWORD_PTR, DWORD_PTR param1, 
         !g_captureSuppressed.load(std::memory_order_acquire)) {
         const BYTE* begin = reinterpret_cast<const BYTE*>(header->lpData);
         audio_diagnostics::RecordWaveInPcm16(begin, header->dwBytesRecorded);
-        g_audioLevel.store(CalculateAudioLevel(begin, header->dwBytesRecorded));
+        g_audioLevel.store(CalculateAudioLevel(std::span<const BYTE>(begin, header->dwBytesRecorded)));
 
         EnterCriticalSection(&g_audioLock);
         if (!g_captureSuppressed.load(std::memory_order_acquire)) {

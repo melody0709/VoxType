@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 #include <algorithm>
+#include <span>
 
 #include "onnxruntime_cxx_api.h"
 #include "kaldi-native-fbank/csrc/online-feature.h"
@@ -304,12 +305,13 @@ public:
         anySpeechSeen_ = false;
     }
 
-    void Process(const float* samples, int nSamples) {
+    void Process(std::span<const float> samples) {
+        const size_t nSamples = samples.size();
         scaledBuf_.resize(nSamples);
-        for (int i = 0; i < nSamples; i++)
+        for (size_t i = 0; i < nSamples; i++)
             scaledBuf_[i] = samples[i] * 32768.0f;
 
-        fbank_->AcceptWaveform(kSampleRate, scaledBuf_.data(), nSamples);
+        fbank_->AcceptWaveform(kSampleRate, scaledBuf_.data(), static_cast<int>(nSamples));
 
         int nReady = fbank_->NumFramesReady();
         while (fbankFrame_ < nReady) {
@@ -335,15 +337,16 @@ public:
         postprocessor_->Flush();
     }
 
-    std::vector<float> GetConcatenatedSamples(const float* samples, int nSamples) const {
+    std::vector<float> GetConcatenatedSamples(std::span<const float> samples) const {
         std::vector<float> out;
         if (postprocessor_->segments.empty()) return out;
 
+        const int nSamples = static_cast<int>(samples.size());
         for (auto& seg : postprocessor_->segments) {
             int startSample = std::max(0, seg.first * kFrameShift);
             int endSample = std::min(nSamples, (seg.second + 1) * kFrameShift);
             if (endSample > startSample) {
-                out.insert(out.end(), samples + startSample, samples + endSample);
+                out.insert(out.end(), samples.begin() + startSample, samples.begin() + endSample);
             }
         }
         return out;

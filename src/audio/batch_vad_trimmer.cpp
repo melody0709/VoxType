@@ -23,7 +23,7 @@ bool DetectVoice(const Config& config,
         floatBuf[i] = static_cast<float>(samples[i]) / 32768.0f;
     }
 
-    return engine.DetectSpeech(floatBuf.data(), floatBuf.size(), config.vadModel);
+    return engine.DetectSpeech(floatBuf, config.vadModel);
 }
 
 } // namespace
