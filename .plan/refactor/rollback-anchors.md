@@ -8,4 +8,4 @@
 | P3 Decompose Main | 9fade0d | Decompose src/app/main.cpp into high-cohesion units | Complete |
 | P4 Decompose Settings | 1f243f5 | Decompose settings.cpp and extract platform text injector | Complete |
 | P5 Eliminate Globals | 34bcf3f | Eliminate globals.h and migrate global state to domain owners | Complete |
-| P6 Modernize Audio Spans | pending | Modernize audio slice signatures to std::span and modern C++23 idioms | Complete |
+| P6 Modernize Audio Spans | 357f3cb | Modernize audio slice signatures to std::span and modern C++23 idioms | Complete |

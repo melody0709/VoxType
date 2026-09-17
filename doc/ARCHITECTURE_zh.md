@@ -43,16 +43,23 @@ flowchart LR
 
 | 目录 | 职责 |
 |------|------|
-| `src/app/` | 程序入口、全局声明、Win32 资源 |
-| `src/asr/` | ASR Provider 客户端、批量/流式 session、ASR 结果分发辅助 |
-| `src/audio/` | 本地 ASR 引擎、音频采集、WASAPI、FireRed VAD、流式 VAD trim |
-| `src/ui/` | HUD、热键、Settings 窗口 |
-| `src/core/` | 共享工具、LLM 纠错、输入框上下文读取 |
+| `src/app/` | 程序入口、主窗口、录音编排、Win32 资源 |
+| `src/asr/` | 本地 ASR 引擎、ASR Provider 客户端、批量/流式 session、指标统计、结果分发 |
+| `src/audio/` | 音频采集（WASAPI / waveIn）、FireRed VAD、流式 VAD trim |
+| `src/ui/` | HUD、HUD 分页、热键、Settings 窗口、UI 主题资源与控件 |
+| `src/platform/` | 平台集成（文本注入器、剪贴板、Windows 消息模拟） |
+| `src/core/` | 核心窗口消息与状态、路径服务、配置存取、LLM 纠错、输入框上下文读取 |
 
 | 文件 | 职责 |
 |------|------|
-| `src/app/globals.h` | 共享常量、控件 ID、结构体定义、extern 全局变量声明 |
-| `src/audio/engine.h` / `src/audio/engine.cpp` | 后端：字符串/路径工具、JSON 配置持久化、音频采集、`AsrEngine` 类、`PreloadAsrEngine()` |
+| `src/core/app_messages.h` | 应用程序窗口消息、热键命令 ID、定时器 ID、托盘通知常量 |
+| `src/core/app_state.h` / `src/core/app_state.cpp` | 全局应用程序实例句柄、窗口句柄、图标、原子音频遥测状态 |
+| `src/core/config_store.h` / `src/core/config_store.cpp` | 配置数据模型（`Config`）、schema 迁移、DPAPI 凭据加密与 JSON 读写 |
+| `src/core/path_service.h` / `src/core/path_service.cpp` | 程序与模型运行目录路径解析、日志与配置文件路径查询 |
+| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 目标窗口直接文本注入（剪贴板粘贴与针对微信的 WM_CHAR 逐字流式投递） |
+| `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | 本地 sherpa-onnx 识别器、VAD 探测器、标点模型生命周期管理、预加载及 DLL 安全探测 |
+| `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | 线程安全的各阶段耗时指标度量（VAD、ASR、标点、云端 API、LLM） |
+| `src/audio/audio_capture.h` / `src/audio/audio_capture.cpp` | 麦克风音频采集生命周期（WASAPI / waveIn）、缓冲区管理、RMS 音量计算 |
 | `src/audio/audio_diagnostics.h` / `src/audio/audio_diagnostics.cpp` | provider 无关的采集/stage 诊断、PCM 指标、WAV/SHA-256/JSON 持久化、留存与受管目录操作 |
 | `src/audio/streaming_vad_trimmer.h` / `src/audio/streaming_vad_trimmer.cpp` | 云端流式 ASR session 可复用的 provider-independent PCM VAD trim |
 | `src/asr/asr_session.h` / `src/asr/asr_session.cpp` | Local、百度、MiMo、Qwen 和 Doubao IME recorded 路径的批量 ASR session 抽象 |
@@ -62,9 +69,17 @@ flowchart LR
 | `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | 云端 replay buffer、自适应 finalize timeout、空 final retry 辅助 |
 | `src/asr/asr_diagnostics.h` / `src/asr/asr_diagnostics.cpp` | 把公共 `Config` stage 路由和 provider 终态映射到 `audio_diagnostics`，provider 不直接写文件 |
 | `src/ui/hud.h` / `src/ui/hud.cpp` | HUD 窗口、Direct2D/DirectWrite 渲染、托盘图标、UI 资源创建/销毁 |
+| `src/ui/hud_pagination.h` / `src/ui/hud_pagination.cpp` | HUD 文本行换行、分页计算与可视范围裁剪 |
+| `src/ui/ui_types.h` | UI 布局度量、颜色常量、控件 ID、DPI 辅助常量 |
+| `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI 字体与画刷等 GDI/DirectWrite 主题资源生命周期管理 |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | 热键配置、CapsLock 长按逻辑、`WH_KEYBOARD_LL` Hook、`HotkeyEdit` 自绘控件 |
 | `src/ui/settings.h` / `src/ui/settings.cpp` | Settings 窗口、tab UI、控件创建、加载/保存、Provider 管理、输入对话框 |
-| `src/app/main.cpp` | 入口（`wWinMain`）、主窗口过程、录音会话编排、LLM 纠错 |
+| `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Settings 对话框控件句柄封装与按分类显隐控制 |
+| `src/app/main.cpp` | 精简 Win32 程序入口（`wWinMain`）与消息主循环 |
+| `src/app/main_window.h` / `src/app/main_window.cpp` | 隐藏主消息窗口、托盘消息调度、热键响应、定时器触发 |
+| `src/app/recording_session_controller.h` / `src/app/recording_session_controller.cpp` | 编排录音生命周期、VAD 裁剪与 ASR 调度的核心状态机 |
+| `src/app/asr_attempt_manager.h` / `src/app/asr_attempt_manager.cpp` | ASR 主备后端重试与分发尝试编排 |
+| `src/app/debug_logger.h` / `src/app/debug_logger.cpp` | 调试信息输出与控制台附加管理 |
 | `src/core/llm_refine.h` | LLM 纠错模块：供应商预设/迁移、请求 JSON、端点规范化、有界 WinHTTP 请求和 OpenAI 兼容响应解析（header-only，`llm::` 命名空间） |
 | `src/asr/baidu_asr.h` | 百度智能云 ASR 模块（header-only） |
 | `src/asr/volcengine_asr.h` | 火山引擎（豆包）ASR 模块（header-only，WebSocket） |
@@ -82,15 +97,16 @@ flowchart LR
 | `tools/asr_audio_replay.bat` / `tools/asr_audio_replay.cpp` | 开发专用规范 WAV 校验与多后端 replay，复用生产 batch/streaming session |
 | `src/audio/firered_vad.h` | FireRed VAD 模块（header-only） |
 | `src/core/input_context.h` | 输入框上下文读取模块（header-only，UIA/MSAA/WM_GETTEXT 分层 Fallback） |
+| `src/core/startup_registration.h` / `src/core/startup_registration.cpp` | 当前用户 Windows 开机自启注册表管理，支持旧版便携路径探测与修复 |
 | `src/core/utils.h` | 共享工具函数（WideToUtf8、Utf8ToWide、EscapeJson、Trim） |
 
-全局变量在 `main.cpp` 中定义，其他模块通过 `globals.h` 的 `extern` 声明引用。
+全局状态变量拆解封装在所属分层模块中（`app_state.*`、`config_store.*`、`audio_capture.*`、`engine_local.*`、`asr_metrics.*`、`ui_theme.*`），具有清晰的访问边界。
 
 ### 延迟加载 DLL
 
 `onnxruntime.dll`、`sherpa-onnx-cxx-api.dll`、`kaldi-native-fbank-core.dll` 通过 MSVC `/DELAYLOAD` 链接选项延迟加载。只在本地 ASR 函数实际调用时才加载到内存。纯云端模式下这些 DLL 永远不会加载，空闲内存保持在 ~12 MB。
 
-`engine.cpp` 中的 `TryLoadAsrDlls()` 安全检查 DLL 是否可用，缺失时优雅返回 false。
+`engine_local.cpp` 中的 `TryLoadAsrDlls()` 安全检查 DLL 是否可用，缺失时优雅返回 false。
 
 ### 模型预加载
 

@@ -23,8 +23,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **机械守卫**：`tools\check_architecture.ps1`（当前 **17 项检查**，含 5 项防绕过）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
-- **每个 Milestone 收尾必须重审"踩坑规则"中的【B】【C】类条目**：条件已解除的改写，与现实不符的删除（不得留作历史注释）。
-- **阶段判据**：收尾某阶段时跑 `tools\check_architecture.ps1 -Stage P1`（同理 P2~P6），输出 PASS 才算该阶段完成。当前基线：`22 / 91 / 7 / 2759 / 4405 / 46`（含义见方案 §1）。
+- **阶段判据**：各阶段 P1~P6 均已完成并通过。当前最新基线：`0 / 0 / 0 / 142 / 3448 / 14`（`globals.h` 彻底消除，`main.cpp` 降至 142 行，`settings.cpp` 降至 3448 行）。
 - **契约同步是每个阶段的 DoD**：涉及类名、路径、配置项搬迁时，必须同步更新 `ARCHITECTURE.md`、`AGENTS.md`（本文）与守卫脚本里的基线数值。
 - **开工前先做备份**：`.bak\`（仓库根，已在 `.gitignore` 中）。禁止把人工备份放进 `build\`。
 
@@ -50,8 +49,8 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **本仓库的 `.ps1` 脚本必须纯 ASCII，或存为 UTF-8 with BOM**。`build.bat` 用的是 Windows PowerShell **5.1**，它按 ANSI(CP936) 解码**无 BOM** 的 UTF-8 脚本，会吞掉"紧跟非 ASCII 字节的换行"，症状是与编码毫无关联的 `Missing '=' operator after key in hash literal` 一类解析错误。同理，统计源码行数/条目**禁止用 `Get-Content`**（会少算），必须用 `[System.IO.File]::ReadAllLines()`。
 - UI 修改后必须编译验证，Settings 检查裁切/重叠，HUD 检查高 DPI。
 - DPI 单位：DirectWrite/Direct2D 用 DIP，Win32 `SetWindowPos` 用物理像素，不能混用。
-- Settings 布局常量在 `src/app/globals.h` 的 `UiStyle` 命名空间，不要硬编码魔法数字。**（目标态：P5 删除 `globals.h` 后迁至 `src/ui/ui_types.h`，以重构方案为准。）**
-- 新增配置项同步**实测为 9~10 处 / 4 个文件**（不只是三处）：`src/app/globals.h` Config 字段、`src/audio/engine.cpp` 的 `LoadConfig` / `SaveConfig`、`src/ui/settings.cpp` 的控件创建与 `LoadSettingsControls` / `SaveSettingsControls`。**（目标态：改为 Core 侧 provider/config 字段注册表驱动，"加一个配置项 = 加一行"；在字段注册表落地前，按现状的 9~10 处同步，漏一处即功能失效。）**
+- Settings 布局常量在 `src/ui/ui_types.h` 的 `UiStyle` 命名空间，不要硬编码魔法数字。
+- 新增配置项同步：`src/core/config_store.h` 的 `Config` 字段、`src/core/config_store.cpp` 的 `LoadConfig` / `SaveConfig`、`src/ui/settings.cpp` 的控件创建与 `LoadSettingsControls` / `SaveSettingsControls`。
 - DLL 延迟加载：`onnxruntime.dll`、`sherpa-onnx-cxx-api.dll`、`kaldi-native-fbank-core.dll` 通过 `/DELAYLOAD` 延迟加载，纯云端模式空闲 ~12 MB。`TryLoadAsrDlls()` 用 SEH 安全检测。
 - 本地模式启动时 `PreloadAsrEngine()` 后台线程预加载模型，Save 后 Reload + 预加载。
 
@@ -90,14 +89,14 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 | :--- | :--- | :--- | :--- |
 | **A · 不变量** | 描述**外部世界的行为**（OS / 协议 / 硬件 / 第三方控件）。语言标准升级、文件搬家都不改变它，违反即 bug。 | **永久保留**，重构中作为"不得破坏"的红线 | WASAPI 生命周期；重采样相位公式；微信必须 `WM_CHAR`；FireRedVAD 的 int16 范围 |
 | **B · 条件约束** | 因为**当前某个前提**才成立（没有测试覆盖 / 还是全局变量 / 还是单文件）。前提一旦解除，约束即失效。 | **必须写明条件与解除条件**；条件解除后重写为"先补测试再重构"，而不是当永久禁令 | "火山协议层不要在无测试覆盖时重写" |
-| **C · 实现现状** | 描述**当前代码长什么样**（某文件里某函数、某签名、某全局变量还在）。 | 重构会让它过期，**每个 Milestone 收尾必须重审**；与现实不符的**立即删除**，不得留作"历史注释" | 「`VadTrimCore` 的入参是 `const float* + size_t`」（P6 会改为 `std::span`） |
+| **C · 实现现状** | 描述**当前代码长什么样**（某文件里某函数、某签名、某全局变量还在）。 | 重构会让它过期，**每个 Milestone 收尾必须重审**；与现实不符的**立即删除**，不得留作"历史注释" | 「`IVadDetector` / `FireRedVad` 使用 `std::span<const float>`」 |
 
 **元规则（重要）**：规则必须可证伪。凡是描述"当前实现"而非"外部行为"的条目，在对应 Milestone 收尾时逐条重审；**已与现实不符的规则是负资产**——它会让执行者建立错误的前置认知，比没有规则更糟。**禁止**把过期规则保留为"历史说明"或注释掉。
 
 - **【A】CapsLock 热键**：短按必须补发 `CapsLock` 保持系统切换，长按录音结束后必须恢复原 Caps Lock 状态。
 - **【A】HUD 尺寸**：DirectWrite 测量 DIP，`SetWindowPos` 用物理像素，高 DPI 需显式换算。
 - **【A】FireRedVAD**：fbank 期望 int16 范围（-32768~32767），不是归一化 float，传入前必须乘 32768。
-- **【A】公共 VAD trim 只裁剪头尾静音**，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是**追加输出语义**，调用方要自己清空/使用局部 `outputs`。**（P2 把签名改成 `std::span` 时，这条语义是最容易被破坏的点，必须配单测。）**
+- **【A】公共 VAD trim 只裁剪头尾静音**，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是**追加输出语义**，调用方要自己清空/使用局部 `outputs`。
 - **【A】Streaming VAD 的 no-speech 判断用 `StreamingVadTrimmer::DetectedSpeech()`**，不要重新引入 provider 专属 `g_xxxVadState`。
 - **【A】转义 JSON 解码**：处理 `\\"` 时不能只看前一个字符，必须统计连续反斜杠数量——偶数个后的 `"` 才是结束符。现状实现在 `src/core/utils.h`（`DecodeJsonStringAt` / `ExtractJsonStringDecoded`）。
 - **【A】火山引擎 WebSocket `connected` 必须用 `std::atomic<bool>`**，不能用 `volatile bool`。
@@ -108,7 +107,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **【A】WASAPI 生命周期**必须是 `Init → Start → Stop → Release`，`Stop()` 只停线程不清资源，没有 `Release()` 第二次录音会卡死。`Init()` 成功但 `Start()` 失败时也必须 `Release()`。
 - **【A】WASAPI 重采样相位更新**必须用 `m_resamplePhase -= written / m_resampleRatio`（实际消耗的源样本数），不能用 `m_resamplePhase -= numFrames`（输入帧数），否则非整数采样率比会越界。
 - **【A】微信粘贴**：微信（`Weixin.exe`）用自定义 Qt 控件，`GetFocus()` 返回 NULL 且 IME 拦截 Ctrl+V。必须用 `WM_CHAR` 逐字符发送，不能用剪贴板+Ctrl+V。其他应用用剪贴板+Ctrl+V+IMM32 切换。
-- **守卫基线只许下调，禁止上调**。`tools/check_architecture.ps1` 里的基线数值（`22 / 91 / 7 / 2759 / 4405 / 46`）代表"当前债务上限"，只减不增。任何上调必须由**用户人工确认**，且提交信息里写明理由。守卫自带完整性检查：相对 `HEAD` 上调基线即判 FAIL。
+- **守卫基线只许下调，禁止上调**。`tools/check_architecture.ps1` 里的基线数值代表"当前债务上限"，只减不增。任何上调必须由**用户人工确认**，且提交信息里写明理由。守卫自带完整性检查：相对 `HEAD` 上调基线即判 FAIL。
 - **不要为了让守卫变绿而删测试、注释掉守卫调用、或放宽校验规则**。这是最容易被自主执行者选择的"捷径"，属于禁止行为。守卫会校验 `build.bat` 仍在主流程（而非仅 `--test`）调用自己，以及 5 个既有测试目标仍在。
 - **不要用 `file(GLOB ...)` 收集源文件**：会让"新增文件忘进 CMake""删除文件忘出 CMake"双双变成静默行为，并让 target 结构检查失真。守卫已禁止 `GLOB`。
 - **拆 `globals.h` 时不要把它的 include 换个新头继续集中**。把 9 个跨层 `#include`（sherpa / provider / 音频 / UIVAD 头）搬到 `config.h` 只是改名字，重编译爆炸圈一点不变——必须让每个 include 回到真正使用它的那一层。

@@ -2,6 +2,17 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.0 (2026-09-17, refactor)
+
+### 架构现代化重构（C++23 Modernization）
+
+- **彻底消除巨石 `globals.h`**：全仓物理删除 `src/app/globals.h`（0 includers，0 externs）。全局状态与窗口消息拆解归入领域所有者（`src/core/app_state.*`, `src/core/app_messages.h`, `src/core/config_store.*`, `src/core/input_context.h`, `src/audio/audio_capture.*`, `src/asr/engine_local.*`, `src/asr/asr_metrics.*`, `src/ui/ui_types.h`, `src/ui/ui_theme.*`, `src/ui/settings_controls.*`, `src/ui/hud.*`）。
+- **解体巨石 `src/audio/engine.cpp`**：分离解耦为 `src/core/path_service.*`、`src/core/config_store.*` 与 `src/asr/engine_local.*`。
+- **拆分收敛巨石 `src/app/main.cpp`**：通过抽离 `src/app/main_window.*`、`src/app/recording_session_controller.*`、`src/app/asr_attempt_manager.*`、`src/app/debug_logger.*` 与 `src/ui/hud_pagination.*`，将 `main.cpp` 缩减至 142 行。
+- **重构 `src/ui/settings.cpp`**：将 Windows 平台文本注入抽离至 `src/platform/text_injector.*`，将 UI 控件句柄封装至 `src/ui/settings_controls.*`，使 `settings.cpp` 维持在清晰可维护的体量。
+- **现代 C++23 音频切片 Span 化**：将 `IVadDetector`、`FireRedVad`、`AsrEngine` 和 `audio_capture` 的裸指针音频切片签名（`const float*, size_t/int`）全面升级为零开销 `std::span<const float>` 与 `std::span<const BYTE>`。
+- **架构机械守卫（v2）全天候守护**：在 CMake 和 Ninja 构建管道中内置 18~19 项机械不变量检查（`tools/check_architecture.ps1`），严防跨层包含越权、头文件扩散反弹与规避绕过。
+
 ## v0.9.27 (2026-09-04, dev)
 
 ### 新增

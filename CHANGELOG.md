@@ -2,6 +2,17 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.0 (2026-09-17, refactor)
+
+### Architectural Refactoring (C++23 Modernization)
+
+- **Eliminated Monolithic `globals.h`**: Completely removed `src/app/globals.h` (0 includers, 0 externs). Global state migrated to clear layer-domain owners (`src/core/app_state.*`, `src/core/app_messages.h`, `src/core/config_store.*`, `src/core/input_context.h`, `src/audio/audio_capture.*`, `src/asr/engine_local.*`, `src/asr/asr_metrics.*`, `src/ui/ui_types.h`, `src/ui/ui_theme.*`, `src/ui/settings_controls.*`, `src/ui/hud.*`).
+- **Decomposed Monolithic `src/audio/engine.cpp`**: Split into `src/core/path_service.*`, `src/core/config_store.*`, and `src/asr/engine_local.*`.
+- **Decomposed Monolithic `src/app/main.cpp`**: Reduced to 142 lines by extracting `src/app/main_window.*`, `src/app/recording_session_controller.*`, `src/app/asr_attempt_manager.*`, `src/app/debug_logger.*`, and `src/ui/hud_pagination.*`.
+- **Decomposed `src/ui/settings.cpp`**: Extracted Windows platform text injection to `src/platform/text_injector.*` and encapsulated UI control handles into `src/ui/settings_controls.*`, keeping `settings.cpp` maintainable and clean.
+- **Modern C++23 Audio Buffer Spans**: Converted raw pointer audio slice interfaces (`const float*, size_t/int`) across `IVadDetector`, `FireRedVad`, `AsrEngine`, and `audio_capture` to zero-overhead `std::span<const float>` and `std::span<const BYTE>`.
+- **Automated Architecture Guard (v2)**: Enforced 18-19 mechanical invariant checks in CMake and Ninja build pipelines (`tools/check_architecture.ps1`), preventing anti-bypass regressions, header leakage, and layer violations.
+
 ## v0.9.27 (2026-09-04, dev)
 
 ### Added

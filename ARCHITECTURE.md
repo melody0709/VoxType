@@ -35,6 +35,8 @@ Single process. Responsibilities:
 - Optionally route audio to cloud ASR backends: Baidu, Volcengine, Qwen ASR, MiMo ASR, Microsoft MAI Transcribe 2, experimental Doubao IME ASR, or the reverse-engineered Qwen IME Free backend.
 - Inject final text into the current application.
 
+- Inject final text into the current application.
+
 `AsrEngine` internally caches `OfflineRecognizer`, `VoiceActivityDetector`, and `OfflinePunctuation`. The same model is not loaded repeatedly.
 
 ## Source Code Structure
@@ -43,16 +45,23 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 
 | Directory | Responsibility |
 |-----------|----------------|
-| `src/app/` | Application entry point, global declarations, Win32 resources |
-| `src/asr/` | ASR provider clients, batch/streaming sessions, ASR result dispatch helpers |
-| `src/audio/` | Local ASR engine, audio capture, WASAPI, FireRed VAD, streaming VAD trim |
-| `src/ui/` | HUD, hotkey handling, Settings window |
-| `src/core/` | Shared utilities, LLM refine, input context reading |
+| `src/app/` | Application entry point, main window, recording orchestrator, Win32 resources |
+| `src/asr/` | Local ASR engine, ASR provider clients, batch/streaming sessions, metrics, dispatch helpers |
+| `src/audio/` | Audio capture (WASAPI / waveIn), FireRed VAD, streaming VAD trimmer |
+| `src/ui/` | HUD, HUD pagination, hotkey handling, Settings window, UI theme/controls |
+| `src/platform/` | Platform integration (text injector, clipboard, Windows message emulation) |
+| `src/core/` | Core app messages/state, path service, config store, LLM refine, input context reading |
 
 | File | Responsibility |
 |------|---------------|
-| `src/app/globals.h` | Shared constants, control IDs, struct definitions, extern global variable declarations |
-| `src/audio/engine.h` / `src/audio/engine.cpp` | Backend: string/path utilities, JSON config persistence, audio capture, `AsrEngine` class, `PreloadAsrEngine()` |
+| `src/core/app_messages.h` | Application window messages, hotkey command IDs, timer IDs, tray notification constants |
+| `src/core/app_state.h` / `src/core/app_state.cpp` | Global application instance, window handle, icon, atomic audio telemetry flags |
+| `src/core/config_store.h` / `src/core/config_store.cpp` | Configuration data model (`Config`), schema migration, DPAPI credential encryption, JSON persistence |
+| `src/core/path_service.h` / `src/core/path_service.cpp` | Application and models directory path resolution, log/config file path queries |
+| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Direct text injection into active windows via clipboard paste or WM_CHAR character streaming (WeChat) |
+| `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | Local sherpa-onnx recognizer, VAD detector, punctuation model lifecycle, preload, DLL availability checks |
+| `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | Thread-safe performance latency metrics (VAD, ASR, Punctuation, Cloud API, LLM) |
+| `src/audio/audio_capture.h` / `src/audio/audio_capture.cpp` | Microphone capture lifecycle (WASAPI/waveIn), active buffer management, RMS level calculation |
 | `src/audio/audio_diagnostics.h` / `src/audio/audio_diagnostics.cpp` | Provider-neutral capture/stage diagnostics, PCM metrics, WAV/SHA-256/JSON persistence, retention, and managed-folder operations |
 | `src/audio/streaming_vad_trimmer.h` / `src/audio/streaming_vad_trimmer.cpp` | Provider-independent streaming PCM VAD trim for cloud ASR sessions |
 | `src/asr/asr_session.h` / `src/asr/asr_session.cpp` | Batch ASR session abstraction for Local, Baidu, MiMo, MAI, Qwen, and recorded Doubao IME paths |
@@ -62,9 +71,17 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | Cloud replay buffer, adaptive finalize timeout, empty-final retry helpers |
 | `src/asr/asr_diagnostics.h` / `src/asr/asr_diagnostics.cpp` | Maps shared `Config` stage routing and provider outcomes into `audio_diagnostics` without provider-specific file I/O |
 | `src/ui/hud.h` / `src/ui/hud.cpp` | HUD window, Direct2D/DirectWrite rendering, tray icon, UI resource creation/deletion |
+| `src/ui/hud_pagination.h` / `src/ui/hud_pagination.cpp` | HUD text line wrapping, paging calculations, and display clipping |
+| `src/ui/ui_types.h` | UI layout dimensions, colors, control constants, DPI metrics |
+| `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI GDI/DirectWrite font and brush theme resource lifecycle management |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | Hotkey config, CapsLock long-press logic, `WH_KEYBOARD_LL` hook, `HotkeyEdit` custom control |
 | `src/ui/settings.h` / `src/ui/settings.cpp` | Settings window, tab UI, control creation, load/save, provider management, input dialog |
-| `src/app/main.cpp` | Entry point (`wWinMain`), main window procedure, recording session orchestration, LLM refine |
+| `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Encapsulated Settings dialog control handles and layout visibility toggles |
+| `src/app/main.cpp` | Slim Win32 application entry point (`wWinMain`) and message pump |
+| `src/app/main_window.h` / `src/app/main_window.cpp` | Main hidden message window, tray dispatch, hotkey handling, timer triggers |
+| `src/app/recording_session_controller.h` / `src/app/recording_session_controller.cpp` | State machine orchestrating recording lifecycle, VAD trimming, and ASR dispatch |
+| `src/app/asr_attempt_manager.h` / `src/app/asr_attempt_manager.cpp` | Dispatches ASR attempts across primary and fallback backends |
+| `src/app/debug_logger.h` / `src/app/debug_logger.cpp` | Application debugging output and console attachment |
 | `src/core/llm_refine.h` | LLM correction module: provider presets/migration, request JSON, endpoint normalization, bounded WinHTTP calls, and OpenAI-compatible response parsing (header-only, `llm::` namespace) |
 | `src/asr/baidu_asr.h` | Baidu Cloud ASR module (header-only) |
 | `src/asr/volcengine_asr.h` | Volcengine (豆包) ASR module (header-only, WebSocket) |
@@ -86,13 +103,13 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/core/startup_registration.h` / `src/core/startup_registration.cpp` | Current-user Windows Run registration, including stale Portable-path detection and repair |
 | `src/core/utils.h` | Shared utility functions (WideToUtf8, Utf8ToWide, EscapeJson, Trim) |
 
-Global variables are defined in `main.cpp` and accessed by other modules via `extern` declarations in `globals.h`.
+Global variables are encapsulated in layer-owned modules (`app_state.*`, `config_store.*`, `audio_capture.*`, `engine_local.*`, `asr_metrics.*`, `ui_theme.*`) with clear access boundaries.
 
 ### Delay-Loaded DLLs
 
 `onnxruntime.dll`, `sherpa-onnx-cxx-api.dll`, and `kaldi-native-fbank-core.dll` are delay-loaded via MSVC `/DELAYLOAD` linker flag. They are only loaded into memory when local ASR functions are actually called. In cloud-only mode, these DLLs are never loaded, keeping idle memory at ~12 MB.
 
-`engine.cpp` includes `TryLoadAsrDlls()` which safely checks DLL availability before calling sherpa-onnx functions, returning `false` gracefully if DLLs are missing.
+`engine_local.cpp` includes `TryLoadAsrDlls()` which safely checks DLL availability before calling sherpa-onnx functions, returning `false` gracefully if DLLs are missing.
 
 ### Build, packaging, and mutable data
 
