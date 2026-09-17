@@ -23,6 +23,11 @@
 #include "ui_utils.h"
 #include "engine_local.h"
 #include "path_service.h"
+#include "app_state.h"
+#include "app_messages.h"
+#include "ui_theme.h"
+#include "asr_metrics.h"
+#include "resource.h"
 
 #include <thread>
 #include <cstdio>
@@ -500,7 +505,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             StopRecordingSession();
             if (IsStopDelayRestoreCapsLock()) {
                 SetStopDelayRestoreCapsLock(false);
-                RestoreCapsLockState(g_capsLockWasOn);
+                RestoreCapsLockState(WasCapsLockOn());
             }
             return 0;
         }
@@ -636,7 +641,7 @@ bool RegisterWindowClasses() {
     settingsClass.hIcon = g_appIcon;
     settingsClass.hIconSm = g_appIcon;
     settingsClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    settingsClass.hbrBackground = g_settingsBgBrush;
+    settingsClass.hbrBackground = ui_theme::SettingsBgBrush();
     if (!RegisterClassExW(&settingsClass)) return false;
 
     WNDCLASSEXW hudClass = { sizeof(hudClass) };
@@ -652,6 +657,6 @@ bool RegisterWindowClasses() {
     hotkeyClass.hInstance = g_instance;
     hotkeyClass.lpszClassName = kHotkeyEditClass;
     hotkeyClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    hotkeyClass.hbrBackground = g_controlBgBrush;
+    hotkeyClass.hbrBackground = ui_theme::ControlBgBrush();
     return RegisterClassExW(&hotkeyClass) != 0;
 }

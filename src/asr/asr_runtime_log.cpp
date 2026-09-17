@@ -1,9 +1,8 @@
 #include "asr_runtime_log.h"
 
-#include "globals.h"
-
 #include <windows.h>
 
+#include <atomic>
 #include <cstdio>
 #include <mutex>
 #include <string>
@@ -15,6 +14,7 @@ constexpr ULONGLONG kMaxLogBytes = 5ull * 1024ull * 1024ull;
 constexpr int kArchiveCount = 2;
 
 std::mutex g_logMutex;
+std::atomic<bool> g_debugModeEnabled{false};
 std::atomic<bool> g_qwenFreeLogEnabled{false};
 std::atomic<bool> g_diagnosticAudioLogEnabled{false};
 
@@ -78,13 +78,17 @@ void WriteNamedVLocked(const wchar_t* fileName, const char* format, va_list args
 } // namespace
 
 bool Enabled() {
-    if (g_enableDebugMode.load(std::memory_order_relaxed)) return true;
+    if (g_debugModeEnabled.load(std::memory_order_relaxed)) return true;
     return g_qwenFreeLogEnabled.load(std::memory_order_relaxed) ||
            g_diagnosticAudioLogEnabled.load(std::memory_order_relaxed);
 }
 
 bool ProviderDebugEnabled() {
-    return g_enableDebugMode.load(std::memory_order_relaxed);
+    return g_debugModeEnabled.load(std::memory_order_relaxed);
+}
+
+void SetDebugModeEnabled(bool enabled) {
+    g_debugModeEnabled.store(enabled, std::memory_order_relaxed);
 }
 
 void SetQwenFreeEnabled(bool enabled) {

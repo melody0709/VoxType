@@ -21,10 +21,17 @@
 #include "selection_context.h"
 #include "ui_utils.h"
 #include "engine_local.h"
+#include "app_state.h"
+#include "app_messages.h"
+#include "asr_metrics.h"
 
 #include <audioclient.h>
 #include <algorithm>
 #include <vector>
+
+bool g_recording = false;
+std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
+
 
 static ULONGLONG g_sessionStartTick = 0;
 static double g_recordingMs = 0.0;

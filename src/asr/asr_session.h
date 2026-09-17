@@ -4,7 +4,8 @@
 #define NOMINMAX
 #endif
 
-#include "globals.h"
+#include "config_store.h"
+#include <windows.h>
 
 #include <memory>
 #include <atomic>

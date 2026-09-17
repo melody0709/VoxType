@@ -24,6 +24,10 @@
 #include "llm_refine.h"
 #include "qwen_free_proto_utdid.h"
 #include "volcengine_asr.h"
+#include "app_state.h"
+#include "app_messages.h"
+#include "ui_theme.h"
+
 #include <algorithm>
 #include <atomic>
 #include <commctrl.h>
@@ -1780,7 +1784,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     case WM_ERASEBKGND: {
         RECT rc;
         GetClientRect(hwnd, &rc);
-        FillRect(reinterpret_cast<HDC>(wParam), &rc, g_settingsBgBrush);
+        FillRect(reinterpret_cast<HDC>(wParam), &rc, ui_theme::SettingsBgBrush());
         return 1;
     }
     case WM_PAINT: {
@@ -1788,7 +1792,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         HDC hdc = BeginPaint(hwnd, &ps);
         RECT rc;
         GetClientRect(hwnd, &rc);
-        FillRect(hdc, &rc, g_settingsBgBrush);
+        FillRect(hdc, &rc, ui_theme::SettingsBgBrush());
 
         HPEN line = CreatePen(PS_SOLID, 1, UiStyle::DividerColor);
         HGDIOBJ oldPen = SelectObject(hdc, line);
@@ -1807,7 +1811,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         RefreshDoubaoImeStatus(hwnd);
         return 0;
     case WM_CTLCOLORDLG:
-        return reinterpret_cast<LRESULT>(g_settingsBgBrush);
+        return reinterpret_cast<LRESULT>(ui_theme::SettingsBgBrush());
     case WM_CTLCOLORSTATIC: {
         HDC hdc = reinterpret_cast<HDC>(wParam);
         HWND ctl = reinterpret_cast<HWND>(lParam);
@@ -1817,19 +1821,19 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             SetTextColor(hdc, UiStyle::TextColor);
         }
         SetBkColor(hdc, UiStyle::BgColor);
-        return reinterpret_cast<LRESULT>(g_settingsBgBrush);
+        return reinterpret_cast<LRESULT>(ui_theme::SettingsBgBrush());
     }
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORLISTBOX: {
         HDC hdc = reinterpret_cast<HDC>(wParam);
         SetTextColor(hdc, UiStyle::InputTextColor);
         SetBkColor(hdc, UiStyle::ControlBgColor);
-        return reinterpret_cast<LRESULT>(g_controlBgBrush);
+        return reinterpret_cast<LRESULT>(ui_theme::ControlBgBrush());
     }
     case WM_CTLCOLORBTN: {
         HDC hdc = reinterpret_cast<HDC>(wParam);
         SetBkColor(hdc, UiStyle::BgColor);
-        return reinterpret_cast<LRESULT>(g_settingsBgBrush);
+        return reinterpret_cast<LRESULT>(ui_theme::SettingsBgBrush());
     }
     case WM_CREATE: {
         UpdateUiScale(hwnd);

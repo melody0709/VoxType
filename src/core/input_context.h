@@ -34,6 +34,9 @@ struct InputContextResult {
     bool isPassword = false;
 };
 
+extern InputContextResult g_inputContextResult;
+extern std::mutex g_inputContextMutex;
+
 namespace input_context {
 
 inline const char* LayerName(int layer) {

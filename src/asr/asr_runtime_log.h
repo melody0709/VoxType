@@ -6,6 +6,7 @@ namespace asr_runtime_log {
 
 bool Enabled();
 bool ProviderDebugEnabled();
+void SetDebugModeEnabled(bool enabled);
 void SetQwenFreeEnabled(bool enabled);
 void SetDiagnosticAudioEnabled(bool enabled);
 void Write(const char* format, ...);

@@ -2,11 +2,16 @@
 
 #include "config_store.h"
 #include "utils.h"
-#include "globals.h"
+#include "app_state.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <utility>
+
+std::unique_ptr<StreamingVadTrimmer> g_streamingVadTrimmer;
+std::vector<float> g_streamingVadSamples;
+std::atomic<bool> g_streamingVadReady{false};
+
 
 bool StreamingVadTrimmer::Start(const Config& config, IVadDetector& engine, std::wstring* error) {
     Reset();

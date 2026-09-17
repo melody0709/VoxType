@@ -9,6 +9,8 @@
 #include "settings_controls.h"
 #include "settings_dialogs.h"
 
+extern HWND g_settingsWindow;
+
 void SetStatus(HWND hwnd, const std::wstring& text);
 
 void AddRecognitionControl(HWND hwnd);

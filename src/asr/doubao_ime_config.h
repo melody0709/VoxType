@@ -1,7 +1,7 @@
 #pragma once
 
 #include "doubao_ime_asr.h"
-#include "globals.h"
+#include "config_store.h"
 
 inline doubao_ime_asr::DoubaoImeConfig BuildDoubaoImeConfigFromConfig(const Config& config) {
     doubao_ime_asr::DoubaoImeConfig dcfg;

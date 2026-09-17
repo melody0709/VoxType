@@ -10,6 +10,36 @@
 #include <shlobj.h>
 #include <vector>
 
+HWND g_settingsWindow = nullptr;
+std::vector<HWND> g_recognitionControls;
+std::vector<HWND> g_generalControls;
+std::vector<HWND> g_llmControls;
+std::vector<HWND> g_promptControls;
+std::vector<HWND> g_cloudAsrControls;
+std::vector<HWND> g_baiduControls;
+std::vector<HWND> g_volcengineControls;
+std::vector<HWND> g_qwenControls;
+std::vector<HWND> g_qwenAudio3Controls;
+std::vector<HWND> g_qwenAudioStreamingOnlyControls;
+std::vector<HWND> g_mimoControls;
+std::vector<HWND> g_maiControls;
+std::vector<HWND> g_maiOpenRouterControls;
+std::vector<HWND> g_maiAzureControls;
+std::vector<HWND> g_doubaoImeControls;
+std::vector<HWND> g_qwenFreeControls;
+std::vector<HWND> g_vadFireredControls;
+std::vector<HWND> g_vadSileroControls;
+bool g_llmKeyVisible = false;
+bool g_baiduKeyVisible = false;
+bool g_baiduApiKeyVisible = false;
+bool g_volcKeyVisible = false;
+bool g_qwenKeyVisible = false;
+bool g_mimoKeyVisible = false;
+bool g_maiOpenRouterKeyVisible = false;
+bool g_maiAzureKeyVisible = false;
+int g_cloudProviderIdx = 0;
+HWND g_cloudAsrHintControl = nullptr;
+
 namespace {
 
 constexpr wchar_t kSettingsHintProperty[] = L"VoxType.SettingsHint";

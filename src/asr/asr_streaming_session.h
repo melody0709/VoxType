@@ -6,7 +6,7 @@
 
 #include <windows.h>
 
-#include "globals.h"
+#include "config_store.h"
 
 #include <string>
 

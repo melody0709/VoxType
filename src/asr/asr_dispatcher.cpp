@@ -2,6 +2,7 @@
 
 #include "asr_diagnostics.h"
 #include "asr_result.h"
+#include "app_messages.h"
 
 #include <utility>
 

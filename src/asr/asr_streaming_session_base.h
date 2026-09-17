@@ -7,6 +7,7 @@
 #include "asr_dispatcher.h"
 #include "asr_streaming_session.h"
 #include "asr_diagnostics.h"
+#include "app_messages.h"
 
 #include <string>
 #include <utility>

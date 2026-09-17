@@ -10,7 +10,9 @@
 #include "streaming_vad_trimmer.h"
 #include "debug_logger.h"
 #include "utils.h"
-#include "globals.h"
+#include "config_store.h"
+#include "app_state.h"
+#include "app_messages.h"
 
 #include <algorithm>
 #include <atomic>
@@ -18,6 +20,19 @@
 #include <cstdint>
 #include <cstdio>
 #include <vector>
+
+HWAVEIN g_waveIn = nullptr;
+WAVEHDR g_waveHeaders[8] = {};
+std::vector<std::vector<BYTE>> g_waveBuffers;
+std::vector<BYTE> g_audioData;
+CRITICAL_SECTION g_audioLock;
+std::atomic<bool> g_captureActive{false};
+std::atomic<bool> g_captureSuppressed{false};
+std::atomic<uint64_t> g_audioCaptureGeneration{0};
+std::atomic<bool> g_audioCaptureFailurePending{false};
+std::atomic<DWORD> g_audioCaptureFailureCode{0};
+std::atomic<bool> g_audioCaptureFailureWasapi{false};
+WasapiCapture g_wasapiCapture;
 
 #pragma comment(lib, "winmm.lib")
 
@@ -119,7 +134,6 @@ bool StartAudioCapture(std::wstring& error,
                 audio_diagnostics::CancelCapture();
             }
             g_audioLevel.store(0.0f);
-            g_hudSmoothedLevel = 0.0f;
             EnterCriticalSection(&g_audioLock);
             g_audioData.clear();
             g_captureSuppressed.store(false, std::memory_order_release);
@@ -145,7 +159,6 @@ bool StartAudioCapture(std::wstring& error,
     }
 
     g_audioLevel.store(0.0f);
-    g_hudSmoothedLevel = 0.0f;
     EnterCriticalSection(&g_audioLock);
     g_audioData.clear();
     LeaveCriticalSection(&g_audioLock);

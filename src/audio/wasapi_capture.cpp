@@ -4,7 +4,9 @@
 #include "audio_chunk_sink.h"
 #include "audio_capture.h"
 #include "vad_detector.h"
-#include "globals.h"
+#include "config_store.h"
+#include "app_state.h"
+#include "app_messages.h"
 #include "streaming_vad_trimmer.h"
 
 #include <algorithm>

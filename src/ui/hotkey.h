@@ -1,6 +1,30 @@
 #pragma once
 
-#include "globals.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <string>
+
+#include "ui_types.h"
+#include "app_messages.h"
+
+struct HotkeyConfig {
+    bool ctrl = false;
+    bool alt = false;
+    bool shift = false;
+    bool win = false;
+    UINT key = VK_CAPITAL;
+
+    bool IsEmpty() const { return key == 0; }
+};
+
+struct HotkeyEditState {
+    HotkeyConfig hotkey;
+    HotkeyConfig original;
+    bool capturing = false;
+};
+
 
 bool IsModifierKey(UINT vk);
 UINT NormalizedKeyFromWParam(WPARAM wParam);
@@ -17,6 +41,15 @@ void ActivateCapsLockLongPress();
 void FinishCapsLockHotkeyPress();
 bool IsCapsLockOn();
 void SendCapsLockTap();
+
+UINT GetActiveHotkeyKey();
+void SetActiveHotkeyKey(UINT key);
+bool WasCapsLockOn();
+void SetCapsLockWasOn(bool wasOn);
+
+void SetHotkeyTargetWindow(HWND hwnd);
+HWND GetHotkeyTargetWindow();
+void SetDefaultUiFont(HFONT font);
 
 LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam);
 void InstallKeyboardHook();

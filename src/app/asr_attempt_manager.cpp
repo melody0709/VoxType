@@ -20,6 +20,10 @@
 #include "volcengine_streaming_session.h"
 #include "volcengine_asr.h"
 #include "hud.h"
+#include "app_state.h"
+#include "app_messages.h"
+#include "asr_metrics.h"
+#include "engine_local.h"
 
 #include <fstream>
 #include <sstream>

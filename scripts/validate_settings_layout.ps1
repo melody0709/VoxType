@@ -6,12 +6,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$uiTypesPath = Join-Path $SourceRoot 'src\ui\ui_types.h'
 $globalsPath = Join-Path $SourceRoot 'src\app\globals.h'
+$layoutConstPath = if (Test-Path -LiteralPath $uiTypesPath -PathType Leaf) { $uiTypesPath } else { $globalsPath }
 $settingsPath = Join-Path $SourceRoot 'src\ui\settings.cpp'
-foreach ($path in @($globalsPath, $settingsPath)) {
+foreach ($path in @($layoutConstPath, $settingsPath)) {
     if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "Settings layout source is missing: $path" }
 }
-$globals = Get-Content -LiteralPath $globalsPath -Raw -Encoding UTF8
+$globals = Get-Content -LiteralPath $layoutConstPath -Raw -Encoding UTF8
 $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8
 
 function Get-UiInt([string]$Name) {

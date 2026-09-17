@@ -158,3 +158,6 @@ int FindPresetIndex(const std::wstring& name);
 bool ApplyPreset(Config& config, int index, bool preserveLegacyFields = false);
 void LoadConfig(Config& config);
 void SaveConfig(const Config& config);
+
+extern Config g_config;
+Config& GetGlobalConfig();

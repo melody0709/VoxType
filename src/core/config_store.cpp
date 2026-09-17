@@ -19,6 +19,9 @@
 
 static constexpr int kCurrentConfigVersion = 15;
 
+Config g_config;
+Config& GetGlobalConfig() { return g_config; }
+
 std::wstring NormalizeDiagnosticAudioMode(std::wstring mode) {
     std::transform(mode.begin(), mode.end(), mode.begin(), [](wchar_t ch) {
         if (ch >= L'A' && ch <= L'Z') return static_cast<wchar_t>(ch - L'A' + L'a');

@@ -5,7 +5,7 @@
 #include "asr_runtime_log.h"
 #include "asr_streaming_session_base.h"
 #include "cloud_asr_common.h"
-#include "globals.h"
+#include "asr_metrics.h"
 #include "pending_pcm_buffer.h"
 #include "qwen_free_proto_asr.h"
 #include "qwen_free_proto_llm.h"
@@ -940,7 +940,7 @@ private:
             rewriteCfg.capturedPcmBytes = capturedPcmBytes_.load();
             auto rewrite = qwen_free_proto_llm::RewriteSelection(
                 rewriteCfg, selection_.selectedText, asrText);
-            g_llmMs = static_cast<double>(rewrite.elapsedMs);
+            asr_metrics::SetLlmMs(static_cast<double>(rewrite.elapsedMs));
             if (abort_.load()) return;
             if (rewrite.ok && !rewrite.polishedText.empty()) {
                 EmitFinal(rewrite.polishedText, true);
@@ -971,7 +971,7 @@ private:
             llmCfg_, asrText,
             recordingMs_.load(),
             capturedPcmBytes_.load());
-        g_llmMs = static_cast<double>(llmR.elapsedMs);
+        asr_metrics::SetLlmMs(static_cast<double>(llmR.elapsedMs));
 
         if (abort_.load()) return;
 
@@ -991,10 +991,10 @@ private:
         // the final stale-message barrier for a callback already posted.
         if (abort_.load(std::memory_order_acquire)) return;
         if (totalStartTick_ != 0) {
-            g_cloudApiMs = (std::max)(
+            asr_metrics::SetCloudApiMs((std::max)(
                 0.0,
                 static_cast<double>(GetTickCount64() - totalStartTick_) -
-                    recordingMs_.load());
+                    recordingMs_.load()));
         }
         if (finalDispatched_.exchange(true)) return;
         if (abort_.load(std::memory_order_acquire)) return;

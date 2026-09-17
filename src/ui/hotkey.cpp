@@ -7,6 +7,8 @@
 #include "ui_utils.h"
 #include "settings.h"
 #include "utils.h"
+#include "config_store.h"
+#include "app_state.h"
 
 #include <algorithm>
 #include <cwctype>
@@ -154,23 +156,43 @@ bool ModifiersMatch(const HotkeyConfig& hotkey) {
     return ctrl == hotkey.ctrl && alt == hotkey.alt && shift == hotkey.shift && win == hotkey.win;
 }
 
+#include "config_store.h"
+
+namespace {
+HWND s_targetWindow = nullptr;
+HHOOK s_keyboardHook = nullptr;
+UINT s_activeHotkeyKey = 0;
+bool s_capsLockHotkeyPending = false;
+bool s_capsLockLongPressActive = false;
+bool s_capsLockWasOn = false;
+HFONT s_defaultFont = nullptr;
+} // namespace
+
+void SetHotkeyTargetWindow(HWND hwnd) { s_targetWindow = hwnd; }
+HWND GetHotkeyTargetWindow() { return s_targetWindow; }
+UINT GetActiveHotkeyKey() { return s_activeHotkeyKey; }
+void SetActiveHotkeyKey(UINT key) { s_activeHotkeyKey = key; }
+bool WasCapsLockOn() { return s_capsLockWasOn; }
+void SetCapsLockWasOn(bool wasOn) { s_capsLockWasOn = wasOn; }
+void SetDefaultUiFont(HFONT font) { s_defaultFont = font; }
+
 void PostHotkeyRecordingCommand(WPARAM command) {
-    if (g_mainWindow) {
-        PostMessageW(g_mainWindow, kHotkeyRecordingMessage, command, 0);
+    if (s_targetWindow) {
+        PostMessageW(s_targetWindow, kHotkeyRecordingMessage, command, 0);
     }
 }
 
 void ResetCapsLockHotkeyState() {
-    if (g_mainWindow) KillTimer(g_mainWindow, kCapsLockLongPressTimer);
-    if (g_capsLockHotkeyPending) {
+    if (s_targetWindow) KillTimer(s_targetWindow, kCapsLockLongPressTimer);
+    if (s_capsLockHotkeyPending) {
         // The hook is going away mid-press (e.g. settings window opened), so
         // the 300 ms long-press verdict will never arrive.  Make sure the
         // capture-only phase started on KEYDOWN cannot be orphaned.
         PostHotkeyRecordingCommand(kHotkeyCaptureDiscard);
     }
-    g_activeHotkeyKey = 0;
-    g_capsLockHotkeyPending = false;
-    g_capsLockLongPressActive = false;
+    s_activeHotkeyKey = 0;
+    s_capsLockHotkeyPending = false;
+    s_capsLockLongPressActive = false;
 }
 
 bool IsCapsLockOn() {
@@ -188,30 +210,30 @@ void SendCapsLockTap() {
 }
 
 void StartCapsLockHotkeyPress() {
-    if (g_activeHotkeyKey == VK_CAPITAL) return;
-    g_activeHotkeyKey = VK_CAPITAL;
-    g_capsLockHotkeyPending = true;
-    g_capsLockLongPressActive = false;
-    g_capsLockWasOn = IsCapsLockOn();
-    if (g_mainWindow) SetTimer(g_mainWindow, kCapsLockLongPressTimer, kCapsLockLongPressMs, nullptr);
+    if (s_activeHotkeyKey == VK_CAPITAL) return;
+    s_activeHotkeyKey = VK_CAPITAL;
+    s_capsLockHotkeyPending = true;
+    s_capsLockLongPressActive = false;
+    s_capsLockWasOn = IsCapsLockOn();
+    if (s_targetWindow) SetTimer(s_targetWindow, kCapsLockLongPressTimer, kCapsLockLongPressMs, nullptr);
     // Capture starts immediately; the 300 ms timer only decides whether the
     // collected PCM becomes a recording (long press) or is discarded (tap).
     PostHotkeyRecordingCommand(kHotkeyCaptureBegin);
 }
 
 void ActivateCapsLockLongPress() {
-    if (g_activeHotkeyKey != VK_CAPITAL || !g_capsLockHotkeyPending || g_capsLockLongPressActive) return;
-    g_capsLockHotkeyPending = false;
-    g_capsLockLongPressActive = true;
+    if (s_activeHotkeyKey != VK_CAPITAL || !s_capsLockHotkeyPending || s_capsLockLongPressActive) return;
+    s_capsLockHotkeyPending = false;
+    s_capsLockLongPressActive = true;
     PostHotkeyRecordingCommand(kHotkeyRecordingStart);
 }
 
 void FinishCapsLockHotkeyPress() {
-    if (g_activeHotkeyKey != VK_CAPITAL) return;
-    if (g_mainWindow) KillTimer(g_mainWindow, kCapsLockLongPressTimer);
+    if (s_activeHotkeyKey != VK_CAPITAL) return;
+    if (s_targetWindow) KillTimer(s_targetWindow, kCapsLockLongPressTimer);
 
-    const bool wasLongPress = g_capsLockLongPressActive;
-    const bool wasShortPress = g_capsLockHotkeyPending && !g_capsLockLongPressActive;
+    const bool wasLongPress = s_capsLockLongPressActive;
+    const bool wasShortPress = s_capsLockHotkeyPending && !s_capsLockLongPressActive;
     ResetCapsLockHotkeyState();
 
     if (wasLongPress) {
@@ -229,7 +251,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
         const auto* event = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
         const HotkeyConfig hotkey = CurrentConfiguredHotkey();
         if (event && event->vkCode == VK_CAPITAL && (event->flags & LLKHF_INJECTED)) {
-            return CallNextHookEx(g_keyboardHook, code, wParam, lParam);
+            return CallNextHookEx(s_keyboardHook, code, wParam, lParam);
         }
         const bool rightAltMatch = event && hotkey.key == VK_RMENU &&
             (event->vkCode == VK_RMENU ||
@@ -239,14 +261,14 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
              (event->vkCode == VK_MENU && (event->flags & LLKHF_EXTENDED) == 0));
         const bool keyMatch = event &&
             (event->vkCode == hotkey.key || rightAltMatch || leftAltMatch);
-        if (keyMatch && (ModifiersMatch(hotkey) || g_activeHotkeyKey == hotkey.key)) {
+        if (keyMatch && (ModifiersMatch(hotkey) || s_activeHotkeyKey == hotkey.key)) {
             if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
                 if (hotkey.key == VK_CAPITAL) {
                     StartCapsLockHotkeyPress();
                     return 1;
                 }
-                if (g_activeHotkeyKey != hotkey.key) {
-                    g_activeHotkeyKey = hotkey.key;
+                if (s_activeHotkeyKey != hotkey.key) {
+                    s_activeHotkeyKey = hotkey.key;
                     PostHotkeyRecordingCommand(kHotkeyRecordingStart);
                 }
                 return 1;
@@ -256,31 +278,31 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
                     FinishCapsLockHotkeyPress();
                     return 1;
                 }
-                g_activeHotkeyKey = 0;
+                s_activeHotkeyKey = 0;
                 PostHotkeyRecordingCommand(kHotkeyRecordingStop);
                 return 1;
             }
         }
     }
-    return CallNextHookEx(g_keyboardHook, code, wParam, lParam);
+    return CallNextHookEx(s_keyboardHook, code, wParam, lParam);
 }
 
 void InstallKeyboardHook() {
-    if (!g_keyboardHook) {
-        g_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, LowLevelKeyboardProc, g_instance, 0);
+    if (!s_keyboardHook) {
+        s_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandleW(nullptr), 0);
     }
 }
 
 void UninstallKeyboardHook() {
-    if (g_keyboardHook) {
-        UnhookWindowsHookEx(g_keyboardHook);
-        g_keyboardHook = nullptr;
+    if (s_keyboardHook) {
+        UnhookWindowsHookEx(s_keyboardHook);
+        s_keyboardHook = nullptr;
     }
     ResetCapsLockHotkeyState();
 }
 
 void ApplyUiFont(HWND hwnd, HFONT font) {
-    if (hwnd) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font ? font : g_uiFont), TRUE);
+    if (hwnd) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font ? font : s_defaultFont), TRUE);
 }
 
 LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {

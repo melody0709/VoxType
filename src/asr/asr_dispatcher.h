@@ -1,6 +1,6 @@
 #pragma once
 
-#include "globals.h"
+#include "config_store.h"
 #include "selection_context.h"
 
 #include <cstdint>

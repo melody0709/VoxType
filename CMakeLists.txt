@@ -42,6 +42,7 @@ add_executable(VoxType WIN32
     src/core/path_service.cpp
     src/core/debug_logger.cpp
     src/core/config_store.cpp
+    src/core/app_state.cpp
     src/audio/audio_capture.cpp
     src/audio/audio_chunk_sink.cpp
     src/audio/audio_diagnostics.cpp
@@ -74,12 +75,14 @@ add_executable(VoxType WIN32
     src/asr/qwen_free_proto_unet.cpp
     src/asr/volcengine_net_diag.cpp
     src/asr/volcengine_streaming_session.cpp
+    src/asr/asr_metrics.cpp
     src/core/startup_registration.cpp
     src/ui/hud.cpp
     src/ui/hotkey.cpp
     src/ui/settings.cpp
     src/ui/settings_controls.cpp
     src/ui/settings_dialogs.cpp
+    src/ui/ui_theme.cpp
     src/platform/text_injector.cpp
 )
 

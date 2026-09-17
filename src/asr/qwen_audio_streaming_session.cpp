@@ -5,7 +5,6 @@
 #include "asr_result.h"
 #include "asr_streaming_session_base.h"
 #include "cloud_asr_common.h"
-#include "globals.h"
 #include "pending_pcm_buffer.h"
 #include "qwen_context.h"
 #include "qwen_finalize_policy.h"

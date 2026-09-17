@@ -56,3 +56,7 @@ void SetStopDelayRestoreCapsLock(bool restore);
 bool IsStopDelayHeldForRepress();
 void SetStopDelayHeldForRepress(bool held);
 void SetCaptureConfigStale(bool stale);
+
+extern bool g_recording;
+extern std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
+

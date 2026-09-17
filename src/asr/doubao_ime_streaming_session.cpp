@@ -6,7 +6,7 @@
 #include "cloud_asr_common.h"
 #include "doubao_ime_asr.h"
 #include "doubao_ime_config.h"
-#include "globals.h"
+#include "asr_metrics.h"
 #include "pending_pcm_buffer.h"
 
 #include <algorithm>
@@ -775,7 +775,7 @@ private:
             return;
         }
 
-        g_cloudApiMs = std::max(0.0, static_cast<double>(GetTickCount64() - tTotal0) - recordingMs_.load());
+        asr_metrics::SetCloudApiMs(std::max(0.0, static_cast<double>(GetTickCount64() - tTotal0) - recordingMs_.load()));
         DispatchFinal(failed ? DoubaoErrorText(error) : finalText);
         markStopped();
     }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "audio_diagnostics.h"
-#include "globals.h"
+#include "config_store.h"
 
 #include <string>
 #include <vector>

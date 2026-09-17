@@ -23,6 +23,20 @@
 
 #define VOLC_DEBUG_LOG 1
 
+struct VolcMapping {
+    int comboIdx; const wchar_t* resourceId;
+};
+constexpr VolcMapping kVolcResources[] = {
+    {0, L"volc.seedasr.sauc.duration"},
+    {1, L"volc.seedasr.sauc.concurrent"},
+    {2, L"volc.bigasr.sauc.duration"},
+    {3, L"volc.bigasr.sauc.concurrent"},
+};
+constexpr const wchar_t* kVolcLanguages[] = {
+    L"", L"en-US", L"ja-JP", L"ko-KR", L"fr-FR",
+    L"de-DE", L"es-MX", L"pt-BR", L"id-ID",
+};
+
 #if VOLC_DEBUG_LOG
 inline void VolcDebugLog(const char* fmt, ...) {
     va_list args;

@@ -5,7 +5,7 @@
 #include "engine_local.h"
 #include "path_service.h"
 #include "utils.h"
-#include "globals.h"
+#include "asr_metrics.h"
 
 #include <algorithm>
 #include <vector>
@@ -196,13 +196,12 @@ std::wstring AsrEngine::Recognize(const std::vector<float>& samples, int sampleR
         VadResult vr = ApplyVad(workSamples, config, threads);
         double ms = tVad.ElapsedMs();
         if (config.enableDebugMode) {
-            g_vadMs = ms;
-            std::lock_guard<std::mutex> lk(g_vadMetricsMutex);
-            g_vadModelName = (config.vadModel == L"firered") ? L"FireRed" : L"Silero";
+            asr_metrics::SetVadMs(ms);
+            asr_metrics::SetVadModelName((config.vadModel == L"firered") ? L"FireRed" : L"Silero");
         }
         if (!vr.hasSpeech) return L"";
         if (!vr.samples.empty()) workSamples = std::move(vr.samples);
-        if (config.enableDebugMode) g_vadTrimmedSamples = workSamples.size();
+        if (config.enableDebugMode) asr_metrics::SetVadTrimmedSamples(workSamples.size());
     }
 
     if (workSamples.empty()) return L"";
@@ -217,7 +216,7 @@ std::wstring AsrEngine::Recognize(const std::vector<float>& samples, int sampleR
         auto result = recognizer->GetResult(&stream);
         text = Utf8ToWide(result.text);
         double ms = tAsr.ElapsedMs();
-        if (config.enableDebugMode) g_asrDecodeMs = ms;
+        if (config.enableDebugMode) asr_metrics::SetAsrDecodeMs(ms);
     }
 
     if (text == L"<sil>" || text == L"<blk>") return L"";
@@ -231,7 +230,7 @@ std::wstring AsrEngine::Recognize(const std::vector<float>& samples, int sampleR
             text = Utf8ToWide(punctuated);
         }
         double ms = tPunct.ElapsedMs();
-        if (config.enableDebugMode) g_punctMs = ms;
+        if (config.enableDebugMode) asr_metrics::SetPunctMs(ms);
     }
 
     return text;
@@ -249,13 +248,20 @@ void AsrEngine::Reload() {
     punctKey.clear();
 }
 
+AsrEngine g_asrEngine;
+
+AsrEngine& GetLocalAsrEngine() {
+    return g_asrEngine;
+}
+
 void PreloadAsrEngine(const Config& config) {
     const int threads = ResolveThreads(config.threads);
-    g_asrEngine.Lock();
-    g_asrEngine.EnsureRecognizer(config);
-    if (config.enableVad) g_asrEngine.EnsureVadForConfig(config, threads);
+    auto& engine = GetLocalAsrEngine();
+    engine.Lock();
+    engine.EnsureRecognizer(config);
+    if (config.enableVad) engine.EnsureVadForConfig(config, threads);
     if (config.postprocess == L"itn" || config.postprocess == L"punct" || config.postprocess == L"llm") {
-        g_asrEngine.EnsurePunctuation(threads);
+        engine.EnsurePunctuation(threads);
     }
-    g_asrEngine.Unlock();
+    engine.Unlock();
 }

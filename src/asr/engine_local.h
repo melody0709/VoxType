@@ -54,3 +54,6 @@ private:
 
 void PreloadAsrEngine(const Config& config);
 std::vector<float> PcmToFloat(const std::vector<BYTE>& pcm);
+AsrEngine& GetLocalAsrEngine();
+extern AsrEngine g_asrEngine;
+

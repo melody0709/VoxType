@@ -5,7 +5,7 @@
 #include "asr_runtime_log.h"
 #include "asr_streaming_session_base.h"
 #include "cloud_asr_common.h"
-#include "globals.h"
+#include "asr_metrics.h"
 #include "pending_pcm_buffer.h"
 #include "qwen_asr.h"
 #include "qwen_finalize_policy.h"
@@ -634,7 +634,7 @@ private:
             return;
         }
 
-        g_cloudApiMs = std::max(0.0, static_cast<double>(GetTickCount64() - tTotal0) - recordingMs_.load());
+        asr_metrics::SetCloudApiMs(std::max(0.0, static_cast<double>(GetTickCount64() - tTotal0) - recordingMs_.load()));
         DispatchFinal(failed ? QwenErrorText(error) : finalText);
         markStopped();
     }

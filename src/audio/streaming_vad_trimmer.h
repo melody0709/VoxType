@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -50,3 +51,8 @@ private:
     std::wstring modelName_;
     VadTrimCore core_;
 };
+
+extern std::unique_ptr<StreamingVadTrimmer> g_streamingVadTrimmer;
+extern std::vector<float> g_streamingVadSamples;
+extern std::atomic<bool> g_streamingVadReady;
+
