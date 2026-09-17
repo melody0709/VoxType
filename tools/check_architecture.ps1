@@ -66,7 +66,7 @@ $BASELINES = @{
     GlobalsIncluders        = 19
     GlobalsExterns          = 91
     MainLines               = 235
-    SettingsLines           = 4405
+    SettingsLines           = 3455
     LayerViolations         = 32
     GlobalsCrossLayerHeader = 0
 }

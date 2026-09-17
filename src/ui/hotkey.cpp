@@ -173,6 +173,20 @@ void ResetCapsLockHotkeyState() {
     g_capsLockLongPressActive = false;
 }
 
+bool IsCapsLockOn() {
+    return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+}
+
+void SendCapsLockTap() {
+    INPUT inputs[2] = {};
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = VK_CAPITAL;
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = VK_CAPITAL;
+    inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(2, inputs, sizeof(INPUT));
+}
+
 void StartCapsLockHotkeyPress() {
     if (g_activeHotkeyKey == VK_CAPITAL) return;
     g_activeHotkeyKey = VK_CAPITAL;

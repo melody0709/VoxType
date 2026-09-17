@@ -78,6 +78,9 @@ add_executable(VoxType WIN32
     src/ui/hud.cpp
     src/ui/hotkey.cpp
     src/ui/settings.cpp
+    src/ui/settings_controls.cpp
+    src/ui/settings_dialogs.cpp
+    src/platform/text_injector.cpp
 )
 
 target_compile_definitions(VoxType PRIVATE UNICODE _UNICODE)
@@ -87,6 +90,7 @@ target_include_directories(VoxType PRIVATE
     "${CMAKE_SOURCE_DIR}/src/audio"
     "${CMAKE_SOURCE_DIR}/src/ui"
     "${CMAKE_SOURCE_DIR}/src/core"
+    "${CMAKE_SOURCE_DIR}/src/platform"
     "${SHERPA_DIR}/include"
     "${CMAKE_SOURCE_DIR}/third_party/onnxruntime/include"
     "${KNF_DIR}/include"

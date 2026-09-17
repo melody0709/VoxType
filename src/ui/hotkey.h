@@ -15,6 +15,8 @@ void ResetCapsLockHotkeyState();
 void StartCapsLockHotkeyPress();
 void ActivateCapsLockLongPress();
 void FinishCapsLockHotkeyPress();
+bool IsCapsLockOn();
+void SendCapsLockTap();
 
 LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam);
 void InstallKeyboardHook();

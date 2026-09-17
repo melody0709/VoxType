@@ -18,6 +18,7 @@
 #include "hud.h"
 #include "hotkey.h"
 #include "settings.h"
+#include "text_injector.h"
 #include "input_context.h"
 #include "ui_utils.h"
 #include "engine_local.h"
@@ -354,7 +355,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                         if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
                     }
                 } else {
-                    PasteTextImeAware(text);
+                    PasteTextImeAware(text, resultConfig.forceUnicodeInput);
                 }
                 double pasteMs = tPaste.ElapsedMs();
                 VolcDebugLog("DeliverFinalText: done (%.0fms, delivered=%d)",
@@ -438,7 +439,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
                 }
             } else {
-                PasteTextImeAware(text);
+                PasteTextImeAware(text, resultConfig.forceUnicodeInput);
             }
             double pasteMs = tPaste.ElapsedMs();
 
@@ -499,7 +500,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             StopRecordingSession();
             if (IsStopDelayRestoreCapsLock()) {
                 SetStopDelayRestoreCapsLock(false);
-                RestoreCapsLockState();
+                RestoreCapsLockState(g_capsLockWasOn);
             }
             return 0;
         }
