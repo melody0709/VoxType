@@ -209,6 +209,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 
     switch (msg) {
     case WM_CREATE:
+        SetHotkeyTargetWindow(hwnd);
         AddTrayIcon(hwnd);
         InstallKeyboardHook();
         return 0;

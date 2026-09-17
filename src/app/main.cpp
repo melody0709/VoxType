@@ -12,6 +12,7 @@
 #include "engine_local.h"
 #include "path_service.h"
 #include "hud.h"
+#include "hotkey.h"
 #include "audio_capture.h"
 #include "audio_diagnostics.h"
 #include "wasapi_capture.h"
@@ -102,6 +103,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         DeleteCriticalSection(&g_streamingSessionCs);
         return 1;
     }
+
+    SetHotkeyTargetWindow(g_mainWindow);
 
     if (g_config.asrBackend == L"local" || g_config.fallbackAsrBackend == L"local") {
         Config localConfig = g_config;

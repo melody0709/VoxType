@@ -5,6 +5,7 @@
 #include "hotkey.h"
 #include "path_service.h"
 #include "ui_utils.h"
+#include "ui_theme.h"
 #include "settings.h"
 #include "utils.h"
 #include "config_store.h"
@@ -12,8 +13,10 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <imm.h>
 
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "imm32.lib")
 
 bool IsModifierKey(UINT vk) {
     return vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL ||
@@ -127,6 +130,12 @@ HotkeyConfig HotkeyFromString(const std::wstring& text) {
         } else if (token.size() > 1 && (token[0] == L'F' || token[0] == L'f')) {
             int f = _wtoi(token.c_str() + 1);
             if (f >= 1 && f <= 24) hotkey.key = VK_F1 + f - 1;
+        } else if (token.rfind(L"0x", 0) == 0 || token.rfind(L"0X", 0) == 0) {
+            wchar_t* end = nullptr;
+            unsigned long hex = wcstoul(token.c_str(), &end, 16);
+            if (hex > 0 && hex <= 0xFF && hex != 0xE5) {
+                hotkey.key = static_cast<UINT>(hex);
+            }
         }
         if (plus == std::wstring::npos) break;
         start = plus + 1;
@@ -135,7 +144,11 @@ HotkeyConfig HotkeyFromString(const std::wstring& text) {
 }
 
 HotkeyConfig CurrentConfiguredHotkey() {
-    return HotkeyFromString(g_config.hotkey);
+    HotkeyConfig cfg = HotkeyFromString(g_config.hotkey);
+    if (cfg.key == 0xE5 || cfg.IsEmpty()) {
+        cfg.key = VK_CAPITAL;
+    }
+    return cfg;
 }
 
 bool ModifiersMatch(const HotkeyConfig& hotkey) {
@@ -166,6 +179,10 @@ bool s_capsLockHotkeyPending = false;
 bool s_capsLockLongPressActive = false;
 bool s_capsLockWasOn = false;
 HFONT s_defaultFont = nullptr;
+
+HWND EffectiveTargetWindow() {
+    return s_targetWindow ? s_targetWindow : g_mainWindow;
+}
 } // namespace
 
 void SetHotkeyTargetWindow(HWND hwnd) { s_targetWindow = hwnd; }
@@ -177,13 +194,15 @@ void SetCapsLockWasOn(bool wasOn) { s_capsLockWasOn = wasOn; }
 void SetDefaultUiFont(HFONT font) { s_defaultFont = font; }
 
 void PostHotkeyRecordingCommand(WPARAM command) {
-    if (s_targetWindow) {
-        PostMessageW(s_targetWindow, kHotkeyRecordingMessage, command, 0);
+    HWND target = EffectiveTargetWindow();
+    if (target) {
+        PostMessageW(target, kHotkeyRecordingMessage, command, 0);
     }
 }
 
 void ResetCapsLockHotkeyState() {
-    if (s_targetWindow) KillTimer(s_targetWindow, kCapsLockLongPressTimer);
+    HWND target = EffectiveTargetWindow();
+    if (target) KillTimer(target, kCapsLockLongPressTimer);
     if (s_capsLockHotkeyPending) {
         // The hook is going away mid-press (e.g. settings window opened), so
         // the 300 ms long-press verdict will never arrive.  Make sure the
@@ -215,7 +234,8 @@ void StartCapsLockHotkeyPress() {
     s_capsLockHotkeyPending = true;
     s_capsLockLongPressActive = false;
     s_capsLockWasOn = IsCapsLockOn();
-    if (s_targetWindow) SetTimer(s_targetWindow, kCapsLockLongPressTimer, kCapsLockLongPressMs, nullptr);
+    HWND target = EffectiveTargetWindow();
+    if (target) SetTimer(target, kCapsLockLongPressTimer, kCapsLockLongPressMs, nullptr);
     // Capture starts immediately; the 300 ms timer only decides whether the
     // collected PCM becomes a recording (long press) or is discarded (tap).
     PostHotkeyRecordingCommand(kHotkeyCaptureBegin);
@@ -230,7 +250,8 @@ void ActivateCapsLockLongPress() {
 
 void FinishCapsLockHotkeyPress() {
     if (s_activeHotkeyKey != VK_CAPITAL) return;
-    if (s_targetWindow) KillTimer(s_targetWindow, kCapsLockLongPressTimer);
+    HWND target = EffectiveTargetWindow();
+    if (target) KillTimer(target, kCapsLockLongPressTimer);
 
     const bool wasLongPress = s_capsLockLongPressActive;
     const bool wasShortPress = s_capsLockHotkeyPending && !s_capsLockLongPressActive;
@@ -302,7 +323,10 @@ void UninstallKeyboardHook() {
 }
 
 void ApplyUiFont(HWND hwnd, HFONT font) {
-    if (hwnd) SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font ? font : s_defaultFont), TRUE);
+    HFONT target = font ? font : (s_defaultFont ? s_defaultFont : ui_theme::UiFont());
+    if (hwnd && target) {
+        SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(target), TRUE);
+    }
 }
 
 LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -310,6 +334,7 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 
     switch (msg) {
     case WM_NCCREATE:
+        ImmAssociateContext(hwnd, nullptr);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(new HotkeyEditState()));
         return TRUE;
     case WM_NCDESTROY:
@@ -319,6 +344,7 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     case WM_GETDLGCODE:
         return DLGC_WANTALLKEYS;
     case WM_SETFOCUS:
+        ImmAssociateContext(hwnd, nullptr);
         if (state) {
             state->capturing = true;
             state->original = state->hotkey;
@@ -337,6 +363,12 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN: {
         if (!state) break;
+        if (wParam == VK_PROCESSKEY) {
+            wParam = ImmGetVirtualKey(hwnd);
+        }
+        if (wParam == VK_PROCESSKEY || wParam == 0xE5) {
+            return 0;
+        }
         if (wParam == VK_ESCAPE) {
             state->hotkey = state->original;
             state->capturing = false;

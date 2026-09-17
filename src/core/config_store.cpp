@@ -232,6 +232,9 @@ void LoadConfig(Config& config) {
     config.enablePartial = ExtractJsonBool(json, "enable_partial", config.enablePartial);
     config.postprocess = Utf8ToWide(ExtractJsonString(json, "postprocess", WideToUtf8(config.postprocess)));
     config.hotkey = Utf8ToWide(ExtractJsonString(json, "hotkey", WideToUtf8(config.hotkey)));
+    if (config.hotkey.empty() || config.hotkey == L"0xE5" || config.hotkey == L"0xe5") {
+        config.hotkey = L"CapsLock";
+    }
     config.llmProvider = Utf8ToWide(ExtractJsonString(json, "llm_provider", ""));
     config.llmProvidersJson = Utf8ToWide(ExtractJsonString(json, "llm_providers_json", ""));
     config.llmEndpoint = Utf8ToWide(ExtractJsonString(json, "llm_endpoint", WideToUtf8(config.llmEndpoint)));
