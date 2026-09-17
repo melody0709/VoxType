@@ -3,13 +3,17 @@
 #endif
 
 #include "engine.h"
+#include "wasapi_capture.h"
+#include "audio_diagnostics.h"
 #include "asr_streaming_session.h"
 #include "streaming_vad_trimmer.h"
 #include "utils.h"
+#include "llm_refine.h"
 #include "qwen_free_postprocess.h"
 #include "qwen_audio_profile.h"
 #include "qwen_special_word_filter.h"
 #include "asr_runtime_log.h"
+#include "sherpa-onnx/c-api/cxx-api.h"
 
 #include <algorithm>
 #include <cmath>

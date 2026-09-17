@@ -1,5 +1,4 @@
 #include "audio_diagnostics.h"
-
 #include "resource.h"
 
 #include <bcrypt.h>

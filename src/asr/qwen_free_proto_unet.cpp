@@ -1,6 +1,5 @@
 #include "qwen_free_proto_unet.h"
 #include "asr_runtime_log.h"
-#include "globals.h"
 #include "qwen_free_proto_utdid.h"
 
 #include <windows.h>

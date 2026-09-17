@@ -1,7 +1,6 @@
 #include "qwen_free_proto_asr.h"
 
 #include "asr_runtime_log.h"
-#include "globals.h"
 #include "qwen_free_asr_json.h"
 #include "qwen_free_diagnostics.h"
 #include "qwen_free_proto_unet.h"

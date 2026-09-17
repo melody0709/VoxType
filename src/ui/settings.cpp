@@ -1,7 +1,6 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #include "settings.h"
 #include "engine.h"
 #include "hotkey.h"
@@ -12,16 +11,17 @@
 #include "mimo_asr.h"
 #include "qwen_asr.h"
 #include "qwen_audio_http.h"
+#include "baidu_asr.h"
 #include "qwen_audio_json.h"
 #include "qwen_audio_streaming.h"
 #include "qwen_special_word_filter.h"
+#include "qwen_free_proto_unet.h"
 #include "qwen_free_proto_asr.h"
 #include "qwen_free_proto_llm.h"
 #include "qwen_free_postprocess.h"
-#include "qwen_free_proto_unet.h"
+#include "llm_refine.h"
 #include "qwen_free_proto_utdid.h"
 #include "volcengine_asr.h"
-
 #include <algorithm>
 #include <atomic>
 #include <commctrl.h>

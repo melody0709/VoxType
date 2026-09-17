@@ -10,6 +10,7 @@
 #include "qwen_context.h"
 #include "qwen_finalize_policy.h"
 #include "qwen_audio_streaming.h"
+#include "utils.h"
 
 #include <algorithm>
 #include <atomic>

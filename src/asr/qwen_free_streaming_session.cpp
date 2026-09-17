@@ -13,6 +13,7 @@
 #include "qwen_free_recovery_policy.h"
 #include "qwen_free_proto_unet.h"
 #include "qwen_free_proto_utdid.h"
+#include "utils.h"
 
 #include <algorithm>
 #include <atomic>

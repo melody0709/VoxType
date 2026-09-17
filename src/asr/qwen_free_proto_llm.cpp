@@ -2,7 +2,6 @@
 
 #include "asr_runtime_log.h"
 #include "cloud_http_common.h"
-#include "globals.h"
 #include "qwen_free_diagnostics.h"
 #include "qwen_free_json.h"
 #include "qwen_free_llm_json.h"

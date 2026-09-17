@@ -63,12 +63,12 @@ Write-Host "============================================================" -Foreg
 #    header basename to the layer that owns the header file.
 # -----------------------------------------------------------------------------
 $BASELINES = @{
-    GlobalsIncluders        = 22
+    GlobalsIncluders        = 19
     GlobalsExterns          = 91
     MainLines               = 2759
     SettingsLines           = 4405
-    LayerViolations         = 46
-    GlobalsCrossLayerHeader = 7
+    LayerViolations         = 44
+    GlobalsCrossLayerHeader = 0
 }
 
 # Allowed layer dependencies: key = layer of the including file,

@@ -18,18 +18,23 @@
 #include <vector>
 #include <thread>
 
-#include "sherpa-onnx/c-api/cxx-api.h"
-#include "firered_vad.h"
-#include "llm_refine.h"
-#include "baidu_asr.h"
-#include "audio_diagnostics.h"
-#include "wasapi_capture.h"
-#include "input_context.h"
-#include "qwen_free_postprocess.h"
 #include "resource.h"
 
 class IStreamingAsrSession;
 class StreamingVadTrimmer;
+class WasapiCapture;
+struct InputContextResult;
+
+#ifndef AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
+#define AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
+namespace audio_diagnostics {
+enum class StageKind {
+    Primary,
+    InternalRetry,
+    Fallback,
+};
+}
+#endif
 
 constexpr wchar_t kAppName[] = L"VoxType";
 constexpr wchar_t kMainClass[] = L"VoxType.Main";
@@ -475,14 +480,12 @@ struct Config {
 };
 
 inline void NormalizeQwenFreePostProcessConfig(Config& config) {
-    const auto flags = qwen_free_postprocess::Normalize({
-        config.qwenFreePolishEnabled,
-        config.qwenFreePunctEnabled,
-        config.qwenFreeCorrectEnabled,
-    });
-    config.qwenFreePolishEnabled = flags.polish;
-    config.qwenFreePunctEnabled = flags.punctuate;
-    config.qwenFreeCorrectEnabled = flags.correct;
+    const bool enabled = config.qwenFreePolishEnabled ||
+                         config.qwenFreePunctEnabled ||
+                         config.qwenFreeCorrectEnabled;
+    config.qwenFreePolishEnabled = enabled;
+    config.qwenFreePunctEnabled = enabled;
+    config.qwenFreeCorrectEnabled = enabled;
 }
 
 struct HotkeyConfig {

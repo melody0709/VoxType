@@ -23,11 +23,14 @@ constexpr size_t kRetentionMaxGroups = 20;
 constexpr uint64_t kRetentionMaxBytes = 100ull * 1024ull * 1024ull;
 constexpr DWORD kRetentionMaxAgeDays = 7;
 
+#ifndef AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
+#define AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
 enum class StageKind {
     Primary,
     InternalRetry,
     Fallback,
 };
+#endif
 
 const char* StageKindName(StageKind kind);
 StageKind RetryStageKind(StageKind parentKind);

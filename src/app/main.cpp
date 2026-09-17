@@ -1,7 +1,6 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-
 #include "globals.h"
 #include "engine.h"
 #include "hud.h"
@@ -22,10 +21,11 @@
 #include "qwen_audio_streaming_session.h"
 #include "qwen_free_streaming_session.h"
 #include "qwen_audio_profile.h"
+#include "wasapi_capture.h"
+#include "llm_refine.h"
 #include "volcengine_streaming_session.h"
 #include "volcengine_asr.h"
 #include "streaming_vad_trimmer.h"
-
 #include <fstream>
 #include <sstream>
 #include <thread>

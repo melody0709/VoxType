@@ -1,6 +1,8 @@
 #pragma once
 
 #include "globals.h"
+#include "firered_vad.h"
+#include "sherpa-onnx/c-api/cxx-api.h"
 
 #include <mutex>
 #include <memory>
