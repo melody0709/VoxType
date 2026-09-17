@@ -17,6 +17,17 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 唯一可直接运行的开发程序是 `build\run\x64-release\VoxType.exe`，不能运行 `build\cmake\x64-release\VoxType.exe` 或手工向运行目录复制文件。
 
+## 架构重构（2026-09 起，进行中）
+
+- **权威方案**：`.plan\refactor\cxx23-architecture-refactor-plan.md`（含分层契约、CMake 目标骨架、分阶段 Milestone 与退出判据）。
+- **机械守卫**：`tools\check_architecture.ps1`（当前 **17 项检查**，含 5 项防绕过）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
+- **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
+- **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
+- **每个 Milestone 收尾必须重审"踩坑规则"中的【B】【C】类条目**：条件已解除的改写，与现实不符的删除（不得留作历史注释）。
+- **阶段判据**：收尾某阶段时跑 `tools\check_architecture.ps1 -Stage P1`（同理 P2~P6），输出 PASS 才算该阶段完成。当前基线：`22 / 91 / 7 / 2759 / 4405 / 46`（含义见方案 §1）。
+- **契约同步是每个阶段的 DoD**：涉及类名、路径、配置项搬迁时，必须同步更新 `ARCHITECTURE.md`、`AGENTS.md`（本文）与守卫脚本里的基线数值。
+- **开工前先做备份**：`.bak\`（仓库根，已在 `.gitignore` 中）。禁止把人工备份放进 `build\`。
+
 ## `build/` 生成目录边界
 
 - `build/` 完全是可删除、gitignored 的生成输出；禁止存放源码、手工脚本、截图、输入数据、用户数据或人工备份。
@@ -28,13 +39,19 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 ## 开发约定
 
 - 编辑文件优先用精确替换（SearchReplace / apply_patch），避免全文覆写。
+- **项目强制使用 C++23 标准**：`CMakeLists.txt` 统一配置 `CMAKE_CXX_STANDARD 23`。后续所有新功能开发与重构必须遵循 C++23 规范，优先采用 `std::expected<T, E>` 错误处理、`std::span` 零拷贝音频切片、`std::format` 格式化、`std::jthread` 协作式线程管理。详细指引见 `.agents/skills/modern-cpp23-guidance/SKILL.md`（**注意：`.agents/` 目前是 untracked，需先提交，否则该指引随工作区丢失**）。
+- **`std::print` / `std::println` 仅限离线测试工具与构建期脚本**。`VoxType` 是 `add_executable(... WIN32)` 子系统程序，**没有控制台**，stdout 无处可见；应用内日志继续走文件日志与 `DebugModeOpenConsole()` 调试通道。
+- **C++20/C++23 字符串字面量规范**：因标准中 `char8_t` 为独立类型，在 MSVC `/utf-8` 编译选项下，与 `std::string` 交互直接使用常规字符串字面量 `"..."`，避免使用 `u8"..."` 导致无法隐式转换。
 - C++ 新增依赖同步更新：`#pragma comment(lib)` + `CMakeLists.txt`；若新增运行时 DLL 或资源，还要更新 `cmake/VoxTypeRuntime.cmake` 的安装清单。
 - **版本号只改 `src/app/resource.h` 的 APP_VERSION_MAJOR/MINOR/PATCH/BUILD**，再同步 `README.md` 版本和 `CHANGELOG.md` 记录。`src/app/main.cpp` / `src/app/resources.rc` 用宏自动派生。
-- sherpa-onnx `cxx-api.h` 含非 ASCII 注释，编译需 `/utf-8`。
+- sherpa-onnx `cxx-api.h` **含非 ASCII 字符串字面量**（不只是注释），编译必须 `/utf-8`：缺此项不是告警而是**硬错误**（`error C2001: newline in constant` 及连锁的 C2146/C2061/C2059，实测 MSVC 14.44.35207 + SDK 10.0.26100.0）。
+- **每个 `add_library` / `add_executable` 都必须继承 `/utf-8` 与 `/EHsc`**：新拆出的静态库若只写在 `VoxType` 上就会编译失败。统一走 `voxtype_build_flags` INTERFACE 目标（见重构方案 §3）。守卫对此硬 FAIL。
+- **`add_library(X STATIC/SHARED/MODULE)` 必须至少声明一个源文件**，否则 CMake 在 generate 阶段直接失败（`No SOURCES given to target`）。需要"先占位后填内容"时用 `INTERFACE`。
+- **本仓库的 `.ps1` 脚本必须纯 ASCII，或存为 UTF-8 with BOM**。`build.bat` 用的是 Windows PowerShell **5.1**，它按 ANSI(CP936) 解码**无 BOM** 的 UTF-8 脚本，会吞掉"紧跟非 ASCII 字节的换行"，症状是与编码毫无关联的 `Missing '=' operator after key in hash literal` 一类解析错误。同理，统计源码行数/条目**禁止用 `Get-Content`**（会少算），必须用 `[System.IO.File]::ReadAllLines()`。
 - UI 修改后必须编译验证，Settings 检查裁切/重叠，HUD 检查高 DPI。
 - DPI 单位：DirectWrite/Direct2D 用 DIP，Win32 `SetWindowPos` 用物理像素，不能混用。
-- Settings 布局常量在 `src/app/globals.h` 的 `UiStyle` 命名空间，不要硬编码魔法数字。
-- 新增配置项同步三处：`src/app/globals.h` Config 字段 + `src/audio/engine.cpp` LoadConfig/SaveConfig + `src/ui/settings.cpp` UI 控件。
+- Settings 布局常量在 `src/app/globals.h` 的 `UiStyle` 命名空间，不要硬编码魔法数字。**（目标态：P5 删除 `globals.h` 后迁至 `src/ui/ui_types.h`，以重构方案为准。）**
+- 新增配置项同步**实测为 9~10 处 / 4 个文件**（不只是三处）：`src/app/globals.h` Config 字段、`src/audio/engine.cpp` 的 `LoadConfig` / `SaveConfig`、`src/ui/settings.cpp` 的控件创建与 `LoadSettingsControls` / `SaveSettingsControls`。**（目标态：改为 Core 侧 provider/config 字段注册表驱动，"加一个配置项 = 加一行"；在字段注册表落地前，按现状的 9~10 处同步，漏一处即功能失效。）**
 - DLL 延迟加载：`onnxruntime.dll`、`sherpa-onnx-cxx-api.dll`、`kaldi-native-fbank-core.dll` 通过 `/DELAYLOAD` 延迟加载，纯云端模式空闲 ~12 MB。`TryLoadAsrDlls()` 用 SEH 安全检测。
 - 本地模式启动时 `PreloadAsrEngine()` 后台线程预加载模型，Save 后 Reload + 预加载。
 
@@ -46,7 +63,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - 音频回调只做轻量采集、可选 VAD trim、`EnqueuePcmChunk()`；不要在 WASAPI/waveIn 回调里做网络请求或 provider 协议逻辑。
 - Streaming 停止录音用 `StopInput()` 通知 session，不要让 `StopRecordingSession()` 同步等待云端 final。
 - 新 provider 如果有跨录音 session 的连接预热/复用句柄，先保留清晰生命周期，不要强行收进单次录音 session。
-- Settings 新增配置项仍必须同步三处：`src/app/globals.h` Config 字段 + `src/audio/engine.cpp` LoadConfig/SaveConfig + `src/ui/settings.cpp` UI 控件。
+- Settings 新增配置项仍必须按"新增配置项同步 9~10 处 / 4 个文件"的规则执行（见"开发约定"一节）；在字段注册表落地前不要只改三处。
 
 ## 不要轻易做的事
 
@@ -55,7 +72,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - 不要在 Settings 打开时继续拦截录音快捷键。
 - 不要依赖固定窗口高度放底部按钮。
 - 不要为了美观牺牲控件可读性，高 DPI 优先留空间。
-- 不要混淆 `src/asr/volcengine_asr.h` 的 `ExtractJsonStr`（无转义）和 `src/audio/engine.cpp` 的 `ExtractJsonString`（支持转义）。
+- 不要新增第四个 JSON 取值函数。项目里已有三族：`ExtractJsonString(json, key, fallback)`（`src/audio/engine.cpp`，声明在 `engine.h`）、`ExtractJsonString(json, key)`（`src/asr/qwen_free_proto_llm.cpp`，2 参重载）、以及 `src/core/utils.h` 的转义感知族（`DecodeJsonStringAt` / `ExtractJsonStringDecoded` / `ExtractJsonArrayFirstStringDecoded`）。新增前先查重；P2 之后 `engine.cpp` 那一族应迁入 Core 并合并为单一定义。
 - 不要在火山引擎 `bigmodel_nostream` 模式下对中间 chunk 调用 `ReceiveResult`——服务器返回空文本，浪费时间。
 - 不要在 Extra Params 和代码生成的 `corpus` 中同时写 `corpus`——代码已跳过 Extra Params 中的 `corpus` key，手动编辑 config 需注意。
 - 不要新增云端 ASR 时绕过 `IAsrSession` / `IStreamingAsrSession`，否则 `main.cpp` 会重新膨胀。
@@ -65,17 +82,34 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 > AI 在完成重大修改或解决复杂报错后，可追加规则。
 
-- CapsLock 热键：短按必须补发 `CapsLock` 保持系统切换，长按录音结束后必须恢复原 Caps Lock 状态。
-- HUD 尺寸：DirectWrite 测量 DIP，`SetWindowPos` 用物理像素，高 DPI 需显式换算。
-- FireRedVAD：fbank 期望 int16 范围（-32768~32767），不是归一化 float，传入前必须乘 32768。
-- 公共 VAD trim 只裁剪头尾静音，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是追加输出语义，调用方要自己清空/使用局部 `outputs`。
-- Streaming VAD 的 no-speech 判断用 `StreamingVadTrimmer::DetectedSpeech()`，不要重新引入 provider 专属 `g_xxxVadState`。
-- `ExtractJsonStr` 处理 `\\"` 时不能只看前一个字符，必须统计连续反斜杠数量——偶数个后的 `"` 是结束符。
-- 火山引擎 WebSocket `connected` 必须用 `std::atomic<bool>`，不能用 `volatile bool`。
-- 火山引擎 `context` 字段值必须是 JSON 字符串（内部引号转义），不能是原始 JSON 对象。
-- 火山引擎 `volcengine_asr.h` 协议层可后续机械拆薄，但不要在无测试覆盖时重写 frame 编解码、三模式 send/drain、`PrewarmConnection()` / `CloseSession()` 行为。
-- 火山引擎 `g_volcSession` 仍保留全局是为了 `hSession/hConnect` 跨录音 session 复用；不要轻易改成单次录音 session 成员，否则 Settings 保存后的预热连接会失效。
-- 百度 ASR transient 失败应重发同一段 PCM；token/auth 错误应清 token 后刷新重试，避免用户必须重新说第二遍。
-- WASAPI 生命周期必须是 `Init → Start → Stop → Release`，`Stop()` 只停线程不清资源，没有 `Release()` 第二次录音会卡死。`Init()` 成功但 `Start()` 失败时也必须 `Release()`。
-- WASAPI 重采样相位更新必须用 `m_resamplePhase -= written / m_resampleRatio`（实际消耗的源样本数），不能用 `m_resamplePhase -= numFrames`（输入帧数），否则非整数采样率比会越界。
-- **微信粘贴**：微信（`Weixin.exe`）用自定义 Qt 控件，`GetFocus()` 返回 NULL 且 IME 拦截 Ctrl+V。必须用 `WM_CHAR` 逐字符发送，不能用剪贴板+Ctrl+V。其他应用用剪贴板+Ctrl+V+IMM32 切换。
+### 规则分类（新增条目必须标注类别）
+
+本节的规则不是同一类东西，混在一起会让"该守的守不住、该放的放不掉"。新增或修改规则时，**必须**标注它属于哪一类：
+
+| 类别 | 含义 | 重构时的处置 | 例 |
+| :--- | :--- | :--- | :--- |
+| **A · 不变量** | 描述**外部世界的行为**（OS / 协议 / 硬件 / 第三方控件）。语言标准升级、文件搬家都不改变它，违反即 bug。 | **永久保留**，重构中作为"不得破坏"的红线 | WASAPI 生命周期；重采样相位公式；微信必须 `WM_CHAR`；FireRedVAD 的 int16 范围 |
+| **B · 条件约束** | 因为**当前某个前提**才成立（没有测试覆盖 / 还是全局变量 / 还是单文件）。前提一旦解除，约束即失效。 | **必须写明条件与解除条件**；条件解除后重写为"先补测试再重构"，而不是当永久禁令 | "火山协议层不要在无测试覆盖时重写" |
+| **C · 实现现状** | 描述**当前代码长什么样**（某文件里某函数、某签名、某全局变量还在）。 | 重构会让它过期，**每个 Milestone 收尾必须重审**；与现实不符的**立即删除**，不得留作"历史注释" | 「`VadTrimCore` 的入参是 `const float* + size_t`」（P6 会改为 `std::span`） |
+
+**元规则（重要）**：规则必须可证伪。凡是描述"当前实现"而非"外部行为"的条目，在对应 Milestone 收尾时逐条重审；**已与现实不符的规则是负资产**——它会让执行者建立错误的前置认知，比没有规则更糟。**禁止**把过期规则保留为"历史说明"或注释掉。
+
+- **【A】CapsLock 热键**：短按必须补发 `CapsLock` 保持系统切换，长按录音结束后必须恢复原 Caps Lock 状态。
+- **【A】HUD 尺寸**：DirectWrite 测量 DIP，`SetWindowPos` 用物理像素，高 DPI 需显式换算。
+- **【A】FireRedVAD**：fbank 期望 int16 范围（-32768~32767），不是归一化 float，传入前必须乘 32768。
+- **【A】公共 VAD trim 只裁剪头尾静音**，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是**追加输出语义**，调用方要自己清空/使用局部 `outputs`。**（P2 把签名改成 `std::span` 时，这条语义是最容易被破坏的点，必须配单测。）**
+- **【A】Streaming VAD 的 no-speech 判断用 `StreamingVadTrimmer::DetectedSpeech()`**，不要重新引入 provider 专属 `g_xxxVadState`。
+- **【A】转义 JSON 解码**：处理 `\\"` 时不能只看前一个字符，必须统计连续反斜杠数量——偶数个后的 `"` 才是结束符。现状实现在 `src/core/utils.h`（`DecodeJsonStringAt` / `ExtractJsonStringDecoded`）。
+- **【A】火山引擎 WebSocket `connected` 必须用 `std::atomic<bool>`**，不能用 `volatile bool`。
+- **【A】火山引擎 `context` 字段值必须是 JSON 字符串**（内部引号转义），不能是原始 JSON 对象。
+- **【B】火山引擎协议层**：**在当前（无测试覆盖）前提下**，不要重写 frame 编解码、三模式 send/drain、`PrewarmConnection()` / `CloseSession()` 行为；可以机械拆薄。**解除条件**：一旦 P3/P6 为该协议层建立了回归测试，本条自动作废，替换为"协议层重构前必须先补测试"。
+- **【B】Streaming provider 的 send loop / drain thread / retry**：不要强行做成一个复杂模板。**解除条件**：公共层的生命周期与通用策略在 P3 收敛并有测试保护后，可重新评估。
+- **【A】百度 ASR** transient 失败应重发同一段 PCM；token/auth 错误应清 token 后刷新重试，避免用户必须重新说第二遍。
+- **【A】WASAPI 生命周期**必须是 `Init → Start → Stop → Release`，`Stop()` 只停线程不清资源，没有 `Release()` 第二次录音会卡死。`Init()` 成功但 `Start()` 失败时也必须 `Release()`。
+- **【A】WASAPI 重采样相位更新**必须用 `m_resamplePhase -= written / m_resampleRatio`（实际消耗的源样本数），不能用 `m_resamplePhase -= numFrames`（输入帧数），否则非整数采样率比会越界。
+- **【A】微信粘贴**：微信（`Weixin.exe`）用自定义 Qt 控件，`GetFocus()` 返回 NULL 且 IME 拦截 Ctrl+V。必须用 `WM_CHAR` 逐字符发送，不能用剪贴板+Ctrl+V。其他应用用剪贴板+Ctrl+V+IMM32 切换。
+- **守卫基线只许下调，禁止上调**。`tools/check_architecture.ps1` 里的基线数值（`22 / 91 / 7 / 2759 / 4405 / 46`）代表"当前债务上限"，只减不增。任何上调必须由**用户人工确认**，且提交信息里写明理由。守卫自带完整性检查：相对 `HEAD` 上调基线即判 FAIL。
+- **不要为了让守卫变绿而删测试、注释掉守卫调用、或放宽校验规则**。这是最容易被自主执行者选择的"捷径"，属于禁止行为。守卫会校验 `build.bat` 仍在主流程（而非仅 `--test`）调用自己，以及 5 个既有测试目标仍在。
+- **不要用 `file(GLOB ...)` 收集源文件**：会让"新增文件忘进 CMake""删除文件忘出 CMake"双双变成静默行为，并让 target 结构检查失真。守卫已禁止 `GLOB`。
+- **拆 `globals.h` 时不要把它的 include 换个新头继续集中**。把 9 个跨层 `#include`（sherpa / provider / 音频 / UIVAD 头）搬到 `config.h` 只是改名字，重编译爆炸圈一点不变——必须让每个 include 回到真正使用它的那一层。
+- **PCH 里放 `<windows.h>` 必须同时全局定义 `NOMINMAX`**：MSVC 用 `/FI` 强制包含 PCH，`min`/`max` 宏会污染每个 TU，使全仓 54 处 `std::min`/`std::max`（14 个文件）报 `error C2589`。各文件里本地的 `#ifndef NOMINMAX` 在 PCH 下**已经太晚**。守卫对此硬 FAIL。

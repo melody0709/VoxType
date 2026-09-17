@@ -108,7 +108,7 @@ int main() {
         "{\"content\":\"wrong\",\"choices\":[{\"message\":{"
         "\"reasoning_content\":\"hidden\","
         "\"content\":\"  \\u4F60\\u597D\\nA\\\"B\\\\C\\/D \\uD83D\\uDE00  \"}}]}";
-    Expect(llm::WideToUtf8(llm::ParseResponse(escapedResponse)) == u8"你好\nA\"B\\C/D 😀",
+    Expect(llm::WideToUtf8(llm::ParseResponse(escapedResponse)) == "你好\nA\"B\\C/D 😀",
            "response parser follows choices[0].message.content and decodes JSON escapes");
 
     const std::string arrayResponse =

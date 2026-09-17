@@ -296,7 +296,7 @@ int main() {
     Expect(qwen_free_json::ExtractString(response, "type") == "final",
            "nested string field is extracted");
     Expect(qwen_free_json::ExtractString(response, "text") ==
-               std::string(u8"你好\n世界 😀"),
+               std::string("你好\n世界 😀"),
            "escaped Unicode and surrogate-pair text is decoded");
     Expect(qwen_free_json::ExtractBool(response, "isFinal"),
            "true boolean field is extracted");

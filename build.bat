@@ -143,6 +143,12 @@ if errorlevel 1 exit /b !ERRORLEVEL!
     -SourceRoot "%ROOT%"
 if errorlevel 1 exit /b !ERRORLEVEL!
 
+rem Architecture invariants are ratcheted (decrease-only) and must hold on every
+rem build, not only under --test, otherwise a silent regression can slip in.
+echo Running architecture invariant check...
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\tools\check_architecture.ps1"
+if errorlevel 1 exit /b !ERRORLEVEL!
+
 call :write_layout_readme
 
 if "!VOXTYPE_TEST_MODE!"=="1" (
