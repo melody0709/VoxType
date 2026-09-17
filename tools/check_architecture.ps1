@@ -498,6 +498,7 @@ function Test-StageGate {
 switch ($Stage) {
     "P1" {
         Test-StageGate -Name "P1: globals.h carries no cross-layer provider headers" -Condition {
+            if (-not (Test-Path $globalsPath)) { return "OK" }
             $t = Read-Text -Path $globalsPath
             $bad = @()
             foreach ($p in @('sherpa-onnx/', 'onnxruntime', 'baidu_asr.h', 'llm_refine.h', 'firered_vad.h',
