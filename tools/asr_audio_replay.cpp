@@ -5,10 +5,16 @@
 #include "asr_result.h"
 #include "asr_session.h"
 #include "asr_streaming_session.h"
+#include "audio_capture.h"
 #include "audio_diagnostics.h"
+#include "config_store.h"
 #include "doubao_ime_streaming_session.h"
-#include "engine.h"
+#include "engine_local.h"
+#include "input_context.h"
+#include "path_service.h"
 #include "qwen_audio_streaming.h"
+#include "vad_detector.h"
+#include "wasapi_capture.h"
 #include "qwen_audio_streaming_session.h"
 #include "qwen_free_streaming_session.h"
 #include "qwen_streaming_session.h"
@@ -66,11 +72,12 @@ bool g_capsLockLongPressActive = false;
 bool g_capsLockWasOn = false;
 std::wstring g_hudText;
 HWAVEIN g_waveIn = nullptr;
-WAVEHDR g_waveHeaders[4] = {};
+WAVEHDR g_waveHeaders[8] = {};
 std::vector<std::vector<BYTE>> g_waveBuffers;
 std::vector<BYTE> g_audioData;
 CRITICAL_SECTION g_audioLock;
 std::atomic<bool> g_captureActive{false};
+std::atomic<bool> g_captureSuppressed{false};
 std::atomic<uint64_t> g_audioCaptureGeneration{0};
 std::atomic<bool> g_audioCaptureFailurePending{false};
 std::atomic<DWORD> g_audioCaptureFailureCode{0};
@@ -166,10 +173,12 @@ public:
     RuntimeScope() {
         InitializeCriticalSection(&g_audioLock);
         InitializeCriticalSection(&g_streamingSessionCs);
+        SetActiveVadDetector(&g_asrEngine);
         comInitialized_ = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
     }
 
     ~RuntimeScope() {
+        SetActiveVadDetector(nullptr);
         qwen_audio_streaming::InvalidateReusableConnections();
         VolcengineClosePersistentConnection();
         g_asrEngine.Reload();
@@ -710,7 +719,7 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     RuntimeScope runtime;
-    LoadConfig();
+    LoadConfig(g_config);
     const Config loaded = g_config;
     std::cout << "runtime_dir=" << Utf8ForConsole(RuntimeAssetDir())
               << " config=" << Utf8ForConsole(ConfigPath())

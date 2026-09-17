@@ -43,6 +43,8 @@ constexpr wchar_t kHudClass[] = L"VoxType.Hud";
 constexpr wchar_t kHotkeyEditClass[] = L"VoxType.HotkeyEdit";
 // Beijing DashScope workspace endpoint supplied for the Audio 3 models.
 // The API key remains user-configured and is never embedded in the binary.
+#ifndef VOXTYPE_CONFIG_CONSTANTS_DEFINED
+#define VOXTYPE_CONFIG_CONSTANTS_DEFINED
 constexpr wchar_t kQwenBeijingHttpBaseUrl[] =
     L"https://llm-c6rtn7zy4nw0u39k.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 constexpr wchar_t kQwenBeijingAudioStreamingBaseUrl[] =
@@ -50,6 +52,7 @@ constexpr wchar_t kQwenBeijingAudioStreamingBaseUrl[] =
 constexpr wchar_t kQwenBeijingRealtimeBaseUrl[] =
     L"wss://llm-c6rtn7zy4nw0u39k.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime";
 constexpr wchar_t kQwenDefaultLanguageHints[] = L"zh,en,yue";
+#endif
 constexpr UINT kTrayMessage = WM_APP + 1;
 constexpr UINT kReloadMessage = WM_APP + 2;
 constexpr UINT kAsrResultMessage = WM_APP + 3;
@@ -360,6 +363,9 @@ constexpr int IDC_MAI_LANGUAGE = 2226;
 constexpr int IDC_MAI_TEST = 2227;
 constexpr int IDC_MAI_HINT = 2228;
 
+#ifndef VOXTYPE_CONFIG_DEFINED
+#define VOXTYPE_CONFIG_DEFINED
+
 struct Config {
     int configVersion = 0;
     std::wstring modelId = L"firered_ctc";
@@ -487,6 +493,8 @@ inline void NormalizeQwenFreePostProcessConfig(Config& config) {
     config.qwenFreePunctEnabled = enabled;
     config.qwenFreeCorrectEnabled = enabled;
 }
+
+#endif // VOXTYPE_CONFIG_DEFINED
 
 struct HotkeyConfig {
     bool ctrl = false;

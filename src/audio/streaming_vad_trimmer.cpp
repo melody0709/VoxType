@@ -1,13 +1,14 @@
 #include "streaming_vad_trimmer.h"
 
-#include "engine.h"
+#include "config_store.h"
+#include "utils.h"
 #include "globals.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <utility>
 
-bool StreamingVadTrimmer::Start(const Config& config, AsrEngine& engine, std::wstring* error) {
+bool StreamingVadTrimmer::Start(const Config& config, IVadDetector& engine, std::wstring* error) {
     Reset();
     if (!config.enableVad) {
         if (error) *error = L"VAD is disabled";
@@ -15,18 +16,10 @@ bool StreamingVadTrimmer::Start(const Config& config, AsrEngine& engine, std::ws
     }
 
     const int threads = ResolveThreads(config.threads);
-    engine.Lock();
     bool ok = engine.EnsureVadForConfig(config, threads);
     if (ok) {
-        if (config.vadModel == L"firered") {
-            if (engine.fireRedVad) engine.fireRedVad->Reset();
-            else ok = false;
-        } else {
-            if (engine.vad) engine.vad->Reset();
-            else ok = false;
-        }
+        engine.ResetVad(config.vadModel);
     }
-    engine.Unlock();
 
     if (!ok) {
         if (error) *error = L"VAD model is not available";
@@ -61,24 +54,14 @@ StreamingVadTrimStats StreamingVadTrimmer::Stats() const {
 }
 
 bool StreamingVadTrimmer::DetectVoice(const int16_t* samples, size_t sampleCount) {
-    if (!active_.load() || !engine_ || !samples || sampleCount == 0) return false;
+    if (!engine_ || !samples || sampleCount == 0) return false;
 
     std::vector<float> floatBuf(sampleCount);
     for (size_t i = 0; i < sampleCount; ++i) {
         floatBuf[i] = static_cast<float>(samples[i]) / 32768.0f;
     }
 
-    bool hasVoice = false;
-    engine_->Lock();
-    if (vadModel_ == L"firered") {
-        engine_->fireRedVad->Process(floatBuf.data(), static_cast<int>(floatBuf.size()));
-        hasVoice = engine_->fireRedVad->IsInSpeech();
-    } else {
-        engine_->vad->AcceptWaveform(floatBuf.data(), static_cast<int32_t>(floatBuf.size()));
-        hasVoice = engine_->vad->IsDetected();
-    }
-    engine_->Unlock();
-    return hasVoice;
+    return engine_->DetectSpeech(floatBuf.data(), floatBuf.size(), vadModel_);
 }
 
 void StreamingVadTrimmer::ProcessPcm16(const BYTE* data, size_t bytes, std::vector<std::vector<BYTE>>& outputs) {

@@ -1,7 +1,8 @@
 #include "batch_vad_trimmer.h"
 
-#include "engine.h"
+#include "config_store.h"
 #include "vad_trim_core.h"
+#include "utils.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -11,7 +12,7 @@ namespace {
 constexpr size_t kFrameBytes = 640; // 20ms at 16kHz, 16-bit, mono.
 
 bool DetectVoice(const Config& config,
-                 AsrEngine& engine,
+                 IVadDetector& engine,
                  const std::vector<BYTE>& frameData) {
     if (frameData.size() < sizeof(int16_t)) return false;
 
@@ -22,23 +23,13 @@ bool DetectVoice(const Config& config,
         floatBuf[i] = static_cast<float>(samples[i]) / 32768.0f;
     }
 
-    bool hasVoice = false;
-    engine.Lock();
-    if (config.vadModel == L"firered") {
-        engine.fireRedVad->Process(floatBuf.data(), static_cast<int>(floatBuf.size()));
-        hasVoice = engine.fireRedVad->IsInSpeech();
-    } else {
-        engine.vad->AcceptWaveform(floatBuf.data(), static_cast<int32_t>(floatBuf.size()));
-        hasVoice = engine.vad->IsDetected();
-    }
-    engine.Unlock();
-    return hasVoice;
+    return engine.DetectSpeech(floatBuf.data(), floatBuf.size(), config.vadModel);
 }
 
 } // namespace
 
 BatchVadTrimResult TrimBatchPcm16WithVad(const Config& config,
-                                         AsrEngine& engine,
+                                         IVadDetector& engine,
                                          const std::vector<BYTE>& pcm) {
     BatchVadTrimResult result;
     result.rawBytes = pcm.size();
@@ -53,18 +44,10 @@ BatchVadTrimResult TrimBatchPcm16WithVad(const Config& config,
     }
 
     const int threads = ResolveThreads(config.threads);
-    engine.Lock();
     bool ok = engine.EnsureVadForConfig(config, threads);
     if (ok) {
-        if (config.vadModel == L"firered") {
-            if (engine.fireRedVad) engine.fireRedVad->Reset();
-            else ok = false;
-        } else {
-            if (engine.vad) engine.vad->Reset();
-            else ok = false;
-        }
+        engine.ResetVad(config.vadModel);
     }
-    engine.Unlock();
 
     if (!ok) {
         result.error = L"VAD model is not available";

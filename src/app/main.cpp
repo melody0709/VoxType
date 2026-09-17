@@ -2,7 +2,12 @@
 #define NOMINMAX
 #endif
 #include "globals.h"
-#include "engine.h"
+#include "audio_capture.h"
+#include "audio_chunk_sink.h"
+#include "config_store.h"
+#include "engine_local.h"
+#include "path_service.h"
+#include "ui_utils.h"
 #include "hud.h"
 #include "hotkey.h"
 #include "settings.h"
@@ -42,7 +47,6 @@
 #include <utility>
 #include <vector>
 #include <commctrl.h>
-
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "shell32.lib")
@@ -54,7 +58,6 @@
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "crypt32.lib")
-
 static void WriteDiagnosticAudioRuntimeLog(const std::string& line) {
     asr_runtime_log::Write("%s", line.c_str());
 }
@@ -1432,28 +1435,25 @@ static StreamingPartialHudCallbackContext g_qwenPartialHudContext{L"Listening...
 static StreamingPartialHudCallbackContext g_doubaoImePartialHudContext{L"Listening... Doubao IME"};
 static StreamingPartialHudCallbackContext g_volcenginePartialHudContext{L"Listening... Volcano Engine"};
 static StreamingPartialHudCallbackContext g_qwenFreePartialHudContext{L"Listening... Qwen IME (Free)"};
-
 static std::unique_ptr<IStreamingAsrSession> TakeActiveStreamingSession() {
     EnterCriticalSection(&g_streamingSessionCs);
+    SetActiveAudioChunkSink(nullptr);
     auto session = std::move(g_activeStreamingSession);
     LeaveCriticalSection(&g_streamingSessionCs);
     return session;
 }
-
 static bool HasActiveStreamingSession() {
     EnterCriticalSection(&g_streamingSessionCs);
     const bool hasSession = (g_activeStreamingSession != nullptr);
     LeaveCriticalSection(&g_streamingSessionCs);
     return hasSession;
 }
-
 static void AbortAndResetActiveStreamingSession() {
     auto session = TakeActiveStreamingSession();
     if (session) {
         session->Abort();
     }
 }
-
 static void ResetStreamingVadTrimmerState() {
     g_streamingVadTrimmer.reset();
     g_streamingVadReady = false;
@@ -1521,14 +1521,13 @@ static void ActivateStreamingSession(std::unique_ptr<IStreamingAsrSession> sessi
         }
     }
 
+    SetActiveAudioChunkSink(session.get());
     g_activeStreamingSession = std::move(session);
     g_streamingVadReady = useVadTrimmer && g_streamingVadTrimmer &&
                           g_streamingVadTrimmer->IsActive();
-
     LeaveCriticalSection(&g_streamingSessionCs);
     LeaveCriticalSection(&g_audioLock);
 }
-
 // Shared HUD/watchdog tail for all streaming backends.
 static void StartStreamingWatchdog(const wchar_t* listeningText) {
     ShowHud(listeningText);
@@ -2288,7 +2287,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 g_config.doubaoImeCdid = update->credentials.cdid;
                 g_config.doubaoImeToken = update->credentials.token;
             }
-            SaveConfig();
+            SaveConfig(g_config);
             if (g_settingsWindow && IsWindow(g_settingsWindow)) {
                 PostMessageW(g_settingsWindow, kDoubaoImeSettingsRefreshMessage, 0, 0);
             }
@@ -2578,11 +2577,11 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             g_enableDebugMode = g_config.enableDebugMode;
             if (g_config.enableDebugMode) DebugModeOpenConsole();
             else DebugModeCloseConsole();
-            SaveConfig();
+            SaveConfig(g_config);
             return 0;
         case ID_TRAY_FORCE_UNICODE:
             g_config.forceUnicodeInput = !g_config.forceUnicodeInput;
-            SaveConfig();
+            SaveConfig(g_config);
             return 0;
         default:
             break;
@@ -2666,8 +2665,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         CloseHandle(mutex);
         return 0;
     }
-
     g_instance = instance;
+    SetActiveVadDetector(&g_asrEngine);
     g_taskbarCreatedMessage = RegisterWindowMessageW(L"TaskbarCreated");
     InitializeCriticalSection(&g_audioLock);
     InitializeCriticalSection(&g_streamingSessionCs);
@@ -2678,7 +2677,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     CreateUiResources();
 
-    LoadConfig();
+    LoadConfig(g_config);
     g_enableDebugMode = g_config.enableDebugMode;
     audio_diagnostics::SetLogCallback(WriteDiagnosticAudioRuntimeLog);
 

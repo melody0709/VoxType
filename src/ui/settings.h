@@ -1,6 +1,9 @@
 #pragma once
-
-#include "globals.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <string>
 #include "selection_context.h"
 
 void SetStatus(HWND hwnd, const std::wstring& text);

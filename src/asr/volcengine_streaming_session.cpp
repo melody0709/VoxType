@@ -4,7 +4,7 @@
 #include "asr_result.h"
 #include "asr_streaming_session_base.h"
 #include "cloud_asr_common.h"
-#include "engine.h"
+#include "engine_local.h"
 #include "globals.h"
 #include "input_context.h"
 #include "pending_pcm_buffer.h"

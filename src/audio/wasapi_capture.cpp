@@ -1,9 +1,10 @@
 #include "wasapi_capture.h"
 #include "audio_diagnostics.h"
-#include "asr_runtime_log.h"
-#include "asr_streaming_session.h"
+#include "debug_logger.h"
+#include "audio_chunk_sink.h"
+#include "audio_capture.h"
+#include "vad_detector.h"
 #include "globals.h"
-#include "engine.h"
 #include "streaming_vad_trimmer.h"
 
 #include <algorithm>
@@ -59,7 +60,7 @@ bool WasapiCapture::FindDevice(const std::wstring& deviceId) {
             m_usedDefaultDevice = false;
             return true;
         }
-        asr_runtime_log::Write("[WASAPI] Device ID not found, using default");
+        debug_log::Write("[WASAPI] Device ID not found, using default");
         m_usedDefaultDevice = true;
     }
     HRESULT hr = m_enumerator->GetDefaultAudioEndpoint(eCapture, eConsole, &m_device);
@@ -68,10 +69,10 @@ bool WasapiCapture::FindDevice(const std::wstring& deviceId) {
 
 bool WasapiCapture::InitAudioClient() {
     HRESULT hr = m_device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, NULL, (void**)&m_audioClient);
-    if (FAILED(hr)) { asr_runtime_log::Write("[WASAPI] Activate failed: 0x%08lx", hr); return false; }
+    if (FAILED(hr)) { debug_log::Write("[WASAPI] Activate failed: 0x%08lx", hr); return false; }
 
     hr = m_audioClient->GetMixFormat(&m_mixFormat);
-    if (FAILED(hr)) { asr_runtime_log::Write("[WASAPI] GetMixFormat failed: 0x%08lx", hr); return false; }
+    if (FAILED(hr)) { debug_log::Write("[WASAPI] GetMixFormat failed: 0x%08lx", hr); return false; }
 
     m_nativeSampleRate = m_mixFormat->nSamplesPerSec;
     m_nativeChannels = m_mixFormat->nChannels;
@@ -86,16 +87,16 @@ bool WasapiCapture::InitAudioClient() {
     hr = m_audioClient->Initialize(
         AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
         hnsBufferDuration, 0, m_mixFormat, NULL);
-    if (FAILED(hr)) { asr_runtime_log::Write("[WASAPI] Initialize failed: 0x%08lx", hr); return false; }
+    if (FAILED(hr)) { debug_log::Write("[WASAPI] Initialize failed: 0x%08lx", hr); return false; }
 
     m_event = CreateEventEx(NULL, NULL, 0, EVENT_ALL_ACCESS);
-    if (!m_event) { asr_runtime_log::Write("[WASAPI] CreateEvent failed"); return false; }
+    if (!m_event) { debug_log::Write("[WASAPI] CreateEvent failed"); return false; }
 
     hr = m_audioClient->SetEventHandle(m_event);
-    if (FAILED(hr)) { asr_runtime_log::Write("[WASAPI] SetEventHandle failed: 0x%08lx", hr); return false; }
+    if (FAILED(hr)) { debug_log::Write("[WASAPI] SetEventHandle failed: 0x%08lx", hr); return false; }
 
     hr = m_audioClient->GetBufferSize(&m_bufferFrames);
-    if (FAILED(hr)) { asr_runtime_log::Write("[WASAPI] GetBufferSize failed: 0x%08lx", hr); return false; }
+    if (FAILED(hr)) { debug_log::Write("[WASAPI] GetBufferSize failed: 0x%08lx", hr); return false; }
 
     return true;
 }
@@ -122,9 +123,9 @@ float WasapiCapture::CalculateAudioLevelFloat(const float* data, UINT32 frames, 
 bool WasapiCapture::Init(const std::wstring& deviceId) {
     m_deviceName.clear();
     m_deviceId.clear();
-    if (!InitCOM()) { asr_runtime_log::Write("[WASAPI] InitCOM failed"); return false; }
-    if (!InitEnumerator()) { asr_runtime_log::Write("[WASAPI] InitEnumerator failed"); return false; }
-    if (!FindDevice(deviceId)) { asr_runtime_log::Write("[WASAPI] FindDevice failed"); return false; }
+    if (!InitCOM()) { debug_log::Write("[WASAPI] InitCOM failed"); return false; }
+    if (!InitEnumerator()) { debug_log::Write("[WASAPI] InitEnumerator failed"); return false; }
+    if (!FindDevice(deviceId)) { debug_log::Write("[WASAPI] FindDevice failed"); return false; }
 
     IPropertyStore* props = nullptr;
     if (SUCCEEDED(m_device->OpenPropertyStore(STGM_READ, &props))) {
@@ -159,7 +160,7 @@ bool WasapiCapture::Start(std::wstring& error) {
 
     HRESULT hr = m_audioClient->Start();
     if (FAILED(hr)) {
-        asr_runtime_log::Write("[WASAPI] AudioClient->Start failed: 0x%08lx", hr);
+        debug_log::Write("[WASAPI] AudioClient->Start failed: 0x%08lx", hr);
         error = L"WASAPI audio start failed";
         m_running.store(false);
         return false;
@@ -372,23 +373,24 @@ void WasapiCapture::CaptureThread() {
                         // ActivateStreamingSession's replay+install section. Both
                         // paths use the same audio-lock -> session-lock order.
                         EnterCriticalSection(&g_streamingSessionCs);
-                        if (g_activeStreamingSession && g_activeStreamingSession->IsRunning()) {
+                        IAudioChunkSink* sink = GetActiveAudioChunkSink();
+                        if (sink && sink->IsRunning()) {
                             const bool useStreamingVadTrim = g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive();
                             if (useStreamingVadTrim) {
                                 std::vector<std::vector<BYTE>> streamingOutputs;
                                 g_streamingVadTrimmer->ProcessPcm16(begin, bytesWritten, streamingOutputs);
                                 for (const auto& chunk : streamingOutputs) {
                                     if (!chunk.empty()) {
-                                        g_activeStreamingSession->EnqueuePcmChunk(chunk.data(), chunk.size());
+                                        sink->EnqueuePcmChunk(chunk.data(), chunk.size());
                                     }
                                 }
                             } else {
-                                g_activeStreamingSession->EnqueuePcmChunk(begin, bytesWritten);
+                                sink->EnqueuePcmChunk(begin, bytesWritten);
                             }
                         }
                         // Snapshot the related streaming state under one lock; use only
                         // the local values after leaving the critical section.
-                        streamingSessionActive = (g_activeStreamingSession != nullptr);
+                        streamingSessionActive = (sink != nullptr);
                         streamingTrimmerActive =
                             streamingSessionActive && g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive();
                         streamingVadReady = g_streamingVadReady;
@@ -401,16 +403,8 @@ void WasapiCapture::CaptureThread() {
                         for (UINT32 i = 0; i < written; ++i)
                             floatBuf[i] = static_cast<float>(out[i]) / 32768.0f;
 
-                        bool hasVoice = false;
-                        g_asrEngine.Lock();
-                        if (g_config.vadModel == L"firered") {
-                            g_asrEngine.fireRedVad->Process(floatBuf.data(), static_cast<int>(floatBuf.size()));
-                            hasVoice = g_asrEngine.fireRedVad->IsInSpeech();
-                        } else {
-                            g_asrEngine.vad->AcceptWaveform(floatBuf.data(), static_cast<int32_t>(floatBuf.size()));
-                            hasVoice = g_asrEngine.vad->IsDetected();
-                        }
-                        g_asrEngine.Unlock();
+                        IVadDetector* vad = GetActiveVadDetector();
+                        bool hasVoice = vad ? vad->DetectSpeech(floatBuf.data(), floatBuf.size(), g_config.vadModel) : false;
                         if (hasVoice) g_vadDetectedVoice.store(true);
                     }
 

@@ -3,7 +3,7 @@
 #endif
 
 #include "hud.h"
-#include "engine.h"
+#include "ui_utils.h"
 
 #include <algorithm>
 #include <cmath>

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <climits>
 #include <cstdint>
 #include <string>
+#include <thread>
 #include <windows.h>
 
 inline std::string WideToUtf8(const std::wstring& value) {
@@ -328,4 +330,34 @@ inline std::wstring ExtractJsonArrayFirstStringDecoded(const std::string& json,
         ++pos;
     }
     return L"";
+}
+
+inline int ResolveThreads(const std::wstring& threads) {
+    if (threads == L"auto" || threads.empty()) {
+        int n = static_cast<int>(std::thread::hardware_concurrency());
+        return std::clamp(n < 1 ? 4 : n, 1, 8);
+    }
+    return std::clamp(_wtoi(threads.c_str()), 1, 8);
+}
+
+struct HiResTimer {
+    LARGE_INTEGER freq_;
+    LARGE_INTEGER start_;
+    HiResTimer() {
+        QueryPerformanceFrequency(&freq_);
+        QueryPerformanceCounter(&start_);
+    }
+    double ElapsedMs() const {
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        return static_cast<double>(now.QuadPart - start_.QuadPart) * 1000.0 / static_cast<double>(freq_.QuadPart);
+    }
+};
+
+template <typename T>
+inline void SafeRelease(T*& value) {
+    if (value) {
+        value->Release();
+        value = nullptr;
+    }
 }

@@ -8,7 +8,7 @@
 #include "cloud_asr_common.h"
 #include "doubao_ime_asr.h"
 #include "doubao_ime_config.h"
-#include "engine.h"
+#include "engine_local.h"
 #include "mai_transcribe.h"
 #include "mimo_asr.h"
 #include "qwen_asr.h"

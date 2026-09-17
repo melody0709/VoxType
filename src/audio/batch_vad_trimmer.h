@@ -10,7 +10,8 @@
 #include <string>
 #include <vector>
 
-class AsrEngine;
+#include "vad_detector.h"
+
 struct Config;
 
 struct BatchVadTrimResult {
@@ -25,5 +26,5 @@ struct BatchVadTrimResult {
 };
 
 BatchVadTrimResult TrimBatchPcm16WithVad(const Config& config,
-                                         AsrEngine& engine,
+                                         IVadDetector& engine,
                                          const std::vector<BYTE>& pcm);

@@ -13,7 +13,8 @@
 #include <string>
 #include <vector>
 
-class AsrEngine;
+#include "vad_detector.h"
+
 struct Config;
 
 struct StreamingVadTrimStats {
@@ -26,7 +27,7 @@ struct StreamingVadTrimStats {
 
 class StreamingVadTrimmer {
 public:
-    bool Start(const Config& config, AsrEngine& engine, std::wstring* error = nullptr);
+    bool Start(const Config& config, IVadDetector& engine, std::wstring* error = nullptr);
     void Reset();
 
     bool IsActive() const { return active_.load(); }
@@ -42,7 +43,7 @@ public:
 private:
     bool DetectVoice(const int16_t* samples, size_t sampleCount);
 
-    AsrEngine* engine_ = nullptr;
+    IVadDetector* engine_ = nullptr;
     std::atomic<bool> active_{false};
     std::atomic<bool> detectedSpeech_{false};
     std::wstring vadModel_;

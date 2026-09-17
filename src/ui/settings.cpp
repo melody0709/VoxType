@@ -2,7 +2,9 @@
 #define NOMINMAX
 #endif
 #include "settings.h"
-#include "engine.h"
+#include "config_store.h"
+#include "path_service.h"
+#include "ui_utils.h"
 #include "hotkey.h"
 #include "hud.h"
 #include "mai_transcribe.h"
@@ -40,11 +42,9 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "imm32.lib")
-
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
 #endif
-
 float UiStyle::Scale = 1.0f;
 
 namespace {
@@ -2055,7 +2055,7 @@ void SaveSettingsControls(HWND hwnd) {
         qwen_audio_streaming::InvalidateReusableConnections();
     }
 
-    SaveConfig();
+    SaveConfig(g_config);
     SetStatus(hwnd, fallbackAdjusted
         ? L"Saved. Fallback disabled because it matches ASR Backend."
         : L"Saved. ASR engine reloaded.");
@@ -2104,7 +2104,7 @@ void StoreVisibleLlmProvider(HWND hwnd) {
     g_config.llmApiKey = apiKey;
     g_config.llmModel = model;
     g_config.llmExtraParams = extraParams;
-    SaveCurrentProvider();
+    SaveCurrentProvider(g_config);
 }
 
 void RefreshProviderDropdown(HWND hwnd) {
@@ -3605,13 +3605,13 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                     g_config.llmProvider = prov;
                     int pi = FindPresetIndex(prov);
                     if (pi >= 0) {
-                        ApplyPreset(pi);
+                        ApplyPreset(g_config, pi);
                     } else {
                         g_config.llmEndpoint.clear();
                         g_config.llmApiKey.clear();
                         g_config.llmModel.clear();
                         g_config.llmExtraParams.clear();
-                        LoadProviderFromStore(prov);
+                        LoadProviderFromStore(g_config, prov);
                     }
                     SetWindowTextW(GetDlgItem(hwnd, IDC_LLM_ENDPOINT), g_config.llmEndpoint.c_str());
                     SetWindowTextW(GetDlgItem(hwnd, IDC_LLM_KEY), g_config.llmApiKey.c_str());
@@ -3644,7 +3644,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
                     g_config.llmModel.clear();
                     g_config.llmExtraParams.clear();
                     g_config.llmProvider = name;
-                    SaveCurrentProvider();
+                    SaveCurrentProvider(g_config);
                     RefreshProviderDropdown(hwnd);
                     SetWindowTextW(GetDlgItem(hwnd, IDC_LLM_ENDPOINT), L"");
                     SetWindowTextW(GetDlgItem(hwnd, IDC_LLM_KEY), L"");
@@ -3660,7 +3660,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             std::wstring prov = ComboText(GetDlgItem(hwnd, IDC_LLM_PROVIDER));
             if (prov.empty() || FindPresetIndex(prov) >= 0) return 0;
             DeleteProviderFromStore(prov);
-            ApplyPreset(0);
+            ApplyPreset(g_config, 0);
             RefreshProviderDropdown(hwnd);
             SetWindowTextW(GetDlgItem(hwnd, IDC_LLM_ENDPOINT), g_config.llmEndpoint.c_str());
             SetWindowTextW(GetDlgItem(hwnd, IDC_LLM_KEY), g_config.llmApiKey.c_str());
@@ -4149,7 +4149,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             g_config.doubaoImeDeviceId.clear();
             g_config.doubaoImeCdid.clear();
             g_config.doubaoImeToken.clear();
-            SaveConfig();
+            SaveConfig(g_config);
             RefreshDoubaoImeStatus(hwnd);
             SetStatus(hwnd, L"Doubao IME credentials reset.");
             return 0;
@@ -4318,7 +4318,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             g_config.doubaoImeDeviceId = msg->result.credentials.deviceId;
             g_config.doubaoImeCdid = msg->result.credentials.cdid;
             g_config.doubaoImeToken = msg->result.credentials.token;
-            SaveConfig();
+            SaveConfig(g_config);
             RefreshDoubaoImeStatus(hwnd);
         }
         if (msg && msg->result.ok) {

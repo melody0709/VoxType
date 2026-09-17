@@ -3,8 +3,10 @@
 #endif
 
 #include "hotkey.h"
-#include "engine.h"
+#include "path_service.h"
+#include "ui_utils.h"
 #include "settings.h"
+#include "utils.h"
 
 #include <algorithm>
 #include <cwctype>

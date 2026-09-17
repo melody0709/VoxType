@@ -35,12 +35,17 @@ set(OPUS_DIR "${CMAKE_SOURCE_DIR}/third_party/opus")
 add_executable(VoxType WIN32
     src/app/main.cpp
     src/app/resources.rc
+    src/core/path_service.cpp
+    src/core/debug_logger.cpp
+    src/core/config_store.cpp
+    src/audio/audio_capture.cpp
+    src/audio/audio_chunk_sink.cpp
     src/audio/audio_diagnostics.cpp
-    src/audio/engine.cpp
     src/audio/batch_vad_trimmer.cpp
     src/audio/streaming_vad_trimmer.cpp
     src/audio/vad_trim_core.cpp
     src/audio/wasapi_capture.cpp
+    src/asr/engine_local.cpp
     src/asr/asr_session.cpp
     src/asr/asr_diagnostics.cpp
     src/asr/asr_result.cpp
@@ -140,6 +145,7 @@ add_executable(qwen_free_protocol_test
 )
 target_include_directories(qwen_free_protocol_test PRIVATE
     "${CMAKE_SOURCE_DIR}/src/asr"
+    "${CMAKE_SOURCE_DIR}/src/core"
 )
 if(MSVC)
     target_compile_options(qwen_free_protocol_test PRIVATE /O2 /EHsc /utf-8)
@@ -234,12 +240,17 @@ add_test(NAME asr_json_protocol_test COMMAND asr_json_protocol_test)
 # sessions but remains outside the canonical runtime payload and normal build.
 add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     tools/asr_audio_replay.cpp
+    src/core/path_service.cpp
+    src/core/debug_logger.cpp
+    src/core/config_store.cpp
+    src/audio/audio_capture.cpp
+    src/audio/audio_chunk_sink.cpp
     src/audio/audio_diagnostics.cpp
-    src/audio/engine.cpp
     src/audio/batch_vad_trimmer.cpp
     src/audio/streaming_vad_trimmer.cpp
     src/audio/vad_trim_core.cpp
     src/audio/wasapi_capture.cpp
+    src/asr/engine_local.cpp
     src/asr/asr_session.cpp
     src/asr/asr_diagnostics.cpp
     src/asr/asr_result.cpp
