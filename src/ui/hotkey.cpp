@@ -323,8 +323,20 @@ void UninstallKeyboardHook() {
 }
 
 void ApplyUiFont(HWND hwnd, HFONT font) {
-    HFONT target = font ? font : (s_defaultFont ? s_defaultFont : ui_theme::UiFont());
-    if (hwnd && target) {
+    if (!hwnd) return;
+    HFONT target = font;
+    if (!target) {
+        if (s_defaultFont) {
+            target = s_defaultFont;
+        } else {
+            UINT dpi = GetDpiForWindow(hwnd);
+            target = ui_theme::UiFontForDpi(dpi);
+        }
+    }
+    if (!target) {
+        target = reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    }
+    if (target) {
         SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(target), TRUE);
     }
 }

@@ -47,9 +47,13 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **每个 `add_library` / `add_executable` 都必须继承 `/utf-8` 与 `/EHsc`**：新拆出的静态库若只写在 `VoxType` 上就会编译失败。统一走 `voxtype_build_flags` INTERFACE 目标（见重构方案 §3）。守卫对此硬 FAIL。
 - **`add_library(X STATIC/SHARED/MODULE)` 必须至少声明一个源文件**，否则 CMake 在 generate 阶段直接失败（`No SOURCES given to target`）。需要"先占位后填内容"时用 `INTERFACE`。
 - **本仓库的 `.ps1` 脚本必须纯 ASCII，或存为 UTF-8 with BOM**。`build.bat` 用的是 Windows PowerShell **5.1**，它按 ANSI(CP936) 解码**无 BOM** 的 UTF-8 脚本，会吞掉"紧跟非 ASCII 字节的换行"，症状是与编码毫无关联的 `Missing '=' operator after key in hash literal` 一类解析错误。同理，统计源码行数/条目**禁止用 `Get-Content`**（会少算），必须用 `[System.IO.File]::ReadAllLines()`。
-- UI 修改后必须编译验证，Settings 检查裁切/重叠，HUD 检查高 DPI。
-- DPI 单位：DirectWrite/Direct2D 用 DIP，Win32 `SetWindowPos` 用物理像素，不能混用。
-- Settings 布局常量在 `src/ui/ui_types.h` 的 `UiStyle` 命名空间，不要硬编码魔法数字。
+- **HUD、Settings 与所有弹窗必须严格遵守 DPI 自适应架构（硬性规范）**：
+  - 应用清单启用了 `PerMonitorV2`。全局 UI 统一以 150% DPI（144 DPI）为逻辑设计基准。
+  - 所有控件尺寸、间距、窗口外框常量必须集中在 `src/ui/ui_types.h` 的 `UiStyle` 命名空间维护，**绝对禁止**在子窗口/独立对话框（如 `settings_dialogs.cpp`）中私自另设 `k*` 局部常数覆盖全局设计。
+  - 物理像素转换统一且必须经由 `S(UiStyle::Constant)`（底层调用 `DipToPx(px, UiStyle::Scale)`，其中 $\text{Scale} = \text{DpiScale} \times 96 / 144$）。**严禁**向 `S()` 传入未经 144 基准核算的低分辨率绝对数值（例如在 96 DPI 下乘 $0.6667$ 会直接导致多行提示腰斩、文字降笔截断、按钮溢出客户区）。
+  - 所有窗体与对话框在创建控件前必须先调用 `UpdateUiScale(hwnd / parent)` 同步当前窗口 DPI；顶层窗体与弹窗必须实现 `WM_DPICHANGED` 重新计算缩放并调用 `SetWindowPos` 更新尺寸。
+  - 字体应用必须经由 `ApplyUiFont`，且其内部必须保证 `HFONT` 永不为 NULL（默认回退至 Segoe UI 9pt），严禁向控件发送空字体句柄导致 Windows 降级为粗体点阵系统字。
+  - UI 修改后必须通过 `build.bat` 构建并在 96/144/192/288 DPI 下执行静态布局校验（`validate_settings_layout.ps1`）。
 - 新增配置项同步：`src/core/config_store.h` 的 `Config` 字段、`src/core/config_store.cpp` 的 `LoadConfig` / `SaveConfig`、`src/ui/settings.cpp` 的控件创建与 `LoadSettingsControls` / `SaveSettingsControls`。
 - DLL 延迟加载：`onnxruntime.dll`、`sherpa-onnx-cxx-api.dll`、`kaldi-native-fbank-core.dll` 通过 `/DELAYLOAD` 延迟加载，纯云端模式空闲 ~12 MB。`TryLoadAsrDlls()` 用 SEH 安全检测。
 - 本地模式启动时 `PreloadAsrEngine()` 后台线程预加载模型，Save 后 Reload + 预加载。
@@ -94,7 +98,10 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 **元规则（重要）**：规则必须可证伪。凡是描述"当前实现"而非"外部行为"的条目，在对应 Milestone 收尾时逐条重审；**已与现实不符的规则是负资产**——它会让执行者建立错误的前置认知，比没有规则更糟。**禁止**把过期规则保留为"历史说明"或注释掉。
 
 - **【A】CapsLock 热键**：短按必须补发 `CapsLock` 保持系统切换，长按录音结束后必须恢复原 Caps Lock 状态。
-- **【A】HUD 尺寸**：DirectWrite 测量 DIP，`SetWindowPos` 用物理像素，高 DPI 需显式换算。
+- **【A】HUD 与 Settings DPI 全局自适应不变量**：
+  1. DirectWrite/Direct2D（HUD）使用 DIP 测量，`SetWindowPos` 使用物理像素，跨屏移动必须重新根据目标显示器 DPI 计算缩放。
+  2. Win32 窗口（Settings / 对话框）逻辑设计基准为 144 DPI（Scale = 1.0），在 96 DPI 标准屏下缩放系数为 0.6667。控件与文字高度必须预留安全容限（单行标签高不低于 30、两行提示不低于 48、按钮不低于 34），严禁在局部私自缩减，否则在 96 DPI 下字体行高将超越控件物理边框，引发文字横向腰斩或 descender（y/g/p 下延）硬件级裁切。
+  3. 任何新建弹窗（Dialog/Prompt）均需统一继承 `UpdateUiScale`、`UiStyle::*` 与 `WM_DPICHANGED` 机制，严禁使用固定写死的外框与控件绝对像素。
 - **【A】FireRedVAD**：fbank 期望 int16 范围（-32768~32767），不是归一化 float，传入前必须乘 32768。
 - **【A】公共 VAD trim 只裁剪头尾静音**，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是**追加输出语义**，调用方要自己清空/使用局部 `outputs`。
 - **【A】Streaming VAD 的 no-speech 判断用 `StreamingVadTrimmer::DetectedSpeech()`**，不要重新引入 provider 专属 `g_xxxVadState`。

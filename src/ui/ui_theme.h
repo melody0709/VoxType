@@ -8,8 +8,11 @@
 namespace ui_theme {
 
 HFONT UiFont();
+HFONT UiFontForDpi(UINT dpi);
 HFONT TitleFont();
+HFONT TitleFontForDpi(UINT dpi);
 HFONT SectionFont();
+HFONT SectionFontForDpi(UINT dpi);
 HBRUSH SettingsBgBrush();
 HBRUSH CardBrush();
 HBRUSH ControlBgBrush();

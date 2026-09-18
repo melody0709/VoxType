@@ -3389,16 +3389,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         return 0;
     }
     case WM_DPICHANGED:
-        UpdateUiScale(hwnd);
-        {
-            RECT* suggested = reinterpret_cast<RECT*>(lParam);
-            SetWindowPos(hwnd, nullptr, suggested->left, suggested->top,
-                         suggested->right - suggested->left,
-                         suggested->bottom - suggested->top,
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            LayoutSettingsWindow(hwnd);
-            InvalidateRect(hwnd, nullptr, TRUE);
-        }
+        HandleSettingsDpiChanged(hwnd, wParam, lParam);
         return 0;
     case WM_DESTROY:
         g_doubaoImeTestGeneration.fetch_add(1, std::memory_order_relaxed);
@@ -3438,8 +3429,7 @@ void ShowSettingsWindow(HWND owner) {
     RECT rc;
     GetWindowRect(g_settingsWindow, &rc);
     int w = rc.right - rc.left, h = rc.bottom - rc.top;
-    RECT work;
-    SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    RECT work = GetWorkAreaForWindow(owner ? owner : g_settingsWindow);
     int x = work.left + (work.right - work.left - w) / 2;
     int y = work.top + (work.bottom - work.top - h) / 2;
     SetWindowPos(g_settingsWindow, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);

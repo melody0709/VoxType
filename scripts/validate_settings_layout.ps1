@@ -59,6 +59,15 @@ $actionButtonH = Get-UiInt 'ActionBtnH'
 $inputWidthFull = Get-UiInt 'InputWFull'
 $rowHeight = Get-UiInt 'RowHeight'
 $qwenHint2LineHeight = Get-UiInt 'QwenHint2LineH'
+$inputDlgW = Get-UiInt 'InputDlgW'
+$inputDlgH = Get-UiInt 'InputDlgH'
+$inputDlgEditW = Get-UiInt 'InputDlgEditW'
+$inputDlgBtnY = Get-UiInt 'InputDlgBtnY'
+$volcDlgW = Get-UiInt 'VolcExtraDlgW'
+$volcDlgH = Get-UiInt 'VolcExtraDlgH'
+$volcDlgEditW = Get-UiInt 'VolcExtraDlgEditW'
+$volcDlgEditH = Get-UiInt 'VolcExtraDlgEditH'
+$volcDlgBtnY = Get-UiInt 'VolcExtraDlgBtnY'
 
 $startupY = $firstRowY + $shortcutHeight + $startupGap
 $startupBottom = $startupY + $startupHeight
@@ -113,6 +122,18 @@ if ($maiHintBottom -gt ($footerMinTop - 4)) {
 if (($inputLeft + $inputWidthFull) -gt ($settingsWindowWidth - $margin)) {
     throw 'MAI Azure Endpoint field exceeds the Settings design width'
 }
+if (($inputDlgEditW + 36) -gt $inputDlgW) {
+    throw 'Input dialog edit field exceeds the dialog width'
+}
+if (($inputDlgBtnY + $actionButtonH) -gt ($inputDlgH - 48)) {
+    throw 'Input dialog buttons exceed the estimated client area'
+}
+if (($volcDlgEditW + 36) -gt $volcDlgW) {
+    throw 'Volcengine extra edit field exceeds the dialog width'
+}
+if (($volcDlgBtnY + $actionButtonH) -gt ($volcDlgH - 48)) {
+    throw 'Volcengine extra dialog buttons exceed the estimated client area'
+}
 
 foreach ($dpi in @(96, 144, 192, 288)) {
     $scale = $dpi / 144.0
@@ -133,6 +154,18 @@ foreach ($dpi in @(96, 144, 192, 288)) {
     }
     if ((Scale ($qwenDialogFooterY + $actionButtonH) $scale) -gt (Scale ($qwenDialogClientBottom - $margin) $scale)) {
         throw "Qwen Advanced footer overflows the estimated client area at $dpi DPI"
+    }
+    if ((Scale ($inputDlgEditW + 36) $scale) -gt (Scale $inputDlgW $scale)) {
+        throw "Input dialog edit field exceeds the dialog width at $dpi DPI"
+    }
+    if ((Scale ($inputDlgBtnY + $actionButtonH) $scale) -gt (Scale ($inputDlgH - 48) $scale)) {
+        throw "Input dialog buttons exceed the estimated client area at $dpi DPI"
+    }
+    if ((Scale ($volcDlgEditW + 36) $scale) -gt (Scale $volcDlgW $scale)) {
+        throw "Volcengine extra edit field exceeds the dialog width at $dpi DPI"
+    }
+    if ((Scale ($volcDlgBtnY + $actionButtonH) $scale) -gt (Scale ($volcDlgH - 48) $scale)) {
+        throw "Volcengine extra dialog buttons exceed the estimated client area at $dpi DPI"
     }
     if ((Scale $maiHintBottom $scale) -gt (Scale ($footerMinTop - 4) $scale)) {
         throw "MAI settings overlap the footer at $dpi DPI"

@@ -2,6 +2,8 @@
 #define NOMINMAX
 #endif
 #include "settings_controls.h"
+#include "settings.h"
+#include "ui_theme.h"
 #include "hotkey.h"
 #include "ui_utils.h"
 
@@ -90,12 +92,50 @@ HINSTANCE GetParentInstance(HWND parent) {
 
 }  // namespace
 
+void UpdateUiScaleForDpi(UINT dpi) {
+    if (dpi == 0) dpi = 96;
+    UiStyle::Scale = static_cast<float>(dpi) / 144.0f;
+}
+
 void UpdateUiScale(HWND hwnd) {
-    UiStyle::Scale = DpiScaleForWindow(hwnd) * 96.0f / 144.0f;
+    UINT dpi = hwnd ? GetDpiForWindow(hwnd) : 0;
+    if (dpi == 0) dpi = GetDpiForSystem();
+    UpdateUiScaleForDpi(dpi);
+}
+
+RECT GetWorkAreaForWindow(HWND hwnd) {
+    RECT work = {};
+    HMONITOR hMon = MonitorFromWindow(hwnd ? hwnd : GetDesktopWindow(), MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { sizeof(mi) };
+    if (GetMonitorInfoW(hMon, &mi)) {
+        work = mi.rcWork;
+    } else {
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    }
+    return work;
 }
 
 int S(int px) {
     return DipToPx(static_cast<float>(px), UiStyle::Scale);
+}
+
+void HandleSettingsDpiChanged(HWND hwnd, WPARAM wParam, LPARAM lParam) {
+    const UINT newDpi = HIWORD(wParam);
+    UpdateUiScaleForDpi(newDpi);
+    RECT* suggested = reinterpret_cast<RECT*>(lParam);
+    if (suggested) {
+        SetWindowPos(hwnd, nullptr, suggested->left, suggested->top,
+                     suggested->right - suggested->left,
+                     suggested->bottom - suggested->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    HFONT newFont = ui_theme::UiFontForDpi(newDpi);
+    EnumChildWindows(hwnd, [](HWND child, LPARAM lp) -> BOOL {
+        SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(lp), TRUE);
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(newFont));
+    LayoutSettingsWindow(hwnd);
+    InvalidateRect(hwnd, nullptr, TRUE);
 }
 
 void MarkSettingsHint(HWND hwnd) {

@@ -42,7 +42,10 @@ extern int g_cloudProviderIdx;
 extern HWND g_cloudAsrHintControl;
 
 void UpdateUiScale(HWND hwnd);
+void UpdateUiScaleForDpi(UINT dpi);
+RECT GetWorkAreaForWindow(HWND hwnd);
 int S(int px);
+void HandleSettingsDpiChanged(HWND hwnd, WPARAM wParam, LPARAM lParam);
 void MarkSettingsHint(HWND hwnd);
 bool IsSettingsHint(HWND hwnd);
 void OpenAsrDebugLog(HWND hwnd, const wchar_t* fileName);
