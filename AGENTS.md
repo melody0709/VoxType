@@ -13,7 +13,9 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 ## Command execution
 
-`CMakeLists.txt` 与 `CMakePresets.json` 是唯一编译权威；`build.bat` 负责准备 MSVC、调用 CMake/Ninja 并安装运行载荷。
+- `CMakeLists.txt` 与 `CMakePresets.json` 是唯一编译权威；`build.bat` 负责准备 MSVC、调用 CMake/Ninja 并安装运行载荷。
+- On Windows, use  PowerShell 7: `pwsh` (or `rtk pwsh`); never use Windows PowerShell 5.1 (`powershell`) unless explicitly requested.
+
 
 唯一可直接运行的开发程序是 `build\run\x64-release\VoxType.exe`，不能运行 `build\cmake\x64-release\VoxType.exe` 或手工向运行目录复制文件。
 
