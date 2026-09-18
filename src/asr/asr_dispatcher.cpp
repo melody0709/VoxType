@@ -2,6 +2,7 @@
 
 #include "asr_diagnostics.h"
 #include "asr_result.h"
+#include "app_state.h"
 #include "app_messages.h"
 
 #include <utility>
@@ -33,6 +34,7 @@ void DispatchAsrFinalText(HWND targetWindow,
     msg->selection = metadata.selection;
 
     if (needLlm) {
+        SetLastRawAsrText(text);
         if (lastRawAsrText) {
             *lastRawAsrText = text;
         }

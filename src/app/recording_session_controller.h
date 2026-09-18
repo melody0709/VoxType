@@ -39,6 +39,7 @@ void ResetStreamingVadTrimmerState();
 bool StartStreamingVadTrimmerForCloud(const Config& config, const wchar_t* debugPrefix, bool markReady = true);
 void FinishStreamingVadTrimmer();
 bool StreamingVadTrimSawNoSpeech();
+bool GetStreamingVadTrimStats(StreamingVadTrimStats& stats);
 
 void StreamingPartialHudCallback(const std::wstring& text, bool, void* userData);
 
@@ -57,6 +58,5 @@ bool IsStopDelayHeldForRepress();
 void SetStopDelayHeldForRepress(bool held);
 void SetCaptureConfigStale(bool stale);
 
-extern bool g_recording;
 extern std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
 

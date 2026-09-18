@@ -123,6 +123,7 @@ float WasapiCapture::CalculateAudioLevelFloat(const float* data, UINT32 frames, 
 }
 
 bool WasapiCapture::Init(const std::wstring& deviceId) {
+    Release();
     m_deviceName.clear();
     m_deviceId.clear();
     if (!InitCOM()) { debug_log::Write("[WASAPI] InitCOM failed"); return false; }
@@ -214,6 +215,8 @@ void WasapiCapture::ReportRuntimeFailure(DWORD code) {
 }
 
 void WasapiCapture::CaptureThread() {
+    HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    const bool needUninit = SUCCEEDED(hrCom) && hrCom != RPC_E_CHANGED_MODE;
     while (m_running.load(std::memory_order_relaxed)) {
         DWORD waitResult = WaitForSingleObject(m_event, 200);
         if (!m_running.load(std::memory_order_relaxed)) break;
@@ -426,6 +429,7 @@ void WasapiCapture::CaptureThread() {
             }
         }
     }
+    if (needUninit) CoUninitialize();
 }
 
 std::vector<WasapiDeviceInfo> WasapiCapture::EnumerateDevices() {

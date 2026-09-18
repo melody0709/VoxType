@@ -141,9 +141,8 @@ static std::wstring VadModelNameSnapshot() {
 }
 
 static void DebugPrintCloudVadTrim(const Config& config) {
-    if (IsStreamingCloudBackend(config) &&
-        g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive()) {
-        StreamingVadTrimStats stats = g_streamingVadTrimmer->Stats();
+    StreamingVadTrimStats stats = {};
+    if (IsStreamingCloudBackend(config) && GetStreamingVadTrimStats(stats)) {
         size_t rawBytes = stats.rawBytes > 0 ? stats.rawBytes : static_cast<size_t>(GetRecordingMs() * 32.0);
         if (GetLastPcmBytes() > 0) rawBytes = GetLastPcmBytes();
         if (stats.outputBytes > 0) {

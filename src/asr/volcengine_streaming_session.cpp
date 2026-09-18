@@ -8,6 +8,7 @@
 #include "config_store.h"
 #include "asr_metrics.h"
 #include "input_context.h"
+#include "app_state.h"
 #include "pending_pcm_buffer.h"
 #include "streaming_vad_trimmer.h"
 #include "volcengine_asr.h"
@@ -678,8 +679,14 @@ private:
             }
         }
 
-        const bool vadTrimActive = g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive();
-        const bool vadDetectedSpeech = vadTrimActive && g_streamingVadTrimmer->DetectedSpeech();
+        bool vadTrimActive = false;
+        bool vadDetectedSpeech = false;
+        EnterCriticalSection(&g_streamingSessionCs);
+        if (g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive()) {
+            vadTrimActive = true;
+            vadDetectedSpeech = g_streamingVadTrimmer->DetectedSpeech();
+        }
+        LeaveCriticalSection(&g_streamingSessionCs);
         int chunksSent = s_volcSession.sequence - 2;
         VolcDebugLog("Volc thread: send loop ended, chunks_sent=%d, vad_voice=%d",
                      chunksSent, vadDetectedSpeech ? 1 : 0);

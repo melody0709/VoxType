@@ -66,8 +66,6 @@ void HandleStreamingSessionStartFailure(uint64_t attemptId, const Config& primar
 void StreamingFinalCallback(std::wstring text, const Config& config, bool bundledPostProcessApplied, void* userData);
 
 std::wstring* GetLastRawAsrTextPtr();
-const std::wstring& GetLastRawAsrText();
-void ClearLastRawAsrText();
 
 size_t GetLastPcmBytes();
 void SetLastPcmBytes(size_t bytes);

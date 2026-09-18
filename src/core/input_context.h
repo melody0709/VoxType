@@ -10,6 +10,7 @@
 
 #include <string>
 #include <set>
+#include <mutex>
 #include <thread>
 #include <future>
 #include <atomic>
@@ -90,13 +91,17 @@ inline std::wstring TakeLastN(const std::wstring& text, size_t n) {
     return text.substr(start);
 }
 
+inline std::mutex s_triggeredWindowsMutex;
 inline std::set<HWND> s_triggeredWindows;
 
 inline void EnsureAccessibilityTree(HWND hwnd) {
     if (!hwnd) return;
-    if (s_triggeredWindows.count(hwnd)) return;
+    {
+        std::lock_guard<std::mutex> lock(s_triggeredWindowsMutex);
+        if (s_triggeredWindows.count(hwnd)) return;
+        s_triggeredWindows.insert(hwnd);
+    }
     SendMessageW(hwnd, WM_GETOBJECT, 0, (LPARAM)0xFFFFFFFC);
-    s_triggeredWindows.insert(hwnd);
 }
 
 inline std::wstring GetForegroundWindowTitle() {

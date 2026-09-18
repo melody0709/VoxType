@@ -29,7 +29,6 @@
 #include <algorithm>
 #include <vector>
 
-bool g_recording = false;
 std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
 
 
@@ -111,8 +110,10 @@ void AbortAndResetActiveStreamingSession() {
 }
 
 void ResetStreamingVadTrimmerState() {
+    EnterCriticalSection(&g_streamingSessionCs);
     g_streamingVadTrimmer.reset();
     g_streamingVadReady = false;
+    LeaveCriticalSection(&g_streamingSessionCs);
     g_vadDetectedVoice.store(false);
 }
 
@@ -130,21 +131,40 @@ bool StartStreamingVadTrimmerForCloud(const Config& config,
         return false;
     }
 
+    EnterCriticalSection(&g_streamingSessionCs);
     g_streamingVadTrimmer = std::move(trimmer);
     g_streamingVadReady = markReady;
+    LeaveCriticalSection(&g_streamingSessionCs);
     VolcDebugLog("%ls: VAD trim active (%ls)", debugPrefix, config.vadModel.c_str());
     return true;
 }
 
 void FinishStreamingVadTrimmer() {
-    if (!g_streamingVadTrimmer || !g_streamingVadTrimmer->IsActive()) return;
-    g_streamingVadTrimmer->Finish();
+    EnterCriticalSection(&g_streamingSessionCs);
+    if (g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive()) {
+        g_streamingVadTrimmer->Finish();
+    }
+    LeaveCriticalSection(&g_streamingSessionCs);
 }
 
 bool StreamingVadTrimSawNoSpeech() {
-    return g_streamingVadTrimmer &&
-           g_streamingVadTrimmer->IsActive() &&
-           !g_streamingVadTrimmer->DetectedSpeech();
+    EnterCriticalSection(&g_streamingSessionCs);
+    const bool sawNoSpeech = g_streamingVadTrimmer &&
+                             g_streamingVadTrimmer->IsActive() &&
+                             !g_streamingVadTrimmer->DetectedSpeech();
+    LeaveCriticalSection(&g_streamingSessionCs);
+    return sawNoSpeech;
+}
+
+bool GetStreamingVadTrimStats(StreamingVadTrimStats& stats) {
+    EnterCriticalSection(&g_streamingSessionCs);
+    bool active = false;
+    if (g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive()) {
+        stats = g_streamingVadTrimmer->Stats();
+        active = true;
+    }
+    LeaveCriticalSection(&g_streamingSessionCs);
+    return active;
 }
 
 void ActivateStreamingSession(std::unique_ptr<IStreamingAsrSession> session,
@@ -612,8 +632,8 @@ void StopRecordingSession() {
             return;
         }
         FinishStreamingVadTrimmer();
-        if (g_streamingVadTrimmer && g_streamingVadTrimmer->IsActive()) {
-            const StreamingVadTrimStats stats = g_streamingVadTrimmer->Stats();
+        StreamingVadTrimStats stats = {};
+        if (GetStreamingVadTrimStats(stats)) {
             audio_diagnostics::StageMetadata stage =
                 asr_diagnostics::MakeStageMetadata(recordingConfig);
             stage.vadActive = stats.active;

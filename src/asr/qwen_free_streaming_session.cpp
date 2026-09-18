@@ -6,6 +6,7 @@
 #include "asr_streaming_session_base.h"
 #include "cloud_asr_common.h"
 #include "asr_metrics.h"
+#include "app_state.h"
 #include "pending_pcm_buffer.h"
 #include "qwen_free_proto_asr.h"
 #include "qwen_free_proto_llm.h"
@@ -930,6 +931,7 @@ private:
         // VoiceInputRewrite 的上下文。失败时不能把“改写指令”误粘贴到
         // 原选区，因此这里只在拿到真正的改写输出后才 EmitFinal。
         if (config_.qwenFreeRewriteEnabled && selection_.HasCapturedSelection()) {
+            SetLastRawAsrText(asrText);
             if (lastRawAsrText_) *lastRawAsrText_ = asrText;
             if (!selection_.Usable()) {
                 EmitFinal(L"Qwen IME rewrite failed: selection target unavailable");
@@ -955,6 +957,7 @@ private:
         }
 
         // 调用 LLM 做润色/标点/纠错。
+        SetLastRawAsrText(asrText);
         if (lastRawAsrText_) *lastRawAsrText_ = asrText;
 
         // 用户禁用润色时直接用 ASR 原文。

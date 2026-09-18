@@ -37,27 +37,18 @@
 #include <cstdint>
 #include <cstddef>
 
-static std::wstring s_lastRawAsrText;
-static size_t s_lastPcmBytes = 0;
+static std::atomic<size_t> s_lastPcmBytes{0};
 
 std::wstring* GetLastRawAsrTextPtr() {
-    return &s_lastRawAsrText;
-}
-
-const std::wstring& GetLastRawAsrText() {
-    return s_lastRawAsrText;
-}
-
-void ClearLastRawAsrText() {
-    s_lastRawAsrText.clear();
+    return nullptr;
 }
 
 size_t GetLastPcmBytes() {
-    return s_lastPcmBytes;
+    return s_lastPcmBytes.load(std::memory_order_relaxed);
 }
 
 void SetLastPcmBytes(size_t bytes) {
-    s_lastPcmBytes = bytes;
+    s_lastPcmBytes.store(bytes, std::memory_order_relaxed);
 }
 
 bool IsStreamingCloudBackend(const Config& config) {

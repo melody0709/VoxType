@@ -19,7 +19,6 @@
 HWND g_hudWindow = nullptr;
 bool g_hudHasSpoken = false;
 bool g_hudIsRefining = false;
-static bool g_recording = false;
 static float g_hudSmoothedLevel = 0.0f;
 static std::wstring g_hudText = L"Ready";
 
@@ -34,14 +33,14 @@ static ID2D1GradientStopCollection* g_hudBarGradientStopsIdle = nullptr;
 static IDWriteTextFormat* g_hudTextFormat = nullptr;
 
 void SetHudRecording(bool recording) {
-    g_recording = recording;
+    g_recording.store(recording);
     if (recording) {
         g_hudSmoothedLevel = 0.0f;
     }
 }
 
 bool IsHudRecording() {
-    return g_recording;
+    return g_recording.load();
 }
 
 namespace {
@@ -264,7 +263,8 @@ void ShowHudConstrained(const std::wstring& text,
 }
 
 void StartHudRecordingAnimation() {
-    if (!g_hudWindow || !g_recording) return;
+    g_hudSmoothedLevel = 0.0f;
+    if (!g_hudWindow || !g_recording.load()) return;
     SetTimer(g_hudWindow, kHudAnimationTimer, 33, nullptr);
     InvalidateRect(g_hudWindow, nullptr, FALSE);
 }
@@ -490,10 +490,14 @@ LRESULT CALLBACK HudWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_TIMER:
         if (wParam == kHudAnimationTimer) {
+            if (!g_recording.load()) {
+                KillTimer(hwnd, kHudAnimationTimer);
+                return 0;
+            }
             InvalidateRect(hwnd, nullptr, FALSE);
         } else {
             KillTimer(hwnd, static_cast<UINT_PTR>(wParam));
-            if (g_recording) return 0;
+            if (g_recording.load()) return 0;
             HideHud();
         }
         return 0;
