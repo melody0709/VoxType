@@ -410,6 +410,14 @@ int main() {
         Expect(qwen_audio_http::IsNoSpeechResponseForTest(
                    400, R"({"message":"ASR_RESPONSE_HAVE_NO_WORDS"})"),
                "Audio 3 no-words HTTP response is recognized as no speech");
+        Expect(qwen_audio_http::IsNoSpeechResponseForTest(400, "{}"),
+               "Audio 3 HTTP 400 with empty JSON object is recognized as no speech");
+        Expect(qwen_audio_http::IsNoSpeechResponseForTest(400, "  {} \r\n"),
+               "Audio 3 HTTP 400 with whitespace-padded {} is recognized as no speech");
+        Expect(qwen_audio_http::IsNoSpeechResponseForTest(400, ""),
+               "Audio 3 HTTP 400 with empty body is recognized as no speech");
+        Expect(!qwen_audio_http::IsNoSpeechResponseForTest(200, "{}"),
+               "HTTP 200 with {} is not classified as no speech error response");
         Expect(!qwen_audio_http::IsNoSpeechResponseForTest(
                    400, R"({"message":"invalid parameter"})"),
                "generic HTTP 400 remains an operational error");

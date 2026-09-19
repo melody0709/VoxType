@@ -450,14 +450,13 @@ inline void WebSocketCloseGracefully(HINTERNET hWebSocket, VolcSession* sess = n
         WinHttpCloseHandle(hWebSocket);
         return;
     }
-    DWORD recvTimeout = 3000;
-    WinHttpSetOption(hWebSocket, WINHTTP_OPTION_WEB_SOCKET_RECEIVE_TIMEOUT,
-                     &recvTimeout, sizeof(recvTimeout));
+    // Send standard close frame to notify server, then close handle immediately.
+    // Never call synchronous WinHttpWebSocketReceive here: ByteDance's gateway
+    // does not reliably echo close frames, and WinHTTP lacks a per-handle
+    // receive timeout option for synchronous WebSockets (WINHTTP_OPTION_WEB_SOCKET_RECEIVE_TIMEOUT
+    // fails with 12009 ERROR_WINHTTP_INVALID_OPTION), which would cause WinHttpWebSocketReceive
+    // to block indefinitely.
     WinHttpWebSocketClose(hWebSocket, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0);
-    BYTE closeBuf[128];
-    DWORD closeBytesRead = 0;
-    WINHTTP_WEB_SOCKET_BUFFER_TYPE closeBufType = static_cast<WINHTTP_WEB_SOCKET_BUFFER_TYPE>(VOLC_WEB_SOCKET_BINARY_MSG);
-    WinHttpWebSocketReceive(hWebSocket, closeBuf, sizeof(closeBuf), &closeBytesRead, &closeBufType);
     WinHttpCloseHandle(hWebSocket);
 }
 
@@ -638,13 +637,7 @@ inline std::string BuildExtraParamsJson(const std::wstring& extraParamsW) {
     return TryBuildExtraParamsJson(extraParamsW, out) ? out : std::string{};
 }
 
-inline bool OpenSessionImpl(VolcSession& sess, const VolcConfig& cfg, bool isRetry, DWORD hardTimeoutMs) {
-    if (hardTimeoutMs < 1000) hardTimeoutMs = 1000;
-    ULONGLONG t0 = GetTickCount64();
-    VolcDebugLog("=== OpenSession START ===");
-    std::wstring cleanKey = TrimWhitespace(cfg.apiKey);
-    if (cleanKey.empty()) return false;
-
+inline bool BuildInitRequestJson(const VolcConfig& cfg, std::string& outJson, std::wstring* outError = nullptr) {
     std::string uid = ToBackslashEscape(WideToUtf8(ProcessUid()));
 
     std::string requestJson = "{"
@@ -689,8 +682,7 @@ inline bool OpenSessionImpl(VolcSession& sess, const VolcConfig& cfg, bool isRet
     if (!cfg.extraParams.empty()) {
         std::string extraParamsJson;
         if (!TryBuildExtraParamsJson(cfg.extraParams, extraParamsJson)) {
-            sess.lastError = L"VolcEngine Extra Params is not a valid JSON property fragment";
-            VolcDebugLog("OpenSession: invalid Extra Params JSON fragment");
+            if (outError) *outError = L"VolcEngine Extra Params is not a valid JSON property fragment";
             return false;
         }
         requestJson += extraParamsJson;
@@ -720,6 +712,22 @@ inline bool OpenSessionImpl(VolcSession& sess, const VolcConfig& cfg, bool isRet
     }
     requestJson += "}"
     "}";
+    outJson = std::move(requestJson);
+    return true;
+}
+
+inline bool OpenSessionImpl(VolcSession& sess, const VolcConfig& cfg, bool isRetry, DWORD hardTimeoutMs) {
+    if (hardTimeoutMs < 1000) hardTimeoutMs = 1000;
+    ULONGLONG t0 = GetTickCount64();
+    VolcDebugLog("=== OpenSession START ===");
+    std::wstring cleanKey = TrimWhitespace(cfg.apiKey);
+    if (cleanKey.empty()) return false;
+
+    std::string requestJson;
+    if (!BuildInitRequestJson(cfg, requestJson, &sess.lastError)) {
+        VolcDebugLog("OpenSession: invalid Extra Params JSON fragment");
+        return false;
+    }
 
     std::vector<BYTE> jsonPayload(requestJson.begin(), requestJson.end());
     std::vector<BYTE> frame = BuildFrame(MSG_FULL_CLIENT_REQ, FLAG_NO_SEQ,
@@ -1262,33 +1270,56 @@ inline TestResult TestConnection(const VolcConfig& cfg) {
     if (!ttLogId.empty()) debugInfo += L"Server: " + ttLogId + L"\n";
 
     if (hWebSocket) {
-        WinHttpWebSocketClose(hWebSocket, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0);
-        WinHttpCloseHandle(hWebSocket);
+        std::string requestJson;
+        std::wstring initError;
+        if (!BuildInitRequestJson(cfg, requestJson, &initError)) {
+            WinHttpWebSocketClose(hWebSocket, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0);
+            WinHttpCloseHandle(hWebSocket);
+            WinHttpCloseHandle(hConnect);
+            WinHttpCloseHandle(hSession);
+            res.message = L"Invalid configuration: " + initError;
+            return res;
+        }
 
-        // HTTP 101 only proves the upgrade succeeded; invalid resource/mode values are
-        // 升级之后经 error frame 返回。这里再复用生产的 OpenSession 走一遍完整
-        // full client request，配置错误会在这一步被识破，而不是误报"连接正常"。
-        // （与生产路径共享同一份握手 + init 实现，不另复制协议代码。）
-        VolcSession verifySess;
-        if (OpenSession(verifySess, cfg, 15000)) {
-            WebSocketCloseGracefully(verifySess.hWebSocket, &verifySess);
-            verifySess.hWebSocket = nullptr;
-            if (verifySess.hConnect) { WinHttpCloseHandle(verifySess.hConnect); verifySess.hConnect = nullptr; }
-            if (verifySess.hSession) { WinHttpCloseHandle(verifySess.hSession); verifySess.hSession = nullptr; }
+        std::vector<BYTE> jsonPayload(requestJson.begin(), requestJson.end());
+        std::vector<BYTE> frame = BuildFrame(MSG_FULL_CLIENT_REQ, FLAG_NO_SEQ,
+                                             SER_JSON, COMP_NONE, 0, jsonPayload);
+
+        const DWORD initSendError = WinHttpWebSocketSend(
+            hWebSocket,
+            static_cast<WINHTTP_WEB_SOCKET_BUFFER_TYPE>(VOLC_WEB_SOCKET_BINARY_MSG),
+            frame.data(), static_cast<DWORD>(frame.size()));
+
+        if (initSendError != ERROR_SUCCESS) {
+            WinHttpWebSocketClose(hWebSocket, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, nullptr, 0);
+            WinHttpCloseHandle(hWebSocket);
+            WinHttpCloseHandle(hConnect);
+            WinHttpCloseHandle(hSession);
+            res.message = L"Failed to send init frame (err=" + std::to_wstring(initSendError) + L").\n\n" + debugInfo;
+            return res;
+        }
+
+        VolcSession tempSess;
+        tempSess.hWebSocket = hWebSocket;
+        tempSess.connected = true;
+
+        VolcResult initResp = ReceiveResult(hWebSocket, 3000, &tempSess);
+
+        WebSocketCloseGracefully(hWebSocket, &tempSess);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+
+        const bool initServerError =
+            initResp.text.find(L"[VolcEngine error:") != std::wstring::npos;
+        if (initResp.receivedServerResponse && !initServerError) {
             res.ok = true;
             res.message = L"Connection OK. ASR session initialized.\n\n" + debugInfo;
         } else {
-            if (verifySess.hWebSocket) {
-                WebSocketCloseGracefully(verifySess.hWebSocket, &verifySess);
-                verifySess.hWebSocket = nullptr;
-            }
-            if (verifySess.hConnect) { WinHttpCloseHandle(verifySess.hConnect); verifySess.hConnect = nullptr; }
-            if (verifySess.hSession) { WinHttpCloseHandle(verifySess.hSession); verifySess.hSession = nullptr; }
+            res.ok = false;
             res.message = L"ASR session check failed: " +
-                (verifySess.lastError.empty()
-                    ? L"server did not accept the client request (check Resource ID / mode)"
-                    : verifySess.lastError);
+                (initServerError ? initResp.text : L"server did not accept the client request (timeout or invalid response)\n\n" + debugInfo);
         }
+        return res;
     } else if (statusCode == 401 || statusCode == 403) {
         res.message = L"Authentication failed (HTTP " + std::to_wstring(statusCode) +
             L").\n\n" + debugInfo +

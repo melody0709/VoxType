@@ -873,11 +873,17 @@ TestResult TestConnection(const Config& cfg) {
             while (!receiveDone.load()) {
                 Event ev;
                 std::wstring currentError;
-                if (!c.Poll(0, ev, currentError)) {
+                if (!c.Poll(200, ev, currentError)) {
+                    if (ev.timeout) {
+                        continue;
+                    }
                     if (!currentError.empty()) receiveError = currentError;
                     break;
                 }
-                if (ev.noSpeech || ev.taskFinished) { finished = true; break; }
+                if (ev.noSpeech || ev.taskFinished) {
+                    finished = true;
+                    break;
+                }
                 if (ev.failed) {
                     receiveError = ev.message.empty() ? L"task failed" : ev.message;
                     break;

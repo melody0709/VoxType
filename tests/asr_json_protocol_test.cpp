@@ -232,6 +232,67 @@ int wmain() {
                   L"https://example.test/?api-version=bad", error),
               "mai azure query rejected");
     }
+    // 21) 火山 BuildInitRequestJson 协议构建与参数覆盖
+    {
+        volc_asr::VolcConfig cfg;
+        cfg.apiKey = L"test_key";
+        cfg.resourceId = L"volc.seedasr.sauc.duration";
+        cfg.mode = L"bigmodel";
+        std::string json;
+        std::wstring err;
+        CHECK(volc_asr::BuildInitRequestJson(cfg, json, &err), "volc build init default ok");
+        CHECK(json.find("\"model_name\":\"bigmodel\"") != std::string::npos &&
+              json.find("\"format\":\"pcm\"") != std::string::npos &&
+              json.find("\"rate\":16000") != std::string::npos &&
+              json.find("\"bits\":16") != std::string::npos &&
+              json.find("\"enable_itn\":true") != std::string::npos,
+              "volc init default fields present");
+
+        // bigmodel_nostream 模式允许传 language
+        cfg.mode = L"bigmodel_nostream";
+        cfg.language = L"zh-CN";
+        CHECK(volc_asr::BuildInitRequestJson(cfg, json, &err), "volc build init nostream ok");
+        CHECK(json.find("\"language\":\"zh-CN\"") != std::string::npos,
+              "volc nostream carries language");
+
+        // bigmodel_async 模式忽略 language
+        cfg.mode = L"bigmodel_async";
+        CHECK(volc_asr::BuildInitRequestJson(cfg, json, &err), "volc build init async ok");
+        CHECK(json.find("\"language\"") == std::string::npos,
+              "volc async omits language");
+
+        // hotwords 与 context 合并入 corpus
+        cfg.hotwordsId = L"hw_test_id";
+        cfg.contextJson = L"{\"ctx\":\"prev_speech\"}";
+        CHECK(volc_asr::BuildInitRequestJson(cfg, json, &err), "volc build init corpus ok");
+        CHECK(json.find("\"corpus\":{") != std::string::npos &&
+              json.find("\"boosting_table_id\":\"hw_test_id\"") != std::string::npos &&
+              json.find("\"context\":") != std::string::npos,
+              "volc corpus fields merged");
+
+        // 畸形 extraParams 必须返回 false
+        cfg.extraParams = L"\"broken_json_key\":[unterminated";
+        CHECK(!volc_asr::BuildInitRequestJson(cfg, json, &err),
+              "volc malformed extra params rejected");
+        CHECK(!err.empty(), "volc extra params error message populated");
+    }
+    // 22) MAI Transcribe 429 限流提示与大小写鲁棒性
+    {
+        const std::string bodyExact = "{\"error\":{\"message\":\"Provider returned 429\",\"code\":429}}";
+        const std::wstring errExact = mai_transcribe::FormatHttpErrorForTest(429, bodyExact);
+        CHECK(errExact.find(L"OpenRouter connected, but MAI-Transcribe-2 upstream provider is temporarily rate-limited") != std::wstring::npos,
+              "mai 429 exact provider returned 429 detected");
+
+        const std::string bodyLower = "{\"error\":{\"message\":\"provider returned 429: rate limit\",\"code\":429}}";
+        const std::wstring errLower = mai_transcribe::FormatHttpErrorForTest(429, bodyLower);
+        CHECK(errLower.find(L"OpenRouter connected, but MAI-Transcribe-2 upstream provider is temporarily rate-limited") != std::wstring::npos,
+              "mai 429 case-insensitive provider returned 429 detected");
+
+        const std::string bodyOther = "{\"error\":{\"message\":\"quota exceeded\",\"code\":429}}";
+        const std::wstring errOther = mai_transcribe::FormatHttpErrorForTest(429, bodyOther);
+        CHECK(errOther == L"MAI ASR error: HTTP 429: quota exceeded",
+              "mai 429 generic message formatted");
+    }
 
     if (g_failures == 0) {
         wprintf(L"ALL PASS\n");

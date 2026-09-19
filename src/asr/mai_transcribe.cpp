@@ -261,6 +261,27 @@ std::string ProviderCode(const std::string& body, DWORD statusCode) {
                         : WideToUtf8(code);
 }
 
+std::wstring FormatHttpErrorImpl(DWORD statusCode, const std::string& body) {
+    std::wstring err = L"MAI ASR error: HTTP " + std::to_wstring(statusCode);
+    const std::wstring message = ErrorMessage(body);
+    std::string lowerBody = body;
+    for (char& c : lowerBody) {
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    }
+    std::wstring lowerMessage = message;
+    for (wchar_t& c : lowerMessage) {
+        if (c >= L'A' && c <= L'Z') c = static_cast<wchar_t>(c - L'A' + L'a');
+    }
+    if (statusCode == 429 &&
+        (lowerMessage.find(L"provider returned 429") != std::wstring::npos ||
+         lowerBody.find("provider returned 429") != std::string::npos)) {
+        err = L"MAI ASR error: OpenRouter connected, but MAI-Transcribe-2 upstream provider is temporarily rate-limited (HTTP 429). Check credits or try again shortly.";
+    } else if (!message.empty()) {
+        err += L": " + message;
+    }
+    return err;
+}
+
 } // namespace
 
 std::string EncodeBase64ForTest(const std::vector<BYTE>& data) {
@@ -293,6 +314,11 @@ bool ValidateAzureEndpointForTest(const std::wstring& endpoint,
     AzureEndpoint parsed = ParseAzureEndpoint(endpoint);
     error = std::move(parsed.error);
     return error.empty();
+}
+
+std::wstring FormatHttpErrorForTest(DWORD statusCode,
+                                    const std::string& responseBody) {
+    return FormatHttpErrorImpl(statusCode, responseBody);
 }
 
 Result Recognize(const std::vector<BYTE>& pcm,
@@ -405,10 +431,7 @@ Result Recognize(const std::vector<BYTE>& pcm,
     if (response.statusCode < 200 || response.statusCode >= 300) {
         result.retryable = IsRetryableCloudHttpStatus(response.statusCode);
         result.providerCode = ProviderCode(response.body, response.statusCode);
-        result.error = L"MAI ASR error: HTTP " +
-                       std::to_wstring(response.statusCode);
-        const std::wstring message = ErrorMessage(response.body);
-        if (!message.empty()) result.error += L": " + message;
+        result.error = FormatHttpErrorImpl(response.statusCode, response.body);
         return result;
     }
 

@@ -174,5 +174,16 @@ bool ShouldRunFallback(const Config& primary,
                        bool selfAbortOrStaleAttempt) {
     if (fallbackAlreadyAttempted || selfAbortOrStaleAttempt) return false;
     if (!IsFallbackAsrEnabled(primary)) return false;
+    const std::wstring lower = Lower(text);
+    if (Contains(lower, L"quota exhausted") ||
+        Contains(lower, L"quota exceeded") ||
+        Contains(lower, L"insufficient quota") ||
+        Contains(lower, L"45000420") ||
+        Contains(lower, L"额度耗尽") ||
+        Contains(lower, L"配额耗尽") ||
+        Contains(lower, L"http 401") ||
+        Contains(lower, L"http 403")) {
+        return false;
+    }
     return ClassifyAsrResult(text).kind == AsrResultKind::OperationalError;
 }

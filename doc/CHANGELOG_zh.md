@@ -2,6 +2,24 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.1 (2026-09-19)
+
+### 修复
+
+- **火山引擎 ASR 连接测试挂死与死锁（严重缺陷）**：
+  - 定位并彻底消除 `WebSocketCloseGracefully()` 中的死锁：Windows WinHTTP 不支持对 WebSocket 句柄设置接收超时（调用 `WINHTTP_OPTION_WEB_SOCKET_RECEIVE_TIMEOUT` 会返回 `ERROR_WINHTTP_INVALID_OPTION (12009)`），且火山引擎网关（`openspeech.bytedance.com`）在收到客户端关闭帧后不回发关闭响应帧。此前在关闭时调用同步 `WinHttpWebSocketReceive` 导致后台线程陷入无限阻塞，界面永久卡在“Testing Volcano Engine ASR connection...”。移除多余的接收阻塞后，所有火山模式（`duration` / `concurrent` x `bigmodel_nostream` / `bigmodel_async`）的连接测试均在 0.27s ~ 0.31s 内极速完成。
+  - 彻底移除 `volc_asr::TestConnection` 中冗余的双重握手（NO_PROXY 后又走 DEFAULT_PROXY），直接复用建立的单连接 WebSocket 发送规范 Init 帧，校验服务端回包（成功返回 `0x09`，配额超限/错误返回 `0x0F`），零污染生产会话 `s_volcSession`。
+  - 在 `volcengine_streaming_session.cpp` 中优化 `Abort()`，将 `worker_.join()` 与 Win32 UI 线程消息循环异步解耦，消除录音打断导致的 UI 假死。
+  - 在 `asr_attempt_manager.cpp` 中，当收到明确不可恢复的配额耗尽（`quota exhausted` / `45000420`）或 HTTP 401/403 错误时，禁止触发无意义的 12 秒回退重试，直接在 HUD 提示错误并在 2.2 秒后自动隐藏。
+- **千问流式 (Qwen Audio 3) 探测修复**：修复接收轮询笔误，将 `c.Poll(0, ...)` 改为 `c.Poll(200, ...)`，超时执行 `continue;`，等待服务端在 100ms 内返回 `task-finished` 正常退出。
+- **千问 HTTP (Qwen Audio 3) 专有空间探测兼容**：扩展 `IsNoSpeechResponseImpl`，将阿里云百炼专有云空间（`*.maas.aliyuncs.com`）在静音时返回的 `HTTP 400 {}` 与 `ASR_RESPONSE_HAVE_NO_WORDS` 一同判定为 NoSpeech 正常响应。
+- **微软 MAI Transcribe 2 错误提示优化**：对 OpenRouter 上游模型提供商返回的 429 限流响应进行不区分大小写匹配，明确提示上游限流信息，避免误判为本地故障。
+
+### 测试
+
+- 在 `asr_json_protocol_test` 与 `qwen_audio_json_test` 中补齐了 Init 请求生成、MAI 429 错误格式化以及百炼 MaaS 静音空响应单测覆盖。
+- 17 项架构守卫全部机械通过。
+
 ## v0.10.0 (2026-09-17, refactor)
 
 ### 架构现代化重构（C++23 Modernization）

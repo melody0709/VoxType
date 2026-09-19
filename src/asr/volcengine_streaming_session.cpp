@@ -111,15 +111,17 @@ struct VolcRetryResult {
     bool transportError = false;
 };
 
-class VolcengineStreamingSession final : public StreamingAsrSessionBase {
+class VolcengineStreamingSessionImpl final
+    : public StreamingAsrSessionBase,
+      public std::enable_shared_from_this<VolcengineStreamingSessionImpl> {
 public:
-    VolcengineStreamingSession(Config config,
-                               HWND targetWindow,
-                               AsrLlmRefineFn refineFn,
-                               std::wstring* lastRawAsrText)
+    VolcengineStreamingSessionImpl(Config config,
+                                   HWND targetWindow,
+                                   AsrLlmRefineFn refineFn,
+                                   std::wstring* lastRawAsrText)
         : StreamingAsrSessionBase(std::move(config), targetWindow, refineFn, lastRawAsrText) {}
 
-    ~VolcengineStreamingSession() override {
+    ~VolcengineStreamingSessionImpl() override {
         Abort();
     }
 
@@ -138,7 +140,7 @@ public:
         openingAttempt_.store(0);
         nextRetryStageIndex_ = 1;
         running_.store(true);
-        worker_ = std::thread([this]() { WorkerLoop(); });
+        worker_ = std::thread([self = shared_from_this()]() { self->WorkerLoop(); });
         return true;
     }
 
@@ -185,8 +187,20 @@ public:
         if (retryReq) WinHttpCloseHandle(retryReq);
         HINTERNET retryWs = AtomicTakeRetryWebSocket();
         if (retryWs) WinHttpCloseHandle(retryWs);
-        if (worker_.joinable() && worker_.get_id() != std::this_thread::get_id()) {
-            worker_.join();
+        if (worker_.joinable()) {
+            if (worker_.get_id() != std::this_thread::get_id()) {
+                try {
+                    std::thread([w = std::move(worker_)]() mutable {
+                        if (w.joinable()) w.join();
+                    }).detach();
+                } catch (...) {
+                    if (worker_.joinable()) {
+                        worker_.detach();
+                    }
+                }
+            } else {
+                worker_.detach();
+            }
         }
         running_.store(false);
     }
@@ -870,6 +884,36 @@ private:
         return AtomicTakeSessionWebSocket(retrySess_);
     }
 
+};
+
+class VolcengineStreamingSession final : public IStreamingAsrSession {
+public:
+    VolcengineStreamingSession(Config config,
+                               HWND targetWindow,
+                               AsrLlmRefineFn refineFn,
+                               std::wstring* lastRawAsrText)
+        : impl_(std::make_shared<VolcengineStreamingSessionImpl>(
+              std::move(config), targetWindow, refineFn, lastRawAsrText)) {}
+
+    ~VolcengineStreamingSession() override {
+        if (impl_) {
+            impl_->Abort();
+        }
+    }
+
+    bool Start(std::wstring& error) override { return impl_->Start(error); }
+    bool EnqueuePcmChunk(const BYTE* data, size_t bytes) override { return impl_->EnqueuePcmChunk(data, bytes); }
+    void StopInput(double recordingMs, size_t capturedPcmBytes) override { impl_->StopInput(recordingMs, capturedPcmBytes); }
+    void Abort() override { if (impl_) impl_->Abort(); }
+    bool IsRunning() const override { return impl_ ? impl_->IsRunning() : false; }
+    DWORD CurrentWatchdogMs() const override { return impl_ ? impl_->CurrentWatchdogMs() : 18000; }
+    DWORD MaxRecordingMs() const override { return impl_ ? impl_->MaxRecordingMs() : 0; }
+    const wchar_t* ProviderName() const override { return impl_ ? impl_->ProviderName() : L"Volcano Engine"; }
+    void SetPartialCallback(AsrPartialCallback cb, void* userData) override { if (impl_) impl_->SetPartialCallback(cb, userData); }
+    void SetFinalCallback(AsrFinalCallback cb, void* userData) override { if (impl_) impl_->SetFinalCallback(cb, userData); }
+
+private:
+    std::shared_ptr<VolcengineStreamingSessionImpl> impl_;
 };
 
 } // namespace

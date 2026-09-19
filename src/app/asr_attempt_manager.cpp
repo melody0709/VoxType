@@ -399,6 +399,11 @@ void RecognizeAsync(const std::vector<BYTE>& pcm,
             } else {
                 selectedResult = std::move(fallbackResult);
             }
+        } else if (IsFallbackAsrEnabled(config) &&
+                   primaryClassification.kind == AsrResultKind::OperationalError) {
+            asr_runtime_log::Write(
+                "event=fallback_suppressed attempt=%llu reason=non_retryable_error",
+                static_cast<unsigned long long>(attemptId));
         }
 
         if (!ShouldAcceptFinalMessage(attemptId)) {
@@ -893,6 +898,12 @@ void HandleAsrAttemptFinal(AsrAttemptFinalMessage& msg) {
         primaryClassification.kind == AsrResultKind::OperationalError) {
         asr_runtime_log::Write(
             "event=fallback_suppressed attempt=%llu reason=selection_rewrite_safety",
+            static_cast<unsigned long long>(msg.attemptId));
+    } else if (!canFallback && !fallbackAlreadyStarted && !selectionRewriteRequested &&
+               IsFallbackAsrEnabled(primaryConfig) &&
+               primaryClassification.kind == AsrResultKind::OperationalError) {
+        asr_runtime_log::Write(
+            "event=fallback_suppressed attempt=%llu reason=non_retryable_error",
             static_cast<unsigned long long>(msg.attemptId));
     }
     if (canFallback && pcm && pcm->size() >= 8000) {

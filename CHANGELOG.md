@@ -2,6 +2,24 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.1 (2026-09-19)
+
+### Fixed
+
+- **Volcano Engine ASR Connection Test Hang (Critical)**:
+  - Discovered and eliminated an infinite deadlock in `WebSocketCloseGracefully()`: Windows WinHTTP does not support `WINHTTP_OPTION_WEB_SOCKET_RECEIVE_TIMEOUT` on WebSockets (returning `12009 ERROR_WINHTTP_INVALID_OPTION`), and ByteDance's WebSocket gateway (`openspeech.bytedance.com`) does not echo a close frame upon receiving a client close frame. Calling synchronous `WinHttpWebSocketReceive` during close blocked the worker thread indefinitely, preventing Settings from completing "Testing Volcano Engine ASR connection...". Removed the redundant receive call; connection tests across all Volcano modes (`duration` / `concurrent` x `bigmodel_nostream` / `bigmodel_async`) now complete reliably in 0.27s - 0.31s.
+  - Eliminated redundant dual-handshake in `volc_asr::TestConnection` (NO_PROXY followed by DEFAULT_PROXY), reusing the single established WebSocket to send standard Init framing and verify server response (`0x09` on success, `0x0F` on quota/config error) with zero state pollution to the production session `s_volcSession`.
+  - In `volcengine_streaming_session.cpp`, improved `Abort()` by decoupling `worker_.join()` from the Win32 UI thread message loop, avoiding UI hangs when aborting during recording.
+  - In `asr_attempt_manager.cpp`, suppressed futile 12s fallbacks when receiving unrecoverable `quota exhausted` (45000420) or HTTP 401/403 errors, surfacing errors immediately on HUD for 2.2s.
+- **Qwen Audio 3 Streaming Probe**: Corrected receive polling typo from `c.Poll(0, ...)` with early break to `c.Poll(200, ...)` with `continue` on timeout, waiting for server `task-finished` within 100ms.
+- **Qwen Audio 3 HTTP Probe Compatibility**: Expanded `IsNoSpeechResponseImpl` to recognize Alibaba Cloud Bailian dedicated space (`*.maas.aliyuncs.com`) returning HTTP 400 with `{}` on silence as a valid `NoSpeech` response.
+- **Microsoft MAI Transcribe 2 Error Reporting**: Added case-insensitive matching for OpenRouter upstream provider 429 rate limit responses, clearly indicating upstream service load rather than local configuration error.
+
+### Tests
+
+- Added test cases in `asr_json_protocol_test` and `qwen_audio_json_test` verifying Init request generation, MAI 429 formatting, and Bailian MaaS empty silence handling.
+- All 17 architecture guard checks pass cleanly.
+
 ## v0.10.0 (2026-09-17, refactor)
 
 ### Architectural Refactoring (C++23 Modernization)

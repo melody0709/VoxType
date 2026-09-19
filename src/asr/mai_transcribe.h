@@ -60,5 +60,7 @@ std::wstring ParseOpenRouterTextForTest(const std::string& responseBody);
 std::wstring ParseAzureTextForTest(const std::string& responseBody);
 bool ValidateAzureEndpointForTest(const std::wstring& endpoint,
                                   std::wstring& error);
+std::wstring FormatHttpErrorForTest(DWORD statusCode,
+                                    const std::string& responseBody);
 
 } // namespace mai_transcribe

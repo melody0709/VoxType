@@ -183,8 +183,15 @@ bool IsNoSpeechResponseImpl(DWORD statusCode, const std::string& responseBody) {
     // Audio 3 HTTP uses a provider error envelope for silence instead of a
     // successful empty transcript. This is a recognition outcome, not an
     // operational failure, so it must enter VoxType's shared no-speech path.
-    return statusCode == 400 &&
-           responseBody.find("ASR_RESPONSE_HAVE_NO_WORDS") != std::string::npos;
+    if (statusCode != 400) return false;
+    if (responseBody.find("ASR_RESPONSE_HAVE_NO_WORDS") != std::string::npos) {
+        return true;
+    }
+    const size_t first = responseBody.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return true;
+    const size_t last = responseBody.find_last_not_of(" \t\r\n");
+    const std::string_view trimmed(responseBody.data() + first, last - first + 1);
+    return trimmed.empty() || trimmed == "{}";
 }
 
 } // namespace
