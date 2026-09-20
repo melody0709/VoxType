@@ -4,12 +4,14 @@
 #include <windows.h>
 #include <algorithm>
 #include <climits>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 
 #include "utils.h"
 #include "config_registry.h"
+#include "vocabulary_manager.h"
 #include "baidu_asr.h"       // ExtractJsonInt / ExtractBaiduResultText
 #include "mai_transcribe.h"
 #include "volcengine_asr.h"  // BuildExtraParamsJson
@@ -426,11 +428,11 @@ int wmain() {
         CHECK(loaded.modelId == L"foo", "loaded value deserialized");
         CHECK(loaded.configVersion == 110, "postload hook executed on loaded config");
     }
-    // 27) 全量 91 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 27) 全量 92 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 91, "registry total entry count is 91");
+        CHECK(reg.GetEntries().size() == 92, "registry total entry count is 92");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -468,6 +470,7 @@ int wmain() {
             "volc_hotwords_name": "hw_name",
             "volc_correct_table_id": "tbl_456",
             "volc_correct_table_name": "tbl_name",
+            "volc_reuse_vocabulary": 1,
             "baidu_api_key": "baidu_key_123",
             "baidu_secret_key": "baidu_secret_456",
             "baidu_dev_pid": 1737,
@@ -564,6 +567,7 @@ int wmain() {
         CHECK(cfg.volcHotwordsName == L"hw_name", "legacy fixture 33: volcHotwordsName");
         CHECK(cfg.volcCorrectTableId == L"tbl_456", "legacy fixture 34: volcCorrectTableId");
         CHECK(cfg.volcCorrectTableName == L"tbl_name", "legacy fixture 35: volcCorrectTableName");
+        CHECK(cfg.volcEnableReuseVocabulary == true, "legacy fixture: volcEnableReuseVocabulary rawint 1");
         CHECK(cfg.baiduApiKey == L"baidu_key_123", "legacy fixture 36: baiduApiKey");
         CHECK(cfg.baiduSecretKey == L"baidu_secret_456", "legacy fixture 37: baiduSecretKey");
         CHECK(cfg.baiduDevPid == 1737, "legacy fixture 38: baiduDevPid");
@@ -620,6 +624,155 @@ int wmain() {
         CHECK(cfg.enableLlmDebug == true, "legacy fixture 89: enableLlmDebug");
         CHECK(cfg.enableDebugMode == true, "legacy fixture 90: enableDebugMode");
         CHECK(cfg.forceUnicodeInput == true, "legacy fixture 91: forceUnicodeInput");
+    }
+
+    // Vocabulary Manager Unit & Regression Tests
+    {
+        // 1. Proportional linear scaling
+        CHECK(vocabulary_manager::WeightToScale10(1) == 1, "vocab scale10 min");
+        CHECK(vocabulary_manager::WeightToScale10(25) == 5, "vocab scale10 mid");
+        CHECK(vocabulary_manager::WeightToScale10(50) == 10, "vocab scale10 max");
+
+        CHECK(std::abs(vocabulary_manager::WeightToVolcengineScale(1) - 1.0f) < 0.11f, "vocab volc scale min");
+        CHECK(std::abs(vocabulary_manager::WeightToVolcengineScale(25) - 2.0f) < 0.05f, "vocab volc scale mid");
+        CHECK(std::abs(vocabulary_manager::WeightToVolcengineScale(50) - 3.0f) < 0.01f, "vocab volc scale max");
+
+        CHECK(vocabulary_manager::WeightToQwen(50) == 50, "vocab qwen weight 50 -> 50");
+        CHECK(vocabulary_manager::WeightToQwen(10) == 50, "vocab qwen weight 10 -> 50");
+        CHECK(vocabulary_manager::WeightToQwen(5) == 5, "vocab qwen weight 5 -> 5");
+        CHECK(vocabulary_manager::WeightToQwen(2) == 2, "vocab qwen weight 2 -> 2");
+
+        // 2. Validation
+        CHECK(vocabulary_manager::IsValidTerm(L"何启煊"), "vocab valid chinese term");
+        CHECK(vocabulary_manager::IsValidTerm(L"VoxType"), "vocab valid english single word");
+        CHECK(vocabulary_manager::IsValidTerm(L"Artificial Intelligence In Speech"), "vocab valid 4 english words");
+        CHECK(!vocabulary_manager::IsValidTerm(L""), "vocab reject empty term");
+        CHECK(!vocabulary_manager::IsValidTerm(L"这是一段非常非常非常非常长的一句话肯定超过了十五个汉字限制"), "vocab reject >15 chars chinese");
+        CHECK(!vocabulary_manager::IsValidTerm(L"one two three four five six seven eight"), "vocab reject >7 words english");
+
+        // 3. JSON parsing with comments
+        const wchar_t* sampleJson =
+            L"{\n"
+            L"  // 单行注释\n"
+            L"  \"// 伪注释键\": \"说明内容\",\n"
+            L"  /* 块注释 */\n"
+            L"  \"何启煊\": 50,\n"
+            L"  \"何燮煊\": \"25\",\n"
+            L"  \"VoxType\": 10\n"
+            L"}\n";
+        auto parsedRes = vocabulary_manager::ParseVocabularyJson(sampleJson);
+        CHECK(parsedRes.has_value(), "vocab parse json success");
+        if (parsedRes) {
+            CHECK(parsedRes->size() == 3, "vocab parse json count 3");
+            CHECK((*parsedRes)[0].word == L"何启煊" && (*parsedRes)[0].weight == 50, "vocab entry 1 match");
+            CHECK((*parsedRes)[1].word == L"何燮煊" && (*parsedRes)[1].weight == 25, "vocab entry 2 match");
+            CHECK((*parsedRes)[2].word == L"VoxType" && (*parsedRes)[2].weight == 10, "vocab entry 3 match");
+        }
+
+        // 4. Line format parsing
+        const wchar_t* lineText =
+            L"# Line comment\n"
+            L"// Another comment\n"
+            L"\"何悦滢\" : 50\n"
+            L"李协煊 20\n"
+            L"Claude\n";
+        auto parsedLines = vocabulary_manager::ParseVocabularyLines(lineText);
+        CHECK(parsedLines.has_value(), "vocab parse lines success");
+        if (parsedLines) {
+            CHECK(parsedLines->size() == 3, "vocab parse lines count 3");
+            CHECK((*parsedLines)[0].word == L"何悦滢" && (*parsedLines)[0].weight == 50, "line entry 1");
+            CHECK((*parsedLines)[1].word == L"李协煊" && (*parsedLines)[1].weight == 20, "line entry 2");
+            CHECK((*parsedLines)[2].word == L"Claude" && (*parsedLines)[2].weight == 50, "line entry 3 default weight");
+        }
+
+        // 5. Transpilation to Qwen (including 50 super-priority cap)
+        vocabulary_manager::VocabularyList bigList;
+        for (int i = 0; i < 60; ++i) {
+            bigList.push_back({ L"词条" + std::to_wstring(i), 50 });
+        }
+        std::string qwenJson = vocabulary_manager::TranspileToQwenJson(bigList);
+        CHECK(!qwenJson.empty(), "vocab transpile to qwen json non-empty");
+        // Count occurrences of ":50" vs ":5"
+        size_t count50 = 0, count5 = 0;
+        size_t p = 0;
+        while ((p = qwenJson.find(":50", p)) != std::string::npos) {
+            count50++;
+            p += 3;
+        }
+        p = 0;
+        while ((p = qwenJson.find(":5", p)) != std::string::npos) {
+            if (p + 2 < qwenJson.size() && qwenJson[p + 2] == '0') {
+                p += 3; // skip :50
+            } else {
+                count5++;
+                p += 2;
+            }
+        }
+        CHECK(count50 == 50, "vocab qwen max 50 super-priorities capped at 50");
+        CHECK(count5 == 10, "vocab qwen excess capped down to 5");
+
+        // 6. Transpilation to Volcengine hotwords & context
+        vocabulary_manager::VocabularyList volcEntries = {
+            { L"何启煊", 50 },
+            { L"何燮煊", 25 }
+        };
+        std::string volcHotwords = vocabulary_manager::TranspileToVolcengineHotwordsJson(volcEntries);
+        CHECK(volcHotwords.find("\"scale\":3.0") != std::string::npos, "volc hotwords scale 3.0");
+        CHECK(volcHotwords.find("\"scale\":2.0") != std::string::npos, "volc hotwords scale 2.0");
+
+        std::wstring ctxJson = vocabulary_manager::BuildVolcengineContextJson(
+            volcEntries, L"hello input", { L"history turn 1" });
+        CHECK(ctxJson.find(L"\"hotwords\":[") != std::wstring::npos, "volc context has hotwords");
+        CHECK(ctxJson.find(L"\"context_type\":\"dialog_ctx\"") != std::wstring::npos, "volc context has dialog_ctx");
+        CHECK(ctxJson.find(L"\"text\":\"hello input\"") != std::wstring::npos, "volc context has input text");
+        CHECK(ctxJson.find(L"\"text\":\"history turn 1\"") != std::wstring::npos, "volc context has history");
+
+        // 7. Transpilation to Sherpa-onnx
+        std::string sherpaHotwords = vocabulary_manager::TranspileToSherpaHotwords(volcEntries);
+        CHECK(sherpaHotwords.find(" : 3.0\n") != std::string::npos, "sherpa hotwords score 3.0");
+        CHECK(sherpaHotwords.find(" : 2.0\n") != std::string::npos, "sherpa hotwords score 2.0");
+
+        // 8. Temp file roundtrip
+        wchar_t tempPath[MAX_PATH];
+        GetTempPathW(MAX_PATH, tempPath);
+        std::wstring testFilePath = std::wstring(tempPath) + L"voxtype_test_vocab_" + std::to_wstring(GetCurrentProcessId()) + L".json";
+        const std::wstring testContent = L"{\r\n  \"测试\": 50\r\n}";
+        auto writeRes = vocabulary_manager::WriteVocabularyFile(testContent, testFilePath);
+        CHECK(writeRes.has_value(), "vocab write file");
+        auto readRes = vocabulary_manager::ReadVocabularyFile(testFilePath);
+        CHECK(readRes.has_value() && *readRes == testContent, "vocab read file matches");
+        DeleteFileW(testFilePath.c_str());
+
+        // 9. Edge cases: Rejecting unclosed JSON, missing values, lone surrogates
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"何启煊\": 50").has_value(),
+              "vocab reject unclosed json missing brace");
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"何启煊\": }").has_value(),
+              "vocab reject json missing value");
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"何启煊\": true}").has_value(),
+              "vocab reject json bool value");
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"\\ude00\": 50}").has_value(),
+              "vocab reject lone low surrogate key");
+
+        // 10. Line parsing delimiter stripping & float weight tolerance
+        const wchar_t* complexLines =
+            L"何启煊 : 50\n"
+            L"何燮煊: 40\n"
+            L"何悦滢 = 30\n"
+            L"李协煊, 20\n"
+            L"SherpaTerm : 3.0\n";
+        auto parsedComplex = vocabulary_manager::ParseVocabularyLines(complexLines);
+        CHECK(parsedComplex.has_value(), "vocab complex lines parse ok");
+        if (parsedComplex && parsedComplex->size() == 5) {
+            CHECK((*parsedComplex)[0].word == L"何启煊" && (*parsedComplex)[0].weight == 50, "line strip colon space");
+            CHECK((*parsedComplex)[1].word == L"何燮煊" && (*parsedComplex)[1].weight == 40, "line strip colon direct");
+            CHECK((*parsedComplex)[2].word == L"何悦滢" && (*parsedComplex)[2].weight == 30, "line strip equals");
+            CHECK((*parsedComplex)[3].word == L"李协煊" && (*parsedComplex)[3].weight == 20, "line strip comma");
+            CHECK((*parsedComplex)[4].word == L"SherpaTerm" && (*parsedComplex)[4].weight == 3, "line float weight parsed");
+        }
+
+        // 11. FormatVocabularyJson CRLF verification
+        std::string formatted = vocabulary_manager::FormatVocabularyJson(volcEntries, true);
+        CHECK(formatted.find("\r\n") != std::string::npos, "format vocab uses crlf");
     }
 
     if (g_failures == 0) {

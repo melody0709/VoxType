@@ -12,6 +12,7 @@ struct DpiFontEntry {
     HFONT uiFont = nullptr;
     HFONT titleFont = nullptr;
     HFONT sectionFont = nullptr;
+    HFONT monoFont = nullptr;
 };
 
 std::vector<DpiFontEntry> s_fontCache;
@@ -21,16 +22,20 @@ HBRUSH s_settingsBgBrush = nullptr;
 HBRUSH s_cardBrush = nullptr;
 HBRUSH s_controlBgBrush = nullptr;
 
-HFONT CreateDpiFont(int pointSize, int weight, UINT dpi) {
+HFONT CreateDpiFontWithName(int pointSize, int weight, UINT dpi, const wchar_t* faceName) {
     if (dpi == 0) dpi = 96;
     const int height = -MulDiv(pointSize, static_cast<int>(dpi), 72);
     HFONT font = CreateFontW(height, 0, 0, 0, weight, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, faceName);
     if (!font) {
         font = reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     }
     return font;
+}
+
+HFONT CreateDpiFont(int pointSize, int weight, UINT dpi) {
+    return CreateDpiFontWithName(pointSize, weight, dpi, L"Segoe UI");
 }
 
 DpiFontEntry& GetOrCreateEntryLocked(UINT dpi) {
@@ -48,6 +53,7 @@ DpiFontEntry& GetOrCreateEntryLocked(UINT dpi) {
     entry.uiFont = CreateDpiFont(9, FW_NORMAL, dpi);
     entry.titleFont = CreateDpiFont(14, FW_SEMIBOLD, dpi);
     entry.sectionFont = CreateDpiFont(9, FW_SEMIBOLD, dpi);
+    entry.monoFont = CreateDpiFontWithName(9, FW_NORMAL, dpi, L"Consolas");
     s_fontCache.push_back(entry);
     return s_fontCache.back();
 }
@@ -68,6 +74,7 @@ void CleanupTheme() {
         if (entry.uiFont) { DeleteObject(entry.uiFont); entry.uiFont = nullptr; }
         if (entry.titleFont) { DeleteObject(entry.titleFont); entry.titleFont = nullptr; }
         if (entry.sectionFont) { DeleteObject(entry.sectionFont); entry.sectionFont = nullptr; }
+        if (entry.monoFont) { DeleteObject(entry.monoFont); entry.monoFont = nullptr; }
     }
     s_fontCache.clear();
     if (s_settingsBgBrush) { DeleteObject(s_settingsBgBrush); s_settingsBgBrush = nullptr; }
@@ -90,9 +97,15 @@ HFONT SectionFontForDpi(UINT dpi) {
     return GetOrCreateEntryLocked(dpi).sectionFont;
 }
 
+HFONT MonospaceFontForDpi(UINT dpi) {
+    std::lock_guard<std::mutex> lock(s_themeMutex);
+    return GetOrCreateEntryLocked(dpi).monoFont;
+}
+
 HFONT UiFont() { return UiFontForDpi(0); }
 HFONT TitleFont() { return TitleFontForDpi(0); }
 HFONT SectionFont() { return SectionFontForDpi(0); }
+HFONT MonospaceFont() { return MonospaceFontForDpi(0); }
 
 HBRUSH SettingsBgBrush() { if (!s_settingsBgBrush) InitTheme(); return s_settingsBgBrush; }
 HBRUSH CardBrush() { if (!s_cardBrush) InitTheme(); return s_cardBrush; }

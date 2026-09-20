@@ -13,6 +13,8 @@ HFONT TitleFont();
 HFONT TitleFontForDpi(UINT dpi);
 HFONT SectionFont();
 HFONT SectionFontForDpi(UINT dpi);
+HFONT MonospaceFont();
+HFONT MonospaceFontForDpi(UINT dpi);
 HBRUSH SettingsBgBrush();
 HBRUSH CardBrush();
 HBRUSH ControlBgBrush();

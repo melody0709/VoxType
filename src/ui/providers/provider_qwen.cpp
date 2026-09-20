@@ -10,6 +10,7 @@
 #include "ui_types.h"
 #include "ui_utils.h"
 #include "asr_probe_service.h"
+#include "vocabulary_manager.h"
 
 #include <windowsx.h>
 #include <algorithm>
@@ -229,7 +230,12 @@ void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     Button_SetCheck(GetDlgItem(parent, IDC_QWEN_INPUT_CONTEXT), cfg.qwenEnableInputContext ? BST_CHECKED : BST_UNCHECKED);
 
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_VOCABULARY_ID), cfg.qwenVocabularyId.c_str());
-    SetWindowTextW(GetDlgItem(parent, IDC_QWEN_VOCABULARY), cfg.qwenVocabulary.c_str());
+    std::wstring vocabText = cfg.qwenVocabulary;
+    auto fileRes = vocabulary_manager::ReadVocabularyFile();
+    if (fileRes && !fileRes->empty()) {
+        vocabText = *fileRes;
+    }
+    SetWindowTextW(GetDlgItem(parent, IDC_QWEN_VOCABULARY), vocabText.c_str());
     Button_SetCheck(GetDlgItem(parent, IDC_QWEN_SEMANTIC_PUNCTUATION), cfg.qwenSemanticPunctuation ? BST_CHECKED : BST_UNCHECKED);
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_MAX_SENTENCE_SILENCE),
                    cfg.qwenMaxSentenceSilenceMs > 0 ? std::to_wstring(cfg.qwenMaxSentenceSilenceMs).c_str() : L"");
@@ -279,7 +285,7 @@ void ProviderQwen::SaveControls(HWND parent, Config& cfg) {
     cfg.qwenEnableInputContext = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_INPUT_CONTEXT)) == BST_CHECKED;
 
     cfg.qwenVocabularyId = QwenControlText(parent, IDC_QWEN_VOCABULARY_ID, 512);
-    cfg.qwenVocabulary = QwenControlText(parent, IDC_QWEN_VOCABULARY, 8192);
+    cfg.qwenVocabulary = QwenControlText(parent, IDC_QWEN_VOCABULARY);
     cfg.qwenSemanticPunctuation = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED;
 
     wchar_t silenceBuf[32] = {};
@@ -295,8 +301,8 @@ void ProviderQwen::SaveControls(HWND parent, Config& cfg) {
     cfg.qwenSpeechNoiseThreshold = std::clamp(static_cast<float>(_wtof(noiseBuf)), -1.0f, 1.0f);
 
     cfg.qwenEnableContinueContext = cfg.qwenEnableInputContext && Button_GetCheck(GetDlgItem(parent, IDC_QWEN_CONTINUE_CONTEXT)) == BST_CHECKED;
-    cfg.qwenSpecialWordReplaceList = QwenControlText(parent, IDC_QWEN_SPECIAL_REPLACE, 8192);
-    cfg.qwenSpecialWordEmptyList = QwenControlText(parent, IDC_QWEN_SPECIAL_EMPTY, 8192);
+    cfg.qwenSpecialWordReplaceList = QwenControlText(parent, IDC_QWEN_SPECIAL_REPLACE);
+    cfg.qwenSpecialWordEmptyList = QwenControlText(parent, IDC_QWEN_SPECIAL_EMPTY);
     cfg.qwenSystemReservedFilter = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
 }
 
@@ -354,15 +360,15 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
         snap.qwenLanguageHints = NormalizeQwenLanguageHints(
             QwenControlText(parent, IDC_QWEN_LANGUAGE_HINTS, 1024));
         snap.qwenVocabularyId = QwenControlText(parent, IDC_QWEN_VOCABULARY_ID);
-        snap.qwenVocabulary = QwenControlText(parent, IDC_QWEN_VOCABULARY, 4096);
+        snap.qwenVocabulary = QwenControlText(parent, IDC_QWEN_VOCABULARY);
         snap.qwenSemanticPunctuation = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED;
         snap.qwenMultiThresholdMode = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_MULTI_THRESHOLD)) == BST_CHECKED;
         snap.qwenHeartbeat = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_HEARTBEAT)) == BST_CHECKED;
         snap.qwenSpeechNoiseThresholdEnabled = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_SPEECH_NOISE_ENABLE)) == BST_CHECKED;
         snap.qwenSpeechNoiseThreshold = std::clamp(static_cast<float>(_wtof(QwenControlText(parent, IDC_QWEN_SPEECH_NOISE_THRESHOLD).c_str())), -1.0f, 1.0f);
         snap.qwenMaxSentenceSilenceMs = std::clamp(_wtoi(QwenControlText(parent, IDC_QWEN_MAX_SENTENCE_SILENCE).c_str()), 200, 6000);
-        snap.qwenSpecialWordReplaceList = QwenControlText(parent, IDC_QWEN_SPECIAL_REPLACE, 4096);
-        snap.qwenSpecialWordEmptyList = QwenControlText(parent, IDC_QWEN_SPECIAL_EMPTY, 4096);
+        snap.qwenSpecialWordReplaceList = QwenControlText(parent, IDC_QWEN_SPECIAL_REPLACE);
+        snap.qwenSpecialWordEmptyList = QwenControlText(parent, IDC_QWEN_SPECIAL_EMPTY);
         snap.qwenSystemReservedFilter = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
 
         std::wstring err;

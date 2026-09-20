@@ -61,6 +61,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/core/asr_probe_service.h` / `src/core/asr_probe_service.cpp` | Decoupled ASR connection probe service interface and registration |
 | `src/app/asr_probe_service_impl.h` / `src/app/asr_probe_service_impl.cpp` | ASR probe service implementation connecting probe requests to backend providers |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | Application and models directory path resolution, log/config file path queries |
+| `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | Universal custom vocabulary manager: parsing (JSON/lines), linear weight scaling, and cross-ASR transpilation |
 | `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Direct text injection into active windows via clipboard paste or WM_CHAR character streaming (WeChat) |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | Local sherpa-onnx recognizer, VAD detector, punctuation model lifecycle, preload, DLL availability checks |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | Thread-safe performance latency metrics (VAD, ASR, Punctuation, Cloud API, LLM) |
@@ -80,7 +81,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | Hotkey config, CapsLock long-press logic, `WH_KEYBOARD_LL` hook, `HotkeyEdit` custom control |
 | `src/ui/form_builder.h` / `src/ui/form_builder.cpp` | Native Win32 form control builder and auto-incrementing layout cursors |
 | `src/ui/settings.h` / `src/ui/settings.cpp` | Settings window shell, tab switcher, top-level window layout, and event dispatcher |
-| `src/ui/tabs/` | Modular Settings tab panels: `General`, `Recognition`, `Cloud ASR`, `LLM`, and `Prompt` |
+| `src/ui/tabs/` | Modular Settings tab panels: `General`, `Recognition`, `Cloud ASR`, `Vocabulary`, `LLM`, and `Prompt` |
 | `src/ui/providers/` | Modular Cloud ASR provider sub-panels: `Baidu`, `Volcengine`, `Qwen`, `MiMo`, `Doubao IME`, `Qwen Free`, and `MAI` |
 | `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Encapsulated Settings dialog control handles and layout visibility toggles |
 | `src/app/main.cpp` | Slim Win32 application entry point (`wWinMain`) and message pump |

@@ -44,6 +44,7 @@ add_executable(VoxType WIN32
     src/core/debug_logger.cpp
     src/core/config_store.cpp
     src/core/config_registry.cpp
+    src/core/vocabulary_manager.cpp
     src/core/asr_probe_service.cpp
     src/core/app_state.cpp
     src/audio/audio_capture.cpp
@@ -92,6 +93,7 @@ add_executable(VoxType WIN32
     src/ui/tabs/tab_cloud_asr.cpp
     src/ui/tabs/tab_llm.cpp
     src/ui/tabs/tab_prompt.cpp
+    src/ui/tabs/tab_vocabulary.cpp
     src/ui/providers/provider_baidu.cpp
     src/ui/providers/provider_volcengine.cpp
     src/ui/providers/provider_qwen.cpp
@@ -248,6 +250,8 @@ add_executable(asr_json_protocol_test
     src/asr/cloud_http_common.cpp
     src/asr/mai_transcribe.cpp
     src/core/config_registry.cpp
+    src/core/path_service.cpp
+    src/core/vocabulary_manager.cpp
 )
 target_compile_definitions(asr_json_protocol_test PRIVATE
     UNICODE _UNICODE VOXTYPE_MAI_PROTOCOL_TEST=1)
@@ -291,6 +295,7 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/core/debug_logger.cpp
     src/core/config_store.cpp
     src/core/config_registry.cpp
+    src/core/vocabulary_manager.cpp
     src/audio/audio_capture.cpp
     src/audio/audio_chunk_sink.cpp
     src/audio/audio_diagnostics.cpp

@@ -296,6 +296,7 @@ void InitializeRegistry() {
     reg.Register({"volc_hotwords_name", &Config::volcHotwordsName});
     reg.Register({"volc_correct_table_id", &Config::volcCorrectTableId});
     reg.Register({"volc_correct_table_name", &Config::volcCorrectTableName});
+    reg.Register({"volc_reuse_vocabulary", &Config::volcEnableReuseVocabulary, CryptoPolicy::None, BoolJsonFormat::RawInt});
     reg.Register({"qwen_api_key", &Config::qwenApiKey, CryptoPolicy::Dpapi});
     reg.Register({"qwen_base_url", &Config::qwenBaseUrl});
     reg.Register({"qwen_http_base_url", &Config::qwenHttpBaseUrl});

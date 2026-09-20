@@ -17,6 +17,7 @@ std::wstring LogDir();
 std::wstring AppDataDir();
 std::wstring AppRootDir();
 std::wstring ConfigPath();
+std::wstring VocabularyPath();
 std::wstring DefaultModelDir(const std::wstring& modelId);
 bool ModelDirExists(const std::wstring& dir);
 bool AnyModelDirExists();
@@ -26,3 +27,10 @@ int ModelIndex(const std::wstring& modelId);
 std::wstring ModelIdFromIndex(int index);
 void MigrateLegacyConfigIfNeeded();
 bool ShouldFallbackFromLegacyModelDir(const std::wstring& modelDir);
+
+namespace PathService {
+inline std::wstring VocabularyPath() { return ::VocabularyPath(); }
+inline std::wstring ConfigPath() { return ::ConfigPath(); }
+inline std::wstring AppDataDir() { return ::AppDataDir(); }
+inline std::wstring LogDir() { return ::LogDir(); }
+}

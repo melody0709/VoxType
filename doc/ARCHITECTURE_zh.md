@@ -56,6 +56,7 @@ flowchart LR
 | `src/core/app_state.h` / `src/core/app_state.cpp` | 全局应用程序实例句柄、窗口句柄、图标、原子音频遥测状态 |
 | `src/core/config_store.h` / `src/core/config_store.cpp` | 配置数据模型（`Config`）、schema 迁移、DPAPI 凭据加密与 JSON 读写 |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | 程序与模型运行目录路径解析、日志与配置文件路径查询 |
+| `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | 通用自定义词汇表管理器：多模式解析（JSON/行格式）、权重比例线性折算与跨 ASR 引擎转译 |
 | `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 目标窗口直接文本注入（剪贴板粘贴与针对微信的 WM_CHAR 逐字流式投递） |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | 本地 sherpa-onnx 识别器、VAD 探测器、标点模型生命周期管理、预加载及 DLL 安全探测 |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | 线程安全的各阶段耗时指标度量（VAD、ASR、标点、云端 API、LLM） |
@@ -73,7 +74,9 @@ flowchart LR
 | `src/ui/ui_types.h` | UI 布局度量、颜色常量、控件 ID、DPI 辅助常量 |
 | `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI 字体与画刷等 GDI/DirectWrite 主题资源生命周期管理 |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | 热键配置、CapsLock 长按逻辑、`WH_KEYBOARD_LL` Hook、`HotkeyEdit` 自绘控件 |
-| `src/ui/settings.h` / `src/ui/settings.cpp` | Settings 窗口、tab UI、控件创建、加载/保存、Provider 管理、输入对话框 |
+| `src/ui/settings.h` / `src/ui/settings.cpp` | Settings 窗口外壳、Tab 切换器、顶层窗口布局与事件分发 |
+| `src/ui/tabs/` | 模块化 Settings Tab 面板：`General`、`Recognition`、`Cloud ASR`、`Vocabulary`、`LLM` 和 `Prompt` |
+| `src/ui/providers/` | 模块化云端 ASR Provider 子面板：`Baidu`、`Volcengine`、`Qwen`、`MiMo`、`Doubao IME`、`Qwen Free` 和 `MAI` |
 | `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Settings 对话框控件句柄封装与按分类显隐控制 |
 | `src/app/main.cpp` | 精简 Win32 程序入口（`wWinMain`）与消息主循环 |
 | `src/app/main_window.h` / `src/app/main_window.cpp` | 隐藏主消息窗口、托盘消息调度、热键响应、定时器触发 |

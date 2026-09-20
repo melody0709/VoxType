@@ -224,8 +224,16 @@ HINSTANCE GetParentInstance(HWND parent) {
 }
 
 std::wstring GetControlText(HWND hwnd, int id, size_t capacity) {
-    std::wstring value(capacity, L'\0');
-    const int length = GetWindowTextW(GetDlgItem(hwnd, id), value.data(), static_cast<int>(value.size()));
+    HWND control = GetDlgItem(hwnd, id);
+    if (!control) return {};
+    const int textLength = GetWindowTextLengthW(control);
+    if (textLength <= 0) return {};
+    size_t allocSize = static_cast<size_t>(textLength) + 1;
+    if (capacity > allocSize) {
+        allocSize = capacity;
+    }
+    std::wstring value(allocSize, L'\0');
+    const int length = GetWindowTextW(control, value.data(), static_cast<int>(value.size()));
     if (length <= 0) return {};
     value.resize(static_cast<size_t>(length));
     return value;

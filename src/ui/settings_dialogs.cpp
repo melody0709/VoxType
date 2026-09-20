@@ -7,10 +7,14 @@
 #include "ui_types.h"
 #include "ui_utils.h"
 #include "ui_theme.h"
+#include "vocabulary_manager.h"
+#include "utils.h"
 
 #include <commctrl.h>
 #include <windowsx.h>
+#include <shellapi.h>
 #include <algorithm>
+#include <format>
 #include <vector>
 
 namespace {
@@ -33,15 +37,11 @@ constexpr int IDC_QWEN_CONTINUE_CONTEXT = 2133;
 constexpr int IDC_QWEN_SPECIAL_REPLACE = 2134;
 constexpr int IDC_QWEN_SPECIAL_EMPTY = 2135;
 constexpr int IDC_QWEN_SYSTEM_FILTER = 2136;
-
-
-
 struct QwenAdvancedControls {
     HWND vocabIdLabel = nullptr;
     HWND vocabId = nullptr;
     HWND vocabIdHint = nullptr;
     HWND vocabJsonLabel = nullptr;
-    HWND vocabJson = nullptr;
     HWND vocabJsonHint = nullptr;
     HWND streamingGroup = nullptr;
     HWND semantic = nullptr;
@@ -77,8 +77,7 @@ void LayoutQwenAdvancedDlg(HWND hwnd, const QwenAdvancedControls& c) {
     if (c.vocabId) MoveWindow(c.vocabId, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::EditH), TRUE);
     if (c.vocabIdHint) MoveWindow(c.vocabIdHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdHintY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH), TRUE);
 
-    if (c.vocabJsonLabel) MoveWindow(c.vocabJsonLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY), S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::LabelH), TRUE);
-    if (c.vocabJson) MoveWindow(c.vocabJson, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenAdvancedDialogVocabJsonH), TRUE);
+    if (c.vocabJsonLabel) MoveWindow(c.vocabJsonLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY), S(140), S(UiStyle::LabelH), TRUE);
     if (c.vocabJsonHint) MoveWindow(c.vocabJsonHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonHintY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH), TRUE);
 
     if (c.streamingGroup) MoveWindow(c.streamingGroup, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogStreamingGroupY), S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::QwenAdvancedDialogStreamingGroupH), TRUE);
@@ -175,7 +174,7 @@ void UpdateQwenAdvancedDialogState(HWND hwnd, bool streaming) {
 
 bool ReadQwenAdvancedDialog(HWND hwnd, QwenAdvancedDialogData& data, std::wstring& error, QwenAdvancedValidator validator) {
     data.vocabularyId = QwenControlText(hwnd, IDC_QWEN_VOCABULARY_ID, 512);
-    data.vocabulary = QwenControlText(hwnd, IDC_QWEN_VOCABULARY, 8192);
+    // data.vocabulary is managed globally in TabVocabulary (%APPDATA%\VoxType\vocabulary.json)
     data.semanticPunctuation = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED;
     data.maxSentenceSilence = QwenControlText(hwnd, IDC_QWEN_MAX_SENTENCE_SILENCE, 32);
     data.multiThreshold = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_MULTI_THRESHOLD)) == BST_CHECKED;
@@ -183,8 +182,8 @@ bool ReadQwenAdvancedDialog(HWND hwnd, QwenAdvancedDialogData& data, std::wstrin
     data.speechNoiseEnabled = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SPEECH_NOISE_ENABLE)) == BST_CHECKED;
     data.speechNoiseThreshold = QwenControlText(hwnd, IDC_QWEN_SPEECH_NOISE_THRESHOLD, 32);
     data.continueContext = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_CONTINUE_CONTEXT)) == BST_CHECKED;
-    data.specialReplace = QwenControlText(hwnd, IDC_QWEN_SPECIAL_REPLACE, 8192);
-    data.specialEmpty = QwenControlText(hwnd, IDC_QWEN_SPECIAL_EMPTY, 8192);
+    data.specialReplace = QwenControlText(hwnd, IDC_QWEN_SPECIAL_REPLACE);
+    data.specialEmpty = QwenControlText(hwnd, IDC_QWEN_SPECIAL_EMPTY);
     data.systemReservedFilter = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
 
     const int silenceMs = _wtoi(data.maxSentenceSilence.c_str());
@@ -235,22 +234,14 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                                        hInst, nullptr);
         ApplyUiFont(state->controls.vocabId);
         state->controls.vocabIdHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdHintY),
-                   S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH),
-                   L"Optional. Its target model must match the selected ASR model.");
+                    S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH),
+                    L"Optional. Its target model must match the selected ASR model.");
 
         state->controls.vocabJsonLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY),
-                    S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::LabelH), L"Inline vocabulary JSON");
-        state->controls.vocabJson = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
-                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE |
-                                              ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
-                                          S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonY),
-                                          S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenAdvancedDialogVocabJsonH),
-                                          hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_VOCABULARY)),
-                                          hInst, nullptr);
-        ApplyUiFont(state->controls.vocabJson);
+                    S(140), S(UiStyle::LabelH), L"Inline vocabulary");
         state->controls.vocabJsonHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonHintY),
                    S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH),
-                   L"Optional. Weights 1–5 or 50; max 2000 entries, max 50 entries at weight 50.");
+                   L"Managed globally in the top-level \"Vocabulary\" tab (%APPDATA%\\VoxType\\vocabulary.json), shared with Volcano Engine.");
 
         const wchar_t* groupTitle = data && data->streaming
             ? L"Streaming recognition"
@@ -341,7 +332,9 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
         if (data) {
             SetWindowTextW(state->controls.vocabId, data->vocabularyId.c_str());
-            SetWindowTextW(state->controls.vocabJson, data->vocabulary.c_str());
+
+            // Vocabulary is managed globally in TabVocabulary (%APPDATA%\VoxType\vocabulary.json)
+
             Button_SetCheck(state->controls.semantic, data->semanticPunctuation ? BST_CHECKED : BST_UNCHECKED);
             SetWindowTextW(state->controls.silence, data->maxSentenceSilence.c_str());
             Button_SetCheck(state->controls.multi, data->multiThreshold ? BST_CHECKED : BST_UNCHECKED);

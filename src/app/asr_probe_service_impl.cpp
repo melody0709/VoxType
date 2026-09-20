@@ -19,6 +19,7 @@
 #include "qwen_free_proto_llm.h"
 #include "qwen_audio_json.h"
 #include "audio_diagnostics.h"
+#include "vocabulary_manager.h"
 
 #include <thread>
 #include <algorithm>
@@ -62,6 +63,10 @@ public:
                 vcfg.hotwordsName = req.configSnapshot.volcHotwordsName;
                 vcfg.correctTableId = req.configSnapshot.volcCorrectTableId;
                 vcfg.correctTableName = req.configSnapshot.volcCorrectTableName;
+                if (req.configSnapshot.volcEnableReuseVocabulary) {
+                    auto vocab = vocabulary_manager::GetEffectiveVocabularyEntries(req.configSnapshot.qwenVocabulary);
+                    vcfg.contextJson = vocabulary_manager::BuildVolcengineContextJson(vocab);
+                }
                 auto res = volc_asr::TestConnection(vcfg);
                 pr.ok = res.ok;
                 pr.message = std::move(res.message);
@@ -78,7 +83,7 @@ public:
                     cfg.model = model;
                     cfg.languageHints = req.configSnapshot.qwenLanguageHints;
                     cfg.vocabularyId = req.configSnapshot.qwenVocabularyId;
-                    cfg.vocabulary = req.configSnapshot.qwenVocabulary;
+                    cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(req.configSnapshot.qwenVocabulary);
                     auto res = qwen_audio_http::TestConnection(cfg);
                     pr.ok = res.ok;
                     pr.message = std::move(res.message);
@@ -92,7 +97,7 @@ public:
                     cfg.model = model;
                     cfg.languageHints = req.configSnapshot.qwenLanguageHints;
                     cfg.vocabularyId = req.configSnapshot.qwenVocabularyId;
-                    cfg.vocabulary = req.configSnapshot.qwenVocabulary;
+                    cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(req.configSnapshot.qwenVocabulary);
                     cfg.semanticPunctuation = req.configSnapshot.qwenSemanticPunctuation;
                     cfg.multiThresholdMode = req.configSnapshot.qwenMultiThresholdMode;
                     cfg.heartbeat = req.configSnapshot.qwenHeartbeat;

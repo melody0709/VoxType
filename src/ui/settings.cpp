@@ -14,6 +14,7 @@
 #include "tab_general.h"
 #include "tab_recognition.h"
 #include "tab_cloud_asr.h"
+#include "tab_vocabulary.h"
 #include "tab_llm.h"
 #include "tab_prompt.h"
 #include "provider_qwen_free.h"
@@ -40,12 +41,13 @@ namespace {
 ui_tab::TabGeneral s_tabGeneral;
 ui_tab::TabRecognition s_tabRecognition;
 ui_tab::TabCloudAsr s_tabCloudAsr;
+ui_tab::TabVocabulary s_tabVocabulary;
 ui_tab::TabLlm s_tabLlm;
 ui_tab::TabPrompt s_tabPrompt;
 
-constexpr size_t kTabCount = 5;
+constexpr size_t kTabCount = 6;
 ui_tab::ISettingsTab* const s_tabs[kTabCount] = {
-    &s_tabGeneral, &s_tabRecognition, &s_tabCloudAsr, &s_tabLlm, &s_tabPrompt
+    &s_tabGeneral, &s_tabRecognition, &s_tabCloudAsr, &s_tabVocabulary, &s_tabLlm, &s_tabPrompt
 };
 
 } // namespace
@@ -188,7 +190,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ApplyUiFont(tab);
         TCITEMW item = {};
         item.mask = TCIF_TEXT;
-        for (auto* name : {L"General", L"Recognition", L"Cloud ASR", L"LLM", L"LLM Prompt"}) {
+        for (auto* name : {L"General", L"Recognition", L"Cloud ASR", L"Vocabulary", L"LLM", L"LLM Prompt"}) {
             item.pszText = const_cast<LPWSTR>(name);
             TabCtrl_InsertItem(tab, 100, &item);
         }
@@ -366,18 +368,10 @@ void ShowSettingsWindow(HWND owner) {
     if (!g_settingsWindow) {
         UpdateUiScale(nullptr);
         g_settingsWindow = CreateWindowExW(
-            WS_EX_APPWINDOW,
-            kSettingsClass,
-            L"VoxType Settings",
+            WS_EX_APPWINDOW, kSettingsClass, L"VoxType Settings",
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            S(UiStyle::SettingsWindowW),
-            S(UiStyle::SettingsWindowH),
-            owner,
-            nullptr,
-            g_instance,
-            nullptr);
+            CW_USEDEFAULT, CW_USEDEFAULT, S(UiStyle::SettingsWindowW), S(UiStyle::SettingsWindowH),
+            owner, nullptr, g_instance, nullptr);
     }
     ui_tab::RefreshStartupRegistrationControl(g_settingsWindow, true);
     RECT rc;

@@ -2,6 +2,35 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.4 (2026-09-20)
+
+### Features
+
+- **Universal Vocabulary Tab & Centralized Storage**:
+  - Promoted vocabulary management from deep dialog nesting into a dedicated top-level Tab (`Vocabulary`), located between `Cloud ASR` and `LLM`.
+  - Established `%APPDATA%\VoxType\vocabulary.json` as the single source of truth for custom hotwords.
+  - Implemented full-width multiline editor with DPI-adaptive `Consolas` monospace font.
+  - Added quick action toolbar: `Edit in External Editor` (opens default system editor with non-locking `FILE_SHARE_*` flags), `Reload from File` (re-parses with validation), and `Format JSON` (canonical indentation and CRLF formatting).
+  - Dynamic status bar displaying active entries count and high-priority entries with syntax validation diagnostics.
+- **Cross-ASR Vocabulary Reusability & Automatic Transpilation**:
+  - **Qwen ASR**: Automatic transpilation to JSON dictionary (`{"word": weight}`), with automatic 50-item capping on super-priority weight (50) to strictly comply with Bailian API constraints.
+  - **Volcano Engine (Doubao)**: Proportional linear weight scaling (`scale = 1.0 + weight / 25.0`, mapping 50 -> 3.0, 40 -> 2.6, 25 -> 2.0). Seamlessly combined into `corpus.context` alongside real-time input field context (`dialog_ctx`). Added `Reuse common vocabulary` toggle in Volcano settings.
+  - **Sherpa-onnx (Offline)**: Pre-wired transpilation to `hotwords.txt` scoring format.
+  - **Flexible Parsing Modes**: Native support for both standard JSON (`"term": 50`) and relaxed plain-text line format (`term [weight]`), automatically stripping colons, equals, and commas.
+
+### Refactoring & UI Optimization
+
+- **Qwen Advanced Dialog Streamlining**:
+  - Eliminated the cramped 3-line inline vocabulary edit box and redundant action buttons from `Qwen ASR Advanced Settings`.
+  - Replaced with a concise, non-truncated guidance label pointing to the top-level `Vocabulary` tab.
+  - Reduced dialog height from 860 DIP to 752 DIP (-108 DIP), eliminating bottom crowding and text clipping across 96/144/192/288 DPI.
+- **Dynamic Memory Allocation**: Replaced fixed 4096 / 8192 character input buffer limits in `settings_controls.cpp` with `GetWindowTextLengthW` dynamic sizing, safely supporting up to the 2,000-entry official limits.
+
+### Tests
+
+- Added 20+ unit and protocol regression tests in `asr_json_protocol_test` covering linear scaling, unclosed JSON detection, comment stripping, delimiter extraction, CRLF formatting, and combined Volcano context payloads.
+- Config registry expanded to 92 persistent fields with legacy deserialization verification.
+
 ## v0.10.3 (2026-09-20)
 
 ### Fixed

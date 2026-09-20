@@ -85,6 +85,7 @@ struct Config {
     std::wstring volcHotwordsName;
     std::wstring volcCorrectTableId;
     std::wstring volcCorrectTableName;
+    bool volcEnableReuseVocabulary = true;
     std::wstring qwenApiKey;
     std::wstring qwenBaseUrl = kQwenBeijingRealtimeBaseUrl;
     std::wstring qwenHttpBaseUrl = kQwenBeijingHttpBaseUrl;

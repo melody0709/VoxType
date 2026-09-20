@@ -102,6 +102,11 @@ void ProviderVolcengine::CreateControls(HWND parent) {
     HWND btnExtra = CreateButton(parent, IDC_VOLC_EXTRA_PARAMS, S(UiStyle::InputLeft), S(UiStyle::RowInputY(6)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Edit Params");
     m_controls.push_back(btnExtra);
 
+    HWND volcReuseVocab = CreateWindowW(L"BUTTON", L"Reuse common vocabulary (vocabulary.json)", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                        S(360), S(UiStyle::RowInputY(6)) + S(6), S(400), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_REUSE_VOCABULARY)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(volcReuseVocab);
+    m_controls.push_back(volcReuseVocab);
+
     control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(7)) + S(2), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Hotwords ID");
     m_controls.push_back(control);
     HWND volcHotwordsId = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
@@ -273,6 +278,7 @@ void ProviderVolcengine::LoadControls(HWND parent, const Config& cfg) {
         SetWindowTextW(GetDlgItem(parent, IDC_VOLC_CONTEXT_HISTORY), ch);
     }
     Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_INPUT_CONTEXT), cfg.volcEnableInputContext ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(parent, IDC_VOLC_REUSE_VOCABULARY), cfg.volcEnableReuseVocabulary ? BST_CHECKED : BST_UNCHECKED);
 }
 
 void ProviderVolcengine::SaveControls(HWND parent, Config& cfg) {
@@ -327,6 +333,7 @@ void ProviderVolcengine::SaveControls(HWND parent, Config& cfg) {
     cfg.volcContextHistory = (parsed >= 1 && parsed <= 20) ? parsed : 3;
 
     cfg.volcEnableInputContext = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_INPUT_CONTEXT)) == BST_CHECKED;
+    cfg.volcEnableReuseVocabulary = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_REUSE_VOCABULARY)) == BST_CHECKED;
 }
 
 bool ProviderVolcengine::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
@@ -425,6 +432,7 @@ bool ProviderVolcengine::HandleCommand(HWND parent, WORD notifyCode, WORD contro
             GetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_NAME), ct, 512);
             snap.volcCorrectTableName = ct;
         }
+        snap.volcEnableReuseVocabulary = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_REUSE_VOCABULARY)) == BST_CHECKED;
         SetStatus(parent, L"Testing Volcano Engine ASR connection...");
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"volcengine", snap };

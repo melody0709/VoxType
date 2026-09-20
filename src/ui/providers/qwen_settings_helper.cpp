@@ -11,6 +11,7 @@
 #include "ui_utils.h"
 #include "asr_probe_service.h"
 #include "qwen_special_word_filter.h"
+#include "vocabulary_manager.h"
 
 #include <windowsx.h>
 #include <winhttp.h>
@@ -148,7 +149,7 @@ bool ValidateQwenEndpoint(const std::wstring& raw,
 }
 
 bool ValidateQwenAdvancedData(QwenAdvancedDialogData& data, std::wstring& error) {
-    if (!asr_probe::ValidateQwenVocabulary(data.vocabulary, &error)) return false;
+    if (!vocabulary_manager::ValidateVocabulary(data.vocabulary, &error)) return false;
     if (!data.streaming) return true;
     qwen_special_word_filter::Config specialFilter;
     if (!qwen_special_word_filter::Normalize(
@@ -195,7 +196,7 @@ void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintContr
     QwenAdvancedDialogData data;
     data.streaming = IsQwenAudioStreamingModel(QwenModelFromControl(hwnd));
     data.vocabularyId = QwenControlText(hwnd, IDC_QWEN_VOCABULARY_ID, 512);
-    data.vocabulary = QwenControlText(hwnd, IDC_QWEN_VOCABULARY, 8192);
+    data.vocabulary = QwenControlText(hwnd, IDC_QWEN_VOCABULARY);
     data.semanticPunctuation = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED;
     data.maxSentenceSilence = QwenControlText(hwnd, IDC_QWEN_MAX_SENTENCE_SILENCE, 32);
     data.multiThreshold = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_MULTI_THRESHOLD)) == BST_CHECKED;
@@ -203,8 +204,8 @@ void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintContr
     data.speechNoiseEnabled = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SPEECH_NOISE_ENABLE)) == BST_CHECKED;
     data.speechNoiseThreshold = QwenControlText(hwnd, IDC_QWEN_SPEECH_NOISE_THRESHOLD, 32);
     data.continueContext = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_CONTINUE_CONTEXT)) == BST_CHECKED;
-    data.specialReplace = QwenControlText(hwnd, IDC_QWEN_SPECIAL_REPLACE, 8192);
-    data.specialEmpty = QwenControlText(hwnd, IDC_QWEN_SPECIAL_EMPTY, 8192);
+    data.specialReplace = QwenControlText(hwnd, IDC_QWEN_SPECIAL_REPLACE);
+    data.specialEmpty = QwenControlText(hwnd, IDC_QWEN_SPECIAL_EMPTY);
     data.systemReservedFilter = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
 
     if (!ShowQwenAdvancedDialog(hwnd, data)) return;

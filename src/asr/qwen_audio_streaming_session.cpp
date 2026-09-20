@@ -10,6 +10,7 @@
 #include "qwen_finalize_policy.h"
 #include "qwen_audio_streaming.h"
 #include "utils.h"
+#include "vocabulary_manager.h"
 
 #include <algorithm>
 #include <atomic>
@@ -44,7 +45,7 @@ qwen_audio_streaming::Config BuildConfig(const Config& c) {
     out.model = c.qwenModel;
     out.languageHints = c.qwenLanguageHints.empty() ? c.qwenLanguage : c.qwenLanguageHints;
     out.vocabularyId = c.qwenVocabularyId;
-    out.vocabulary = c.qwenVocabulary;
+    out.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(c.qwenVocabulary);
     out.inputContextText = c.qwenInputContextSnapshotCaptured
         ? c.qwenInputContextSnapshot
         : L"";

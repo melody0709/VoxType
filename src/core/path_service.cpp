@@ -180,6 +180,10 @@ std::wstring ConfigPath() {
     return MutableDataDir() + L"\\config.json";
 }
 
+std::wstring VocabularyPath() {
+    return MutableDataDir() + L"\\vocabulary.json";
+}
+
 std::wstring DefaultModelDir(const std::wstring& modelId) {
     const std::wstring base = DownloadedModelRoot() + L"\\";
     if (modelId == L"firered_aed") {

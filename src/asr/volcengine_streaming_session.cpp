@@ -12,6 +12,7 @@
 #include "pending_pcm_buffer.h"
 #include "streaming_vad_trimmer.h"
 #include "volcengine_asr.h"
+#include "vocabulary_manager.h"
 
 #include <algorithm>
 #include <atomic>
@@ -52,27 +53,6 @@ DWORD VolcFinalizeWaitMs(const Config& config, double recordingMs, size_t captur
     return IsFallbackAsrEnabled(config)
         ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs, capturedPcmBytes)
         : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs, capturedPcmBytes);
-}
-
-std::wstring JsonEscape(const std::wstring& s) {
-    std::wstring out;
-    out.reserve(s.size());
-    for (wchar_t c : s) {
-        if (c == L'\\') out += L"\\\\";
-        else if (c == L'"') out += L"\\\"";
-        else if (c == L'\n') out += L"\\n";
-        else if (c == L'\r') out += L"\\r";
-        else if (c == L'\t') out += L"\\t";
-        else if (c == L'\b') out += L"\\b";
-        else if (c == L'\f') out += L"\\f";
-        else if (c < 0x20) {
-            wchar_t buf[8];
-            swprintf_s(buf, L"\\u%04x", (unsigned)c);
-            out += buf;
-        }
-        else out += c;
-    }
-    return out;
 }
 
 HINTERNET AtomicTakeSessionWebSocket(volc_asr::VolcSession& sess) {
@@ -234,27 +214,6 @@ private:
             Sleep((std::min)(static_cast<DWORD>(50), remaining));
         }
         return !abort_.load() && !sess.forceAbort.load();
-    }
-
-    std::wstring BuildContextJson(const std::wstring& inputFieldText, bool includeHistory) const {
-        std::wstring json = L"{\"context_type\":\"dialog_ctx\",\"context_data\":[";
-        int idx = 0;
-
-        if (!inputFieldText.empty()) {
-            json += L"{\"text\":\"" + JsonEscape(inputFieldText) + L"\"}";
-            idx++;
-        }
-
-        if (includeHistory) {
-            std::lock_guard<std::mutex> lock(g_volcRecognitionHistoryMutex);
-            for (size_t i = 0; i < g_volcRecognitionHistory.size(); ++i) {
-                if (idx > 0) json += L",";
-                json += L"{\"text\":\"" + JsonEscape(g_volcRecognitionHistory[i]) + L"\"}";
-                idx++;
-            }
-        }
-        json += L"]}";
-        return json;
     }
 
     void AddRecognitionHistory(const std::wstring& text) {
@@ -465,11 +424,18 @@ private:
                 hasInputText = !ctxInputText.empty();
             }
 
-            if (hasInputText) {
-                vcfg.contextJson = BuildContextJson(ctxInputText, false);
-            } else if (config_.volcEnableContext) {
-                vcfg.contextJson = BuildContextJson(L"", true);
+            vocabulary_manager::VocabularyList vocab;
+            if (config_.volcEnableReuseVocabulary) {
+                vocab = vocabulary_manager::GetEffectiveVocabularyEntries(config_.qwenVocabulary);
             }
+
+            std::vector<std::wstring> history;
+            if (!hasInputText && config_.volcEnableContext) {
+                std::lock_guard<std::mutex> lock(g_volcRecognitionHistoryMutex);
+                history.assign(g_volcRecognitionHistory.begin(), g_volcRecognitionHistory.end());
+            }
+
+            vcfg.contextJson = vocabulary_manager::BuildVolcengineContextJson(vocab, ctxInputText, history);
         }
 
         // Open session with retries
