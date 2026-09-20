@@ -2,6 +2,26 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.2 (2026-09-20)
+
+### Architectural Refactoring (Settings Modularization & Hardening)
+
+- **Settings Modular Decomposition**: Completely split the 3,448-line monolithic `src/ui/settings.cpp` down to 397 lines by decomposing UI panels into dedicated Tab classes (`src/ui/tabs/`: General, Recognition, Cloud ASR, LLM, Prompt) and Cloud Provider sub-panels (`src/ui/providers/`: Baidu, Volcengine, Qwen, MiMo, Doubao IME, Qwen Free, MAI).
+- **Strong-Typed Configuration Registry (`config_registry.*`)**: Introduced a declarative, reflection-style registry handling canonical JSON serialization, deserialization, and DPAPI key encryption across all 91 persistent fields without handwritten repetitive boilerplate.
+- **DPI Dynamic Rebuild Architecture (`WM_DPICHANGED`)**:
+  - Implemented dynamic control lifecycle reconstruction on DPI transitions.
+  - Added raw edit buffer and focus/selection preservation: all `Edit` control texts and in-progress typing (including out-of-range draft values, whitespace, and caret positions) are captured and restored verbatim without premature normalization.
+  - Fully DPI-scaled footer divider line with `S(...)` coordinates, ensuring exact pixel alignment with action buttons across 96, 144, 192, and 288 DPI.
+  - Enforced pure-virtual `DestroyControls() = 0` on `ISettingsTab` and `ICloudProviderPanel` to guarantee complete resource disposal.
+- **Float Round-Trip Precision**: Enabled `std::numeric_limits<float>::max_digits10` (9 digits for IEEE 754 single precision) in `config_registry.cpp`, preventing 6-digit float truncation during round-trip JSON serialization.
+- **Decoupled ASR Probe Service (`asr_probe_service.*`)**: Extracted probe execution and test result marshaling from the UI window into a pure background service with generation tracking to avoid stale test race conditions.
+
+### Tests
+
+- Added comprehensive 91-field legacy JSON deserialization regression test in `asr_json_protocol_test`.
+- Enhanced `scripts/validate_settings_layout.ps1` with comment stripping (`Strip-Comments`) and verified design across 96/144/192/288 DPI.
+- All 17 architectural mechanical guards pass.
+
 ## v0.10.1 (2026-09-19)
 
 ### Fixed

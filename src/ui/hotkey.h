@@ -32,6 +32,7 @@ UINT NormalizedKeyFromKeyMessage(WPARAM wParam, LPARAM lParam);
 std::wstring KeyName(UINT key);
 std::wstring HotkeyToString(const HotkeyConfig& hotkey);
 HotkeyConfig HotkeyFromString(const std::wstring& text);
+HotkeyConfig ConfiguredHotkeyOrDefault(const std::wstring& text);
 HotkeyConfig CurrentConfiguredHotkey();
 bool ModifiersMatch(const HotkeyConfig& hotkey);
 

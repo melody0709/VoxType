@@ -57,6 +57,9 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/core/app_messages.h` | Application window messages, hotkey command IDs, timer IDs, tray notification constants |
 | `src/core/app_state.h` / `src/core/app_state.cpp` | Global application instance, window handle, icon, atomic audio telemetry flags |
 | `src/core/config_store.h` / `src/core/config_store.cpp` | Configuration data model (`Config`), schema migration, DPAPI credential encryption, JSON persistence |
+| `src/core/config_registry.h` / `src/core/config_registry.cpp` | Strongly-typed configuration field registry, metadata, DPAPI encryption, JSON serialization strategies |
+| `src/core/asr_probe_service.h` / `src/core/asr_probe_service.cpp` | Decoupled ASR connection probe service interface and registration |
+| `src/app/asr_probe_service_impl.h` / `src/app/asr_probe_service_impl.cpp` | ASR probe service implementation connecting probe requests to backend providers |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | Application and models directory path resolution, log/config file path queries |
 | `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Direct text injection into active windows via clipboard paste or WM_CHAR character streaming (WeChat) |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | Local sherpa-onnx recognizer, VAD detector, punctuation model lifecycle, preload, DLL availability checks |
@@ -75,7 +78,10 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/ui/ui_types.h` | UI layout dimensions, colors, control constants, DPI metrics |
 | `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI GDI/DirectWrite font and brush theme resource lifecycle management |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | Hotkey config, CapsLock long-press logic, `WH_KEYBOARD_LL` hook, `HotkeyEdit` custom control |
-| `src/ui/settings.h` / `src/ui/settings.cpp` | Settings window, tab UI, control creation, load/save, provider management, input dialog |
+| `src/ui/form_builder.h` / `src/ui/form_builder.cpp` | Native Win32 form control builder and auto-incrementing layout cursors |
+| `src/ui/settings.h` / `src/ui/settings.cpp` | Settings window shell, tab switcher, top-level window layout, and event dispatcher |
+| `src/ui/tabs/` | Modular Settings tab panels: `General`, `Recognition`, `Cloud ASR`, `LLM`, and `Prompt` |
+| `src/ui/providers/` | Modular Cloud ASR provider sub-panels: `Baidu`, `Volcengine`, `Qwen`, `MiMo`, `Doubao IME`, `Qwen Free`, and `MAI` |
 | `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Encapsulated Settings dialog control handles and layout visibility toggles |
 | `src/app/main.cpp` | Slim Win32 application entry point (`wWinMain`) and message pump |
 | `src/app/main_window.h` / `src/app/main_window.cpp` | Main hidden message window, tray dispatch, hotkey handling, timer triggers |

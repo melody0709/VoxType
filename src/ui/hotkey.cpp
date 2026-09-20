@@ -143,12 +143,16 @@ HotkeyConfig HotkeyFromString(const std::wstring& text) {
     return hotkey;
 }
 
-HotkeyConfig CurrentConfiguredHotkey() {
-    HotkeyConfig cfg = HotkeyFromString(g_config.hotkey);
+HotkeyConfig ConfiguredHotkeyOrDefault(const std::wstring& text) {
+    HotkeyConfig cfg = HotkeyFromString(text);
     if (cfg.key == 0xE5 || cfg.IsEmpty()) {
         cfg.key = VK_CAPITAL;
     }
     return cfg;
+}
+
+HotkeyConfig CurrentConfiguredHotkey() {
+    return ConfiguredHotkeyOrDefault(g_config.hotkey);
 }
 
 bool ModifiersMatch(const HotkeyConfig& hotkey) {

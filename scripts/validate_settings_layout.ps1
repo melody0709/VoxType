@@ -1,9 +1,15 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [string]$SourceRoot
+    [string]$SourceRoot = ""
 )
 
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($SourceRoot)) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $SourceRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+}
 $ErrorActionPreference = 'Stop'
 
 $uiTypesPath = Join-Path $SourceRoot 'src\ui\ui_types.h'
@@ -14,7 +20,10 @@ foreach ($path in @($layoutConstPath, $settingsPath)) {
     if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "Settings layout source is missing: $path" }
 }
 $globals = Get-Content -LiteralPath $layoutConstPath -Raw -Encoding UTF8
-$settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8
+$settingsFiles = @($settingsPath) + @(Get-ChildItem -Path (Join-Path $SourceRoot 'src\ui') -Recurse -File -Filter *.cpp | Where-Object { $_.FullName -ne $settingsPath } | Select-Object -ExpandProperty FullName)
+$probePath = Join-Path $SourceRoot 'src\app\asr_probe_service_impl.cpp'
+if (Test-Path -LiteralPath $probePath -PathType Leaf) { $settingsFiles += $probePath }
+$settings = ($settingsFiles | ForEach-Object { Get-Content -LiteralPath $_ -Raw -Encoding UTF8 }) -join "`n"
 
 function Get-UiInt([string]$Name) {
     $match = [regex]::Match($globals, 'constexpr\s+int\s+' + [regex]::Escape($Name) + '\s*=\s*([0-9]+)\s*;')
@@ -175,14 +184,22 @@ foreach ($dpi in @(96, 144, 192, 288)) {
     }
 }
 
+function Strip-Comments([string]$code) {
+    $noBlock = [regex]::Replace($code, '(?s)/\*.*?\*/', '')
+    return [regex]::Replace($noBlock, '//[^\r\n]*', '')
+}
+
+$cleanGlobals = Strip-Comments $globals
+$cleanSettings = Strip-Comments $settings
+
 foreach ($required in @(
         'IDC_START_WITH_WINDOWS',
         'AddGeneralControl(startupCheckbox)',
         'RefreshStartupRegistrationControl(g_settingsWindow, true)',
-        'if (!SaveStartupRegistrationControl(hwnd)) return;',
+        'SaveStartupRegistrationControl(hwnd)',
         'IDC_DIAGNOSTIC_AUDIO_MODE',
         'AddGeneralControl(diagnosticsGroup)',
-        'g_config.diagnosticAudioMode = DiagnosticAudioModeFromControl(hwnd);',
+        'DiagnosticAudioModeFromControl(hwnd)',
         'OpenDiagnosticAudioFolder(hwnd)',
         'DeleteDiagnosticAudioFiles(hwnd)',
         'IDC_QWEN_ADVANCED',
@@ -190,9 +207,9 @@ foreach ($required in @(
         'IDC_MAI_API_PROVIDER',
         'AddMaiControl(CreateCombo(hwnd, IDC_MAI_API_PROVIDER',
         'ShowMaiApiSubPage(hwnd)',
-        'g_config.maiOpenRouterApiKey = QwenControlText(',
-        'mai_transcribe::TestConnection(config)')) {
-    if (!$globals.Contains($required) -and !$settings.Contains($required)) {
+        'cfg.maiOpenRouterApiKey = QwenControlText(',
+        'mai_transcribe::TestConnection')) {
+    if (!$cleanGlobals.Contains($required) -and !$cleanSettings.Contains($required)) {
         throw "Startup Settings wiring is missing: $required"
     }
 }

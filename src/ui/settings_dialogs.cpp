@@ -34,21 +34,7 @@ constexpr int IDC_QWEN_SPECIAL_REPLACE = 2134;
 constexpr int IDC_QWEN_SPECIAL_EMPTY = 2135;
 constexpr int IDC_QWEN_SYSTEM_FILTER = 2136;
 
-HINSTANCE GetParentInstance(HWND parent) {
-    if (parent) {
-        HINSTANCE h = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE));
-        if (h) return h;
-    }
-    return GetModuleHandleW(nullptr);
-}
 
-std::wstring QwenControlText(HWND hwnd, int id, size_t capacity = 1024) {
-    std::wstring value(capacity, L'\0');
-    const int length = GetWindowTextW(GetDlgItem(hwnd, id), value.data(), static_cast<int>(value.size()));
-    if (length <= 0) return {};
-    value.resize(static_cast<size_t>(length));
-    return value;
-}
 
 struct QwenAdvancedControls {
     HWND vocabIdLabel = nullptr;

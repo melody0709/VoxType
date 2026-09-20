@@ -13,34 +13,6 @@
 #include <vector>
 
 HWND g_settingsWindow = nullptr;
-std::vector<HWND> g_recognitionControls;
-std::vector<HWND> g_generalControls;
-std::vector<HWND> g_llmControls;
-std::vector<HWND> g_promptControls;
-std::vector<HWND> g_cloudAsrControls;
-std::vector<HWND> g_baiduControls;
-std::vector<HWND> g_volcengineControls;
-std::vector<HWND> g_qwenControls;
-std::vector<HWND> g_qwenAudio3Controls;
-std::vector<HWND> g_qwenAudioStreamingOnlyControls;
-std::vector<HWND> g_mimoControls;
-std::vector<HWND> g_maiControls;
-std::vector<HWND> g_maiOpenRouterControls;
-std::vector<HWND> g_maiAzureControls;
-std::vector<HWND> g_doubaoImeControls;
-std::vector<HWND> g_qwenFreeControls;
-std::vector<HWND> g_vadFireredControls;
-std::vector<HWND> g_vadSileroControls;
-bool g_llmKeyVisible = false;
-bool g_baiduKeyVisible = false;
-bool g_baiduApiKeyVisible = false;
-bool g_volcKeyVisible = false;
-bool g_qwenKeyVisible = false;
-bool g_mimoKeyVisible = false;
-bool g_maiOpenRouterKeyVisible = false;
-bool g_maiAzureKeyVisible = false;
-int g_cloudProviderIdx = 0;
-HWND g_cloudAsrHintControl = nullptr;
 
 namespace {
 
@@ -81,14 +53,6 @@ constexpr QwenLanguageOption kQwenLanguages[] = {
     {L"Polish (pl)", L"pl"},
     {L"Swedish (sv)", L"sv"},
 };
-
-HINSTANCE GetParentInstance(HWND parent) {
-    if (parent) {
-        HINSTANCE h = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE));
-        if (h) return h;
-    }
-    return GetModuleHandleW(nullptr);
-}
 
 }  // namespace
 
@@ -185,14 +149,14 @@ HWND CreateHint(HWND parent, int x, int y, int w, int h, const wchar_t* text) {
 }
 
 HWND CreateCombo(HWND parent, int id, int x, int y, int w, int h) {
-    HWND hwnd = CreateWindowW(L"COMBOBOX", nullptr, WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+    HWND hwnd = CreateWindowW(L"COMBOBOX", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
                               x, y, w, h, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), GetParentInstance(parent), nullptr);
     ApplyUiFont(hwnd);
     return hwnd;
 }
 
 HWND CreateButton(HWND parent, int id, int x, int y, int w, int h, const wchar_t* text) {
-    HWND hwnd = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hwnd = CreateWindowW(L"BUTTON", text, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                               x, y, w, h, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), GetParentInstance(parent), nullptr);
     ApplyUiFont(hwnd);
     return hwnd;
@@ -248,5 +212,34 @@ void PopulateQwenLanguageCombo(HWND combo) {
     if (!combo) return;
     for (const auto& lang : kQwenLanguages) {
         ComboBox_AddString(combo, lang.label);
+    }
+}
+
+HINSTANCE GetParentInstance(HWND parent) {
+    if (parent) {
+        HINSTANCE h = reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(parent, GWLP_HINSTANCE));
+        if (h) return h;
+    }
+    return GetModuleHandleW(nullptr);
+}
+
+std::wstring GetControlText(HWND hwnd, int id, size_t capacity) {
+    std::wstring value(capacity, L'\0');
+    const int length = GetWindowTextW(GetDlgItem(hwnd, id), value.data(), static_cast<int>(value.size()));
+    if (length <= 0) return {};
+    value.resize(static_cast<size_t>(length));
+    return value;
+}
+
+std::atomic<uint64_t> g_sharedTestGeneration{0};
+
+void PostSharedTestResult(HWND hwnd, uint64_t generation, bool ok,
+                          std::wstring message) {
+    auto* payload = new std::wstring(std::move(message));
+    const WPARAM packed = static_cast<WPARAM>(
+        (generation << 1) | (ok ? 0ULL : 1ULL));
+    if (!PostMessageW(hwnd, kSharedTestResultMessage, packed,
+                      reinterpret_cast<LPARAM>(payload))) {
+        delete payload;
     }
 }

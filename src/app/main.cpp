@@ -19,6 +19,7 @@
 #include "input_context.h"
 #include "volcengine_asr.h"
 #include "volcengine_streaming_session.h"
+#include "asr_probe_service_impl.h"
 
 #include <thread>
 #include <commctrl.h>
@@ -35,6 +36,8 @@
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "crypt32.lib")
 
+bool ProcessSettingsDialogMessage(MSG* msg);
+
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\VoxType.SingleInstance");
     if (!mutex) {
@@ -47,6 +50,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         return 0;
     }
     g_instance = instance;
+    asr_probe::InitializeAsrProbeService();
     SetActiveVadDetector(&g_asrEngine);
     SetTaskbarCreatedMessage(RegisterWindowMessageW(L"TaskbarCreated"));
     InitializeCriticalSection(&g_audioLock);
@@ -68,9 +72,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                                    kStreamingPartialHudMaxScreenFraction);
     });
 
-    if (g_config.enableDebugMode) {
-        DebugModeOpenConsole();
-    }
+    if (g_config.enableDebugMode) DebugModeOpenConsole();
 
     if (!RegisterWindowClasses()) {
         MessageBoxW(nullptr, L"Failed to register window classes.", kAppName, MB_OK | MB_ICONERROR);
@@ -127,6 +129,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (ProcessSettingsDialogMessage(&msg)) continue;
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }

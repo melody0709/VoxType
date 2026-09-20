@@ -250,7 +250,9 @@ bool RunModelDownloader(HWND hwnd, const std::wstring& modelId) {
             LPARAM lParam = ModelDirExists(modelDir)
                 ? reinterpret_cast<LPARAM>(new std::wstring(std::move(modelDir)))
                 : 0;
-            PostMessageW(hwnd, WM_APP + 20, 0, lParam);
+            if (!PostMessageW(hwnd, WM_APP + 20, 0, lParam)) {
+                if (lParam) delete reinterpret_cast<std::wstring*>(lParam);
+            }
         }).detach();
     } else {
         PostMessageW(hwnd, WM_APP + 20, 0, 0);

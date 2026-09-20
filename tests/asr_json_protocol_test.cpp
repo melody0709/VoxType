@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "utils.h"
+#include "config_registry.h"
 #include "baidu_asr.h"       // ExtractJsonInt / ExtractBaiduResultText
 #include "mai_transcribe.h"
 #include "volcengine_asr.h"  // BuildExtraParamsJson
@@ -292,6 +293,333 @@ int wmain() {
         const std::wstring errOther = mai_transcribe::FormatHttpErrorForTest(429, bodyOther);
         CHECK(errOther == L"MAI ASR error: HTTP 429: quota exceeded",
               "mai 429 generic message formatted");
+    }
+    // 23) Config 强类型注册表序列化与反序列化验证
+    {
+        config_registry::InitializeRegistry();
+        const auto& reg = config_registry::Registry::Instance();
+
+        Config original;
+        original.configVersion = 15;
+        original.modelId = L"firered_ctc";
+        original.enableVad = true;
+        original.vadThreshold = 0.25f;
+        original.volcEnableNonstream = true; // RawInt
+        original.qwenFreePolishEnabled = true; // RawInt
+        original.llmEndpoint = L"https://api.deepseek.com/v1";
+
+        std::string json = reg.SaveJson(original);
+        CHECK(json.find("\"enable_vad\": true") != std::string::npos, "config registry literal bool true");
+        CHECK(json.find("\"volc_enable_nonstream\": 1") != std::string::npos, "config registry rawint bool 1");
+        CHECK(json.find("\"qwen_free_polish\": 1") != std::string::npos, "config registry rawint qwen free 1");
+        CHECK(json.find("\"vad_threshold\": 0.25") != std::string::npos, "config registry float precision");
+
+        Config loaded;
+        reg.LoadJson(loaded, json);
+        CHECK(loaded.configVersion == 15, "config registry load version");
+        CHECK(loaded.modelId == L"firered_ctc", "config registry load string");
+        CHECK(loaded.enableVad == true, "config registry load literal bool");
+        CHECK(loaded.volcEnableNonstream == true, "config registry load rawint bool");
+        CHECK(loaded.qwenFreePolishEnabled == true, "config registry load qwen free bool");
+        CHECK(std::abs(loaded.vadThreshold - 0.25f) < 0.001f, "config registry load float");
+        CHECK(loaded.llmEndpoint == L"https://api.deepseek.com/v1", "config registry load endpoint");
+
+        // Sub-0.01 precision check (e.g. 0.075 must not be truncated to 0.08 or 0.07)
+        original.vadThreshold = 0.075f;
+        std::string jsonPrec = reg.SaveJson(original);
+        CHECK(jsonPrec.find("\"vad_threshold\": 0.075") != std::string::npos, "config registry sub-0.01 float precision preserved");
+        Config loadedPrec;
+        reg.LoadJson(loadedPrec, jsonPrec);
+        CHECK(std::abs(loadedPrec.vadThreshold - 0.075f) < 0.0001f, "config registry load sub-0.01 float");
+
+        // Full round-trip precision check (e.g. 1.2345678f must not be truncated to 1.23457 by 6-digit default)
+        original.vadThreshold = 1.2345678f;
+        std::string json7Digit = reg.SaveJson(original);
+        CHECK(json7Digit.find("1.23457") == std::string::npos, "config registry max_digits10 float does not round to 6 digits");
+        Config loaded7Digit;
+        reg.LoadJson(loaded7Digit, json7Digit);
+        CHECK(loaded7Digit.vadThreshold == 1.2345678f, "config registry round-trip exact float");
+    }
+    // 24) QuotedInt 布尔格式与引号布尔字符串解析验证
+    {
+        config_registry::Registry customReg;
+        customReg.Register({"quoted_flag", &Config::enablePartial,
+                            config_registry::CryptoPolicy::None,
+                            config_registry::BoolJsonFormat::QuotedInt});
+        customReg.Register({"literal_flag", &Config::enableVad,
+                            config_registry::CryptoPolicy::None,
+                            config_registry::BoolJsonFormat::Literal});
+
+        Config c1;
+        c1.enablePartial = true;
+        c1.enableVad = false;
+        std::string json1 = customReg.SaveJson(c1);
+        CHECK(json1.find("\"quoted_flag\": \"1\"") != std::string::npos,
+              "quoted int bool format produces \"1\"");
+        CHECK(json1.find("\"literal_flag\": false") != std::string::npos,
+              "literal bool format produces false");
+
+        c1.enablePartial = false;
+        std::string json2 = customReg.SaveJson(c1);
+        CHECK(json2.find("\"quoted_flag\": \"0\"") != std::string::npos,
+              "quoted int bool format produces \"0\"");
+
+        // 反序列化：支持 "1", "0", "true", "false", 以及裸 1, 0, true, false
+        Config c2;
+        customReg.LoadJson(c2, "{\"quoted_flag\": \"1\", \"literal_flag\": \"true\"}");
+        CHECK(c2.enablePartial == true, "load quoted \"1\" as bool true");
+        CHECK(c2.enableVad == true, "load quoted \"true\" as bool true");
+
+        customReg.LoadJson(c2, "{\"quoted_flag\": \"0\", \"literal_flag\": \"false\"}");
+        CHECK(c2.enablePartial == false, "load quoted \"0\" as bool false");
+        CHECK(c2.enableVad == false, "load quoted \"false\" as bool false");
+
+        customReg.LoadJson(c2, "{\"quoted_flag\": 1, \"literal_flag\": 0}");
+        CHECK(c2.enablePartial == true, "load raw int 1 as bool true");
+        CHECK(c2.enableVad == false, "load raw int 0 as bool false");
+    }
+    // 25) DPAPI 加密字段在增量/局部 JSON 加载时保持内存原有值（防止误清空）
+    {
+        config_registry::Registry dpapiReg;
+        dpapiReg.Register({"secret_key", &Config::qwenApiKey,
+                           config_registry::CryptoPolicy::Dpapi});
+        dpapiReg.Register({"version", &Config::configVersion});
+
+        Config c;
+        c.qwenApiKey = L"existing_unencrypted_secret";
+        c.configVersion = 10;
+
+        // 局部 JSON 不含 secret_key 或 secret_key_dpapi，原有值不得被覆盖清空
+        dpapiReg.LoadJson(c, "{\"version\": 20}");
+        CHECK(c.configVersion == 20, "partial json updates present field");
+        CHECK(c.qwenApiKey == L"existing_unencrypted_secret",
+              "partial json preserves absent DPAPI secret");
+    }
+    // 26) 生命周期钩子 PreSaveHook 与 PostLoadHook 执行验证
+    {
+        config_registry::Registry hookReg;
+        hookReg.Register({"model", &Config::modelId});
+        hookReg.Register({"version", &Config::configVersion});
+
+        bool hookCalled = false;
+        hookReg.SetPreSaveHook([&](Config& cfg) {
+            hookCalled = true;
+            if (cfg.modelId == L"raw") {
+                cfg.modelId = L"normalized_model";
+            }
+        });
+        hookReg.SetPostLoadHook([](Config& cfg) {
+            cfg.configVersion += 100;
+        });
+
+        Config c;
+        c.modelId = L"raw";
+        c.configVersion = 5;
+
+        std::string saved = hookReg.SaveJson(c);
+        CHECK(hookCalled, "presave hook invoked");
+        CHECK(saved.find("\"model\": \"normalized_model\"") != std::string::npos,
+              "presave hook reflected in serialized json");
+
+        Config loaded;
+        hookReg.LoadJson(loaded, "{\"model\": \"foo\", \"version\": 10}");
+        CHECK(loaded.modelId == L"foo", "loaded value deserialized");
+        CHECK(loaded.configVersion == 110, "postload hook executed on loaded config");
+    }
+    // 27) 全量 91 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    {
+        config_registry::InitializeRegistry();
+        const auto& reg = config_registry::Registry::Instance();
+        CHECK(reg.GetEntries().size() == 91, "registry total entry count is 91");
+
+        const std::string legacyJson = R"({
+            "config_version": 15,
+            "hotkey": "Ctrl+Shift+Space",
+            "model_id": "SenseVoiceSmall",
+            "model_dir": "D:\\models\\custom",
+            "threads": "4",
+            "enable_vad": true,
+            "vad_model": "firered",
+            "vad_threshold": 0.075,
+            "vad_min_silence": 350,
+            "vad_min_speech": 120,
+            "vad_pad_start": 80,
+            "vad_smooth_window": 5,
+            "postprocess": "llm",
+            "enable_partial": true,
+            "asr_backend": "qwen",
+            "fallback_asr_backend": "local",
+            "cloud_provider": "volcengine",
+            "volc_api_key": "volc_key_345",
+            "volc_resource_id": "volc.bigasr.sauc.duration",
+            "volc_mode": "bigmodel_async",
+            "volc_language": "zh-CN",
+            "volc_enable_nonstream": 1,
+            "volc_end_window_size": 800,
+            "volc_enable_ddc": 1,
+            "volc_extra_params": "{\"custom\":\"param\"}",
+            "volc_enable_context": 1,
+            "volc_context_history": 7,
+            "volc_enable_input_context": 1,
+            "volc_enable_music_fc": 1,
+            "volc_enable_poi_fc": 0,
+            "volc_force_to_speech_time": 1000,
+            "volc_hotwords_id": "hw_123",
+            "volc_hotwords_name": "hw_name",
+            "volc_correct_table_id": "tbl_456",
+            "volc_correct_table_name": "tbl_name",
+            "baidu_api_key": "baidu_key_123",
+            "baidu_secret_key": "baidu_secret_456",
+            "baidu_dev_pid": 1737,
+            "qwen_api_key": "qwen_key_678",
+            "qwen_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "qwen_http_base_url": "https://dashscope.aliyuncs.com/api/v1/services/audio/asr",
+            "qwen_audio_streaming_base_url": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+            "qwen_model": "qwen-audio-3.0-asr-flash-streaming",
+            "qwen_transport": "websocket",
+            "qwen_language": "zh",
+            "qwen_chunk_ms": 400,
+            "qwen_language_hints": "zh,en",
+            "qwen_vocabulary_id": "voc_123",
+            "qwen_vocabulary": "vocab_text",
+            "qwen_semantic_punctuation": true,
+            "qwen_max_sentence_silence": 1500,
+            "qwen_multi_threshold": false,
+            "qwen_heartbeat": true,
+            "qwen_speech_noise_threshold_enabled": true,
+            "qwen_speech_noise_threshold": 0.35,
+            "qwen_enable_input_context": true,
+            "qwen_enable_continue_context": true,
+            "qwen_special_word_replace": "foo=bar",
+            "qwen_special_word_empty": "baz",
+            "qwen_system_reserved_filter": true,
+            "mimo_api_key": "mimo_key_901",
+            "mimo_base_url": "https://token-plan-ams.xiaomimimo.com/v1",
+            "mimo_model": "mimo-v2.5-asr",
+            "mimo_language": "zh",
+            "doubao_ime_device_id": "legacy_device_123",
+            "doubao_ime_cdid": "legacy_cdid_456",
+            "doubao_ime_token": "legacy_token_789",
+            "qwen_free_polish": 1,
+            "qwen_free_punct": 1,
+            "qwen_free_correct": 1,
+            "qwen_free_rewrite": 0,
+            "qwen_free_debug_log": 0,
+            "qwen_free_shell_path": "C:\\Program Files\\QianwenIME",
+            "qwen_free_utdid_override": "custom_utdid",
+            "mai_api_provider": "azure",
+            "mai_openrouter_api_key": "mai_or_key_789",
+            "mai_azure_endpoint": "https://custom.azure.com",
+            "mai_azure_api_key": "mai_az_key_012",
+            "mai_language": "zh-CN",
+            "audio_backend": "wasapi",
+            "audio_device_id": "device_default",
+            "diagnostic_audio_mode": "failures",
+            "llm_provider": "DeepSeek",
+            "llm_providers_json": "[{\"id\":\"custom\"}]",
+            "llm_endpoint": "https://api.deepseek.com/v1",
+            "llm_api_key": "llm_secret_key_abc",
+            "llm_model": "deepseek-chat",
+            "llm_prompt": "Custom prompt text",
+            "enable_llm_debug": true,
+            "enable_debug_mode": true,
+            "force_unicode_input": true
+        })";
+
+        Config cfg;
+        reg.LoadJson(cfg, legacyJson);
+
+        CHECK(cfg.configVersion == 15, "legacy fixture 1: version");
+        CHECK(cfg.hotkey == L"Ctrl+Shift+Space", "legacy fixture 2: hotkey");
+        CHECK(cfg.modelId == L"SenseVoiceSmall", "legacy fixture 3: modelId");
+        CHECK(cfg.modelDir == L"D:\\models\\custom", "legacy fixture 4: modelDir");
+        CHECK(cfg.threads == L"4", "legacy fixture 5: threads");
+        CHECK(cfg.enableVad == true, "legacy fixture 6: enableVad");
+        CHECK(cfg.vadModel == L"firered", "legacy fixture 7: vadModel");
+        CHECK(std::abs(cfg.vadThreshold - 0.075f) < 0.0001f, "legacy fixture 8: vadThreshold sub-0.01 precision");
+        CHECK(cfg.vadMinSilence == 350, "legacy fixture 9: vadMinSilence");
+        CHECK(cfg.vadMinSpeech == 120, "legacy fixture 10: vadMinSpeech");
+        CHECK(cfg.vadPadStart == 80, "legacy fixture 11: vadPadStart");
+        CHECK(cfg.vadSmoothWindow == 5, "legacy fixture 12: vadSmoothWindow");
+        CHECK(cfg.postprocess == L"llm", "legacy fixture 13: postprocess");
+        CHECK(cfg.enablePartial == true, "legacy fixture 14: enablePartial");
+        CHECK(cfg.asrBackend == L"qwen", "legacy fixture 15: asrBackend");
+        CHECK(cfg.fallbackAsrBackend == L"local", "legacy fixture 16: fallbackAsrBackend");
+        CHECK(cfg.cloudProvider == L"volcengine", "legacy fixture 17: cloudProvider");
+        CHECK(cfg.volcApiKey == L"volc_key_345", "legacy fixture 18: volcApiKey");
+        CHECK(cfg.volcResourceId == L"volc.bigasr.sauc.duration", "legacy fixture 19: volcResourceId");
+        CHECK(cfg.volcMode == L"bigmodel_async", "legacy fixture 20: volcMode");
+        CHECK(cfg.volcLanguage == L"zh-CN", "legacy fixture 21: volcLanguage");
+        CHECK(cfg.volcEnableNonstream == true, "legacy fixture 22: volcEnableNonstream rawint 1");
+        CHECK(cfg.volcEndWindowSize == 800, "legacy fixture 23: volcEndWindowSize");
+        CHECK(cfg.volcEnableDdc == true, "legacy fixture 24: volcEnableDdc");
+        CHECK(cfg.volcExtraParams == L"{\"custom\":\"param\"}", "legacy fixture 25: volcExtraParams");
+        CHECK(cfg.volcEnableContext == true, "legacy fixture 26: volcEnableContext");
+        CHECK(cfg.volcContextHistory == 7, "legacy fixture 27: volcContextHistory");
+        CHECK(cfg.volcEnableInputContext == true, "legacy fixture 28: volcEnableInputContext");
+        CHECK(cfg.volcEnableMusicFc == true, "legacy fixture 29: volcEnableMusicFc");
+        CHECK(cfg.volcEnablePoiFc == false, "legacy fixture 30: volcEnablePoiFc");
+        CHECK(cfg.volcForceToSpeechTime == 1000, "legacy fixture 31: volcForceToSpeechTime");
+        CHECK(cfg.volcHotwordsId == L"hw_123", "legacy fixture 32: volcHotwordsId");
+        CHECK(cfg.volcHotwordsName == L"hw_name", "legacy fixture 33: volcHotwordsName");
+        CHECK(cfg.volcCorrectTableId == L"tbl_456", "legacy fixture 34: volcCorrectTableId");
+        CHECK(cfg.volcCorrectTableName == L"tbl_name", "legacy fixture 35: volcCorrectTableName");
+        CHECK(cfg.baiduApiKey == L"baidu_key_123", "legacy fixture 36: baiduApiKey");
+        CHECK(cfg.baiduSecretKey == L"baidu_secret_456", "legacy fixture 37: baiduSecretKey");
+        CHECK(cfg.baiduDevPid == 1737, "legacy fixture 38: baiduDevPid");
+        CHECK(cfg.qwenApiKey == L"qwen_key_678", "legacy fixture 39: qwenApiKey");
+        CHECK(cfg.qwenBaseUrl == L"https://dashscope.aliyuncs.com/compatible-mode/v1", "legacy fixture 40: qwenBaseUrl");
+        CHECK(cfg.qwenHttpBaseUrl == L"https://dashscope.aliyuncs.com/api/v1/services/audio/asr", "legacy fixture 41: qwenHttpBaseUrl");
+        CHECK(cfg.qwenAudioStreamingBaseUrl == L"wss://dashscope.aliyuncs.com/api-ws/v1/inference", "legacy fixture 42: qwenAudioStreamingBaseUrl");
+        CHECK(cfg.qwenModel == L"qwen-audio-3.0-asr-flash-streaming", "legacy fixture 43: qwenModel");
+        CHECK(cfg.qwenTransport == L"websocket", "legacy fixture 44: qwenTransport");
+        CHECK(cfg.qwenLanguage == L"zh", "legacy fixture 45: qwenLanguage");
+        CHECK(cfg.qwenChunkMs == 400, "legacy fixture 46: qwenChunkMs");
+        CHECK(cfg.qwenLanguageHints == L"zh,en", "legacy fixture 47: qwenLanguageHints");
+        CHECK(cfg.qwenVocabularyId == L"voc_123", "legacy fixture 48: qwenVocabularyId");
+        CHECK(cfg.qwenVocabulary == L"vocab_text", "legacy fixture 49: qwenVocabulary");
+        CHECK(cfg.qwenSemanticPunctuation == true, "legacy fixture 50: qwenSemanticPunctuation");
+        CHECK(cfg.qwenMaxSentenceSilenceMs == 1500, "legacy fixture 51: qwenMaxSentenceSilenceMs");
+        CHECK(cfg.qwenMultiThresholdMode == false, "legacy fixture 52: qwenMultiThresholdMode");
+        CHECK(cfg.qwenHeartbeat == true, "legacy fixture 53: qwenHeartbeat");
+        CHECK(cfg.qwenSpeechNoiseThresholdEnabled == true, "legacy fixture 54: qwenSpeechNoiseThresholdEnabled");
+        CHECK(std::abs(cfg.qwenSpeechNoiseThreshold - 0.35f) < 0.001f, "legacy fixture 55: qwenSpeechNoiseThreshold");
+        CHECK(cfg.qwenEnableInputContext == true, "legacy fixture 56: qwenEnableInputContext");
+        CHECK(cfg.qwenEnableContinueContext == true, "legacy fixture 57: qwenEnableContinueContext");
+        CHECK(cfg.qwenSpecialWordReplaceList == L"foo=bar", "legacy fixture 58: qwenSpecialWordReplaceList");
+        CHECK(cfg.qwenSpecialWordEmptyList == L"baz", "legacy fixture 59: qwenSpecialWordEmptyList");
+        CHECK(cfg.qwenSystemReservedFilter == true, "legacy fixture 60: qwenSystemReservedFilter");
+        CHECK(cfg.mimoApiKey == L"mimo_key_901", "legacy fixture 61: mimoApiKey");
+        CHECK(cfg.mimoBaseUrl == L"https://token-plan-ams.xiaomimimo.com/v1", "legacy fixture 62: mimoBaseUrl");
+        CHECK(cfg.mimoModel == L"mimo-v2.5-asr", "legacy fixture 63: mimoModel");
+        CHECK(cfg.mimoLanguage == L"zh", "legacy fixture 64: mimoLanguage");
+        CHECK(cfg.doubaoImeDeviceId == L"legacy_device_123", "legacy fixture 65: doubaoImeDeviceId");
+        CHECK(cfg.doubaoImeCdid == L"legacy_cdid_456", "legacy fixture 66: doubaoImeCdid");
+        CHECK(cfg.doubaoImeToken == L"legacy_token_789", "legacy fixture 67: doubaoImeToken");
+        CHECK(cfg.qwenFreePolishEnabled == true, "legacy fixture 68: qwenFreePolishEnabled rawint 1");
+        CHECK(cfg.qwenFreePunctEnabled == true, "legacy fixture 69: qwenFreePunctEnabled rawint 1");
+        CHECK(cfg.qwenFreeCorrectEnabled == true, "legacy fixture 70: qwenFreeCorrectEnabled rawint 1");
+        CHECK(cfg.qwenFreeRewriteEnabled == false, "legacy fixture 71: qwenFreeRewriteEnabled rawint 0");
+        CHECK(cfg.qwenFreeDebugLog == false, "legacy fixture 72: qwenFreeDebugLog rawint 0");
+        CHECK(cfg.qwenFreeShellPath == L"C:\\Program Files\\QianwenIME", "legacy fixture 73: qwenFreeShellPath");
+        CHECK(cfg.qwenFreeUtdidOverride == L"custom_utdid", "legacy fixture 74: qwenFreeUtdidOverride");
+        CHECK(cfg.maiApiProvider == L"azure", "legacy fixture 75: maiApiProvider");
+        CHECK(cfg.maiOpenRouterApiKey == L"mai_or_key_789", "legacy fixture 76: maiOpenRouterApiKey");
+        CHECK(cfg.maiAzureEndpoint == L"https://custom.azure.com", "legacy fixture 77: maiAzureEndpoint");
+        CHECK(cfg.maiAzureApiKey == L"mai_az_key_012", "legacy fixture 78: maiAzureApiKey");
+        CHECK(cfg.maiLanguage == L"zh-CN", "legacy fixture 79: maiLanguage");
+        CHECK(cfg.audioBackend == L"wasapi", "legacy fixture 80: audioBackend");
+        CHECK(cfg.audioDeviceId == L"device_default", "legacy fixture 81: audioDeviceId");
+        CHECK(cfg.diagnosticAudioMode == L"failures", "legacy fixture 82: diagnosticAudioMode");
+        CHECK(cfg.llmProvider == L"DeepSeek", "legacy fixture 83: llmProvider");
+        CHECK(cfg.llmProvidersJson == L"[{\"id\":\"custom\"}]", "legacy fixture 84: llmProvidersJson");
+        CHECK(cfg.llmEndpoint == L"https://api.deepseek.com/v1", "legacy fixture 85: llmEndpoint");
+        CHECK(cfg.llmApiKey == L"llm_secret_key_abc", "legacy fixture 86: llmApiKey");
+        CHECK(cfg.llmModel == L"deepseek-chat", "legacy fixture 87: llmModel");
+        CHECK(cfg.llmPrompt == L"Custom prompt text", "legacy fixture 88: llmPrompt");
+        CHECK(cfg.enableLlmDebug == true, "legacy fixture 89: enableLlmDebug");
+        CHECK(cfg.enableDebugMode == true, "legacy fixture 90: enableDebugMode");
+        CHECK(cfg.forceUnicodeInput == true, "legacy fixture 91: forceUnicodeInput");
     }
 
     if (g_failures == 0) {

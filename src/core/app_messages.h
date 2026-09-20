@@ -28,6 +28,7 @@ constexpr UINT kHotkeyRecordingMessage = WM_APP + 11;
 // messages from a previous recording; lParam carries the native error code.
 constexpr UINT kAudioCaptureErrorMessage = WM_APP + 12;
 constexpr UINT kWaveInCaptureErrorMessage = WM_APP + 13;
+constexpr UINT kDoubaoImeSettingsCredentialsMessage = WM_APP + 14;
 
 constexpr WPARAM kHotkeyRecordingStart = 1;
 constexpr WPARAM kHotkeyRecordingStop = 2;

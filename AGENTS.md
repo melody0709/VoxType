@@ -25,7 +25,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **机械守卫**：`tools\check_architecture.ps1`（当前 **17 项检查**，含 5 项防绕过）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
-- **阶段判据**：各阶段 P1~P6 均已完成并通过。当前最新基线：`0 / 0 / 0 / 142 / 3448 / 14`（`globals.h` 彻底消除，`main.cpp` 降至 142 行，`settings.cpp` 降至 3448 行）。
+- **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。当前最新基线：`0 / 0 / 0 / 148 / 400 / 2`（`globals.h` 彻底消除，`main.cpp` 为 148 行，`settings.cpp` 降至 397 行，跨层 include 违规降至 1 处）。
 - **契约同步是每个阶段的 DoD**：涉及类名、路径、配置项搬迁时，必须同步更新 `ARCHITECTURE.md`、`AGENTS.md`（本文）与守卫脚本里的基线数值。
 - **开工前先做备份**：`.bak\`（仓库根，已在 `.gitignore` 中）。禁止把人工备份放进 `build\`。
 
@@ -56,7 +56,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
   - 所有窗体与对话框在创建控件前必须先调用 `UpdateUiScale(hwnd / parent)` 同步当前窗口 DPI；顶层窗体与弹窗必须实现 `WM_DPICHANGED` 重新计算缩放并调用 `SetWindowPos` 更新尺寸。
   - 字体应用必须经由 `ApplyUiFont`，且其内部必须保证 `HFONT` 永不为 NULL（默认回退至 Segoe UI 9pt），严禁向控件发送空字体句柄导致 Windows 降级为粗体点阵系统字。
   - UI 修改后必须通过 `build.bat` 构建并在 96/144/192/288 DPI 下执行静态布局校验（`validate_settings_layout.ps1`）。
-- 新增配置项同步：`src/core/config_store.h` 的 `Config` 字段、`src/core/config_store.cpp` 的 `LoadConfig` / `SaveConfig`、`src/ui/settings.cpp` 的控件创建与 `LoadSettingsControls` / `SaveSettingsControls`。
+- **新增配置项统一注册机制（强类型注册表）**：新增配置项遵循三步规范：1. 在 `src/core/config_store.h` 的 `Config` 声明字段与默认值；2. 在 `src/core/config_registry.cpp` 的 `InitializeRegistry()` 注册字段（绑定 JSON 键名、类型、加密策略与格式，自动实现序列化/反序列化/DPAPI）；3. 在对应模块的 Tab（`src/ui/tabs/`）或 Provider（`src/ui/providers/`）中创建控件并加载/保存（或通过 `FormBinder` 绑定）。
 - DLL 延迟加载：`onnxruntime.dll`、`sherpa-onnx-cxx-api.dll`、`kaldi-native-fbank-core.dll` 通过 `/DELAYLOAD` 延迟加载，纯云端模式空闲 ~12 MB。`TryLoadAsrDlls()` 用 SEH 安全检测。
 - 本地模式启动时 `PreloadAsrEngine()` 后台线程预加载模型，Save 后 Reload + 预加载。
 
@@ -68,7 +68,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - 音频回调只做轻量采集、可选 VAD trim、`EnqueuePcmChunk()`；不要在 WASAPI/waveIn 回调里做网络请求或 provider 协议逻辑。
 - Streaming 停止录音用 `StopInput()` 通知 session，不要让 `StopRecordingSession()` 同步等待云端 final。
 - 新 provider 如果有跨录音 session 的连接预热/复用句柄，先保留清晰生命周期，不要强行收进单次录音 session。
-- Settings 新增配置项仍必须按"新增配置项同步 9~10 处 / 4 个文件"的规则执行（见"开发约定"一节）；在字段注册表落地前不要只改三处。
+- Settings 模块化重构已全面落地强类型注册表与 Tab/Provider 分离架构，新增配置项按"强类型注册表三步规范"执行（见"开发约定"一节）；禁止绕过注册表私自硬编码读写。
 
 ## 不要轻易做的事
 

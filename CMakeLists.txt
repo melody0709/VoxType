@@ -37,11 +37,14 @@ add_executable(VoxType WIN32
     src/app/main_window.cpp
     src/app/recording_session_controller.cpp
     src/app/asr_attempt_manager.cpp
+    src/app/asr_probe_service_impl.cpp
     src/ui/hud_pagination.cpp
     src/app/resources.rc
     src/core/path_service.cpp
     src/core/debug_logger.cpp
     src/core/config_store.cpp
+    src/core/config_registry.cpp
+    src/core/asr_probe_service.cpp
     src/core/app_state.cpp
     src/audio/audio_capture.cpp
     src/audio/audio_chunk_sink.cpp
@@ -79,10 +82,24 @@ add_executable(VoxType WIN32
     src/core/startup_registration.cpp
     src/ui/hud.cpp
     src/ui/hotkey.cpp
+    src/ui/form_builder.cpp
     src/ui/settings.cpp
     src/ui/settings_controls.cpp
     src/ui/settings_dialogs.cpp
     src/ui/ui_theme.cpp
+    src/ui/tabs/tab_general.cpp
+    src/ui/tabs/tab_recognition.cpp
+    src/ui/tabs/tab_cloud_asr.cpp
+    src/ui/tabs/tab_llm.cpp
+    src/ui/tabs/tab_prompt.cpp
+    src/ui/providers/provider_baidu.cpp
+    src/ui/providers/provider_volcengine.cpp
+    src/ui/providers/provider_qwen.cpp
+    src/ui/providers/qwen_settings_helper.cpp
+    src/ui/providers/provider_mimo.cpp
+    src/ui/providers/provider_doubao.cpp
+    src/ui/providers/provider_qwen_free.cpp
+    src/ui/providers/provider_mai.cpp
     src/platform/text_injector.cpp
 )
 
@@ -92,6 +109,8 @@ target_include_directories(VoxType PRIVATE
     "${CMAKE_SOURCE_DIR}/src/asr"
     "${CMAKE_SOURCE_DIR}/src/audio"
     "${CMAKE_SOURCE_DIR}/src/ui"
+    "${CMAKE_SOURCE_DIR}/src/ui/tabs"
+    "${CMAKE_SOURCE_DIR}/src/ui/providers"
     "${CMAKE_SOURCE_DIR}/src/core"
     "${CMAKE_SOURCE_DIR}/src/platform"
     "${SHERPA_DIR}/include"
@@ -228,6 +247,7 @@ add_executable(asr_json_protocol_test
     src/audio/audio_diagnostics.cpp
     src/asr/cloud_http_common.cpp
     src/asr/mai_transcribe.cpp
+    src/core/config_registry.cpp
 )
 target_compile_definitions(asr_json_protocol_test PRIVATE
     UNICODE _UNICODE VOXTYPE_MAI_PROTOCOL_TEST=1)
@@ -270,6 +290,7 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/core/path_service.cpp
     src/core/debug_logger.cpp
     src/core/config_store.cpp
+    src/core/config_registry.cpp
     src/audio/audio_capture.cpp
     src/audio/audio_chunk_sink.cpp
     src/audio/audio_diagnostics.cpp
