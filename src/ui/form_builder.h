@@ -11,9 +11,8 @@
 #include <span>
 #include <utility>
 
+#include "config_store.h"
 #include "ui_types.h"
-
-struct Config;
 
 namespace ui_form {
 

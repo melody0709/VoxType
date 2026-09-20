@@ -2,6 +2,18 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.3 (2026-09-20)
+
+### Fixed
+
+- **Qwen ASR Model List & Settings Logic Recovery**:
+  - Restored the canonical 3-model Qwen selector (`qwen-audio-3.0-asr-flash-streaming`, `qwen-audio-3.0-asr-flash`, and `qwen3-asr-flash-realtime`), eliminating the spurious `paraformer-realtime-v2` introduced in modularization refactor.
+  - Corrected Qwen Audio HTTP endpoint path validation to `/api/v1/services/aigc/multimodal-generation/generation` (matching Alibaba Cloud DashScope & Bailian MaaS dedicated space specifications), resolving premature `Qwen Base URL path must be...` test connection failures.
+  - Enhanced Base URL path tolerance in `ValidateQwenEndpoint` to accept host-only or root (`/`) inputs by automatically falling back to the standard endpoint path.
+  - Corrected default fallback Base URLs in `ApplyQwenModelProfile` for HTTP, Streaming, and Legacy Realtime profiles.
+  - Fixed `EditQwenAdvancedSettings` to disable forced Base URL overwrite when closing advanced settings modal.
+  - Added modal error dialog (`MessageBoxW`) upon connection test input validation failure to prevent truncation in the single-line footer status label.
+
 ## v0.10.2 (2026-09-20)
 
 ### Architectural Refactoring (Settings Modularization & Hardening)

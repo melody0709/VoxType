@@ -2,6 +2,18 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.3 (2026-09-20)
+
+### 修复
+
+- **千问 ASR 模型列表与设置逻辑纠偏恢复**：
+  - 恢复千问官方支持的 3 款模型选择项（`qwen-audio-3.0-asr-flash-streaming`、`qwen-audio-3.0-asr-flash` 与 `qwen3-asr-flash-realtime`），彻底剔除重构时误引入的 `paraformer-realtime-v2`。
+  - 纠正千问 Audio HTTP 接口路径校验规则，将其调整为真实的 `/api/v1/services/aigc/multimodal-generation/generation`（严格对齐阿里云百炼专属空间及公网 API 规范），彻底解决 `Qwen Base URL path must be...` 连接测试误拦截问题。
+  - 增强 `ValidateQwenEndpoint` 容错机制：当用户仅填写基础域名或携带根路径 `/` 时自动补齐规范端点路径。
+  - 修正 `ApplyQwenModelProfile` 在 HTTP、流式及 Legacy 模式下的默认回退端点，统一端点规范。
+  - 修复 `EditQwenAdvancedSettings` 高级参数弹窗保存时强制覆盖 Base URL 的逻辑缺陷。
+  - 在连接测试输入校验失败时弹出模态错误提示框（`MessageBoxW`），彻底消除底部单行窄状态栏由于 DPI 限制造成的文本截断问题。
+
 ## v0.10.2 (2026-09-20)
 
 ### 架构现代化重构（Settings 模块化与加固）

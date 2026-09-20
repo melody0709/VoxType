@@ -210,10 +210,12 @@ void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     HWND qwenModelCombo = GetDlgItem(parent, IDC_QWEN_MODEL);
     if (qwenModelCombo) {
         ComboBox_ResetContent(qwenModelCombo);
-        ComboBox_AddString(qwenModelCombo, L"paraformer-realtime-v2");
         ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.0-asr-flash-streaming");
         ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.0-asr-flash");
-        SetWindowTextW(qwenModelCombo, cfg.qwenModel.c_str());
+        ComboBox_AddString(qwenModelCombo, L"qwen3-asr-flash-realtime");
+        int idx = ComboBox_FindStringExact(qwenModelCombo, -1, cfg.qwenModel.c_str());
+        if (idx == CB_ERR) idx = 0;
+        ComboBox_SetCurSel(qwenModelCombo, idx);
     }
 
     HWND qwenLangCombo = GetDlgItem(parent, IDC_QWEN_LANGUAGE);
@@ -367,16 +369,28 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
         if (IsQwenAudioStreamingModel(selectedModel)) {
             if (!ValidateQwenEndpoint(snap.qwenAudioStreamingBaseUrl, L"wss", L"/api-ws/v1/inference", err)) {
                 SetStatus(parent, err);
+                MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
                 return true;
             }
         } else if (IsQwenAudioHttpModel(selectedModel)) {
-            if (!ValidateQwenEndpoint(snap.qwenHttpBaseUrl, L"https", L"/api/v1/services/audio/asr/transcription", err)) {
+            if (!ValidateQwenEndpoint(snap.qwenHttpBaseUrl, L"https", L"/api/v1/services/aigc/multimodal-generation/generation", err)) {
                 SetStatus(parent, err);
+                MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
                 return true;
+            }
+        } else {
+            if (!ValidateQwenEndpoint(snap.qwenBaseUrl, L"wss", L"/api-ws/v1/realtime", err)) {
+                std::wstring wsErr;
+                if (!ValidateQwenEndpoint(snap.qwenBaseUrl, L"ws", L"/api-ws/v1/realtime", wsErr)) {
+                    SetStatus(parent, err);
+                    MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+                    return true;
+                }
             }
         }
         if (!ValidateQwenHints(QwenControlText(parent, IDC_QWEN_LANGUAGE_HINTS, 1024), err)) {
             SetStatus(parent, err);
+            MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
             return true;
         }
 

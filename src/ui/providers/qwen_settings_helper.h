@@ -5,12 +5,14 @@
 #endif
 #include <windows.h>
 #include <string>
+#include "config_store.h"
 #include "settings_dialogs.h"
 
 namespace ui_provider {
 
-constexpr wchar_t kQwenDefaultBaseUrl[] = L"wss://dashscope.aliyuncs.com/api-ws/v1/inference/";
-constexpr wchar_t kQwenDefaultModel[] = L"paraformer-realtime-v2";
+constexpr wchar_t kQwenDefaultBaseUrl[] =
+    L"wss://llm-c6rtn7zy4nw0u39k.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime";
+constexpr wchar_t kQwenDefaultModel[] = L"qwen-audio-3.0-asr-flash-streaming";
 
 bool IsQwenAudioHttpModel(const std::wstring& model);
 bool IsQwenAudioStreamingModel(const std::wstring& model);

@@ -138,6 +138,7 @@ bool ValidateQwenEndpoint(const std::wstring& raw,
         return false;
     }
     std::wstring actualPath(parts.lpszUrlPath, parts.dwUrlPathLength);
+    if (actualPath.empty() || actualPath == L"/") actualPath = path;
     while (actualPath.size() > 1 && actualPath.back() == L'/') actualPath.pop_back();
     if (actualPath != path) {
         error = L"Qwen Base URL path must be " + path + L".";
@@ -178,11 +179,11 @@ void ApplyQwenModelProfile(HWND hwnd, const std::wstring& model, bool forceUpdat
     }
     if (urlToSet.empty() || forceUpdate) {
         if (IsQwenAudioHttpModel(model)) {
-            urlToSet = L"https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription";
+            urlToSet = kQwenBeijingHttpBaseUrl;
         } else if (IsQwenAudioStreamingModel(model)) {
-            urlToSet = L"wss://dashscope.aliyuncs.com/api-ws/v1/inference/";
+            urlToSet = kQwenBeijingAudioStreamingBaseUrl;
         } else {
-            urlToSet = kQwenDefaultBaseUrl;
+            urlToSet = kQwenBeijingRealtimeBaseUrl;
         }
     }
     SetWindowTextW(GetDlgItem(hwnd, IDC_QWEN_BASE_URL), urlToSet.c_str());
@@ -225,7 +226,7 @@ void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintContr
     SetWindowTextW(GetDlgItem(hwnd, IDC_QWEN_SPECIAL_EMPTY), data.specialEmpty.c_str());
     Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER),
                     data.systemReservedFilter ? BST_CHECKED : BST_UNCHECKED);
-    ApplyQwenModelProfile(hwnd, QwenModelFromControl(hwnd), true, state, hintControl);
+    ApplyQwenModelProfile(hwnd, QwenModelFromControl(hwnd), false, state, hintControl);
     SetStatus(hwnd, L"Qwen advanced settings updated. Click Save to apply.");
 }
 
