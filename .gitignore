@@ -4,6 +4,7 @@ runtime/
 .claude/
 .opencode/
 .trae/
+.commandcode/
 *.user
 *.suo
 *.obj
