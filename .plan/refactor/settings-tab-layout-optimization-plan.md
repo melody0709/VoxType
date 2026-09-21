@@ -319,3 +319,21 @@ flowchart TD
 - 当前 `validate_settings_layout.ps1` 在构建期会自动以 96、144、192、288 DPI 四档静态核算控件坐标；
 - 当 Diagnostics 迁入 Tab 5、Qwen 提示词收敛为单行后，必须同步更新该脚本中的坐标核算规则与常量断言，保证 `build.bat` 主干构建 100% 绿灯。
 
+### 6.6 边界 6：本地模型后台下载中途切换 Provider 的状态机防护
+- **潜在场景**：用户在本地模式下点击 `[Download Local Model]`，后台下载线程启动；在下载未完成时，用户突然切换 `ASR Backend` 到 `Qwen`，导致本地模型相关的 `IDC_DOWNLOAD_MODELS` 和 `IDC_MODEL_DIR` 被隐藏；
+- **防范策略**：
+  - 隐藏控件的 HWND 在父窗口销毁前依然合法，当下载完成消息 `WM_APP + 20` 达到时，`SetWindowTextW` 与 `EnableWindow` 调用不会崩溃；
+  - 但状态提示应当在当前全局状态栏（`IDC_STATUS`）清晰反馈，避免因控件隐藏造成静默失败或迷惑。
+
+### 6.7 边界 7：Fallback 备用引擎与主引擎互斥联动
+- **潜在场景**：用户在主引擎选择 `Qwen ASR`，在备用引擎也选择 `Qwen ASR`；
+- **防范策略**：
+  - 代码中已有后盾保证：`SaveSettingsControls` 会自动纠正 `if (fallback == primary) fallback = "none"`；
+  - 在前端交互层强化：当主引擎切换时，若发现 Fallback 与新主引擎相同，自动将 Fallback 下拉框归位到 `Disabled`，并在状态栏给出温和提示，避免给用户带来“备用已生效”的假象。
+
+### 6.8 边界 8：键盘焦点导航（Tab Order）与隐藏控件隔离
+- **潜在场景**：Win32 原生对话框使用 Tab 键在各控件间移动焦点；
+- **防范策略**：
+  - 当子 ProviderPanel 隐藏时，其内部所有具有 `WS_TABSTOP` 属性的 Edit/Combo/Button 控件必须通过 `ShowWindow(c, SW_HIDE)` 隐藏，确保 Windows 对话框管理器在处理 `IsDialogMessageW` 时不会把键盘焦点跳入不可见的隐藏控件中。
+
+
