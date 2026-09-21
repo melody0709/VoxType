@@ -282,3 +282,40 @@ flowchart TD
 - **M4: 静态布局验证与回归测试**
   - 在 96 DPI、144 DPI (150%)、192 DPI (200%) 下运行全量布局与防截断验证；
   - 执行 `build.bat`，通过全部 17 项架构守卫。
+
+---
+
+## 6. 全面边界条件与风险防范审查（Comprehensive Boundary & Edge-Case Review）
+
+在正式执行重构之前，对系统各层面的边界条件进行全面锁定：
+
+### 6.1 边界 1：跨屏幕 DPI 动态切换（`WM_DPICHANGED`）未保存草稿保护
+- **现有机制**：`settings.cpp:WM_DPICHANGED` 在窗口跨显示器拖拽时，会先通过 `draft` 拷贝调用各 Tab 的 `SaveControls`，并枚举所有原生 Edit 控件临时抓取正在输入尚未保存的文本，然后执行全量 `DestroyControls -> CreateControls -> LoadControls` 重建，最后恢复 Edit 内容与光标焦点。
+- **重构边界契约**：
+  - 在 Tab 2 中，当前激活的子 ProviderPanel（如 `ProviderQwen`）必须挂载在同一个父窗口生命周期下；
+  - `TabSpeechEngine::DestroyControls()` 与 `CreateControls()` 必须递归触发激活 Provider 的销毁与重建；
+  - 严禁子 Provider 使用局部独立 HWND 破坏 `EnumChildWindows` 的文本收集遍历。
+
+### 6.2 边界 2：配置持久化与强类型注册表（`ConfigRegistry`）契约不变性
+- **不变性保证**：本次重构仅调整 UI 控件的呈现位置与视觉分组，**100% 保持底层持久化模型不变**；
+- `g_config.asrBackend`、`g_config.fallbackAsrBackend`、`g_config.qwenApiKey` 等 93 个注册表字段名称、类型、DPAPI 加密策略和 JSON 编码格式零修改；
+- `g_config.cloudProvider` 历史字段：由 Tab 2 在主后端切换为云端时做自动等价同步，防止依赖该字段的外部逻辑失序。
+
+### 6.3 边界 3：异步连通性测试（`Test Connection`）生命周期安全
+- **多线程风险防范**：
+  - 用户点击 `[Test Connection]` 后若立即切换 Tab 或点击 `[Close]` 关闭设置窗口；
+  - 必须继续依托全局 `g_sharedTestGeneration.fetch_add(1)` 机制：窗口隐藏或销毁时递增代数，所有后台探测线程（Qwen/Volc/Baidu/LLM）投递给 `kSharedTestResultMessage` 的结果若代数不匹配，立即安全丢弃，杜绝向已释放控件发消息或非法弹窗。
+
+### 6.4 边界 4：架构守卫红线与行数防弹机制
+- **行数红线（`SettingsLines <= 400`）**：
+  - 现存 `settings.cpp` 为 389 行（余量仅 11 行）；
+  - 重组后 `settings.cpp` 仅对 5 个 Tab 数组进行指针映射更新（保持 5 个），不在此处堆砌任何新业务代码；
+  - 动态切换 Provider 的逻辑 100% 封装在 `tab_recognition.cpp`（或升级后的 `tab_speech_engine.cpp`）内部，`settings.cpp` 的行数只减不增。
+- **分层规则（`ui -> core`）**：
+  - 新建或重构的 Tab 文件统一留在 `src/ui/tabs/`，属于 `ui` 目标；
+  - 严禁任何 UI 代码直接包含 `src/asr/` 或 `src/audio/`；涉及音频诊断文件管理统一经由 Core 层的 `asr_probe_service.h` / `path_service.h`。
+
+### 6.5 边界 5：静态布局校验脚本（`scripts/validate_settings_layout.ps1`）同步联动
+- 当前 `validate_settings_layout.ps1` 在构建期会自动以 96、144、192、288 DPI 四档静态核算控件坐标；
+- 当 Diagnostics 迁入 Tab 5、Qwen 提示词收敛为单行后，必须同步更新该脚本中的坐标核算规则与常量断言，保证 `build.bat` 主干构建 100% 绿灯。
+
