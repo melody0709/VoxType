@@ -16,7 +16,6 @@
 #include "tab_cloud_asr.h"
 #include "tab_vocabulary.h"
 #include "tab_llm.h"
-#include "tab_prompt.h"
 #include "provider_qwen_free.h"
 
 #include <commctrl.h>
@@ -43,11 +42,10 @@ ui_tab::TabRecognition s_tabRecognition;
 ui_tab::TabCloudAsr s_tabCloudAsr;
 ui_tab::TabVocabulary s_tabVocabulary;
 ui_tab::TabLlm s_tabLlm;
-ui_tab::TabPrompt s_tabPrompt;
 
-constexpr size_t kTabCount = 6;
+constexpr size_t kTabCount = 5;
 ui_tab::ISettingsTab* const s_tabs[kTabCount] = {
-    &s_tabGeneral, &s_tabRecognition, &s_tabCloudAsr, &s_tabVocabulary, &s_tabLlm, &s_tabPrompt
+    &s_tabGeneral, &s_tabRecognition, &s_tabCloudAsr, &s_tabVocabulary, &s_tabLlm
 };
 
 } // namespace
@@ -166,7 +164,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     case WM_CTLCOLORSTATIC: {
         HDC hdc = reinterpret_cast<HDC>(wParam);
         HWND ctl = reinterpret_cast<HWND>(lParam);
-        if (ctl == GetDlgItem(hwnd, IDC_LLM_PROMPT_HINT) || IsSettingsHint(ctl)) {
+        if (IsSettingsHint(ctl)) {
             SetTextColor(hdc, UiStyle::HintTextColor);
         } else {
             SetTextColor(hdc, UiStyle::TextColor);
@@ -190,7 +188,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ApplyUiFont(tab);
         TCITEMW item = {};
         item.mask = TCIF_TEXT;
-        for (auto* name : {L"General", L"Recognition", L"Cloud ASR", L"Vocabulary", L"LLM", L"LLM Prompt"}) {
+        for (auto* name : {L"General", L"Recognition", L"Cloud ASR", L"Vocabulary", L"LLM"}) {
             item.pszText = const_cast<LPWSTR>(name);
             TabCtrl_InsertItem(tab, 100, &item);
         }

@@ -107,7 +107,7 @@ bool IsUsableAsrTextForContext(const std::wstring& text) {
 }
 
 bool ShouldRunLlmRefine(const Config& config, const std::wstring& text) {
-    return config.postprocess == L"llm"
+    return config.enableLlm
         && !config.llmEndpoint.empty()
         && !config.llmApiKey.empty()
         && IsUsableAsrTextForContext(text);

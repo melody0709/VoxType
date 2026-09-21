@@ -2,6 +2,35 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.6 (2026-09-21)
+
+### Features & UI Architecture
+
+- **Unified LLM Tab & Master Switch Architecture**:
+  - Eliminated the separate top-level `LLM Prompt` tab, consolidating all LLM settings into a clean, single-column `LLM` tab and slimming the Settings window from 6 tabs down to 5 (`General`, `Recognition`, `Cloud ASR`, `Vocabulary`, `LLM`).
+  - Added dedicated top-level master toggle `[√] Enable LLM Refinement` (`enableLlm` in persistent `Config`), cleanly decoupling LLM post-processing from ASR recognition.
+  - Automatically dims and disables all provider connection, parameter, and prompt controls when the master switch is unchecked.
+  - Decoupled `Punctuation` dropdown in `Recognition` tab to pure ASR punctuation options (`Disabled` / `Auto punctuate`), completely removing the conflated `Auto punctuate + LLM` item.
+- **Hierarchical Secondary Prompt Management Dialog**:
+  - Implemented single-row prompt selector in the main LLM tab: `Prompt: [ Preset Dropdown ] [ Manage... ]`.
+  - Added dedicated modal `System Prompt Management` dialog (`ShowPromptManageDialog`, 760×580) featuring:
+    - Preset switcher (`Basic Fix`, `Deep Fix`, `Polish`, `Custom`) with dynamic descriptions.
+    - Large 700×380 multiline edit box with vertical scrolling for comfortable prompt inspection and authoring.
+    - `[ Reset to Default ]`, `[ OK ]`, and `[ Cancel ]` actions.
+    - Robust custom prompt retention preventing built-in preset preview from erasing user custom prompts across preset switches.
+- **Quick Access to Refinement Logs & Vocabulary Directory**:
+  - Added `[ Open Log Folder ]` action button next to the refinement log checkbox in the `LLM` tab to directly open the log directory (`%LOCALAPPDATA%\VoxType\log\` or `<ExeDir>\log\`) in Windows Explorer with one click.
+  - Replaced the cut-off `%APPDATA%\VoxType\vocabulary.json` static label on the top action row of the `Vocabulary` tab with an interactive `[ Open Folder ]` button (`IDC_VOCAB_TAB_OPEN_FOLDER`), allowing one-click opening of the vocabulary directory in Windows Explorer.
+- **Zero-Friction Backward Compatibility & Seamless Migration**:
+  - Automatic migration on startup: legacy configurations with `postprocess == "llm"` and no `enable_llm` are transparently upgraded to `enableLlm = true` and `postprocess = "auto"`.
+  - Updated `ShouldRunLlmRefine` to directly inspect `config.enableLlm` independent of punctuation choice.
+
+### Quality & Layout Verification
+
+- Multi-DPI static layout ratchets expanded in `scripts/validate_settings_layout.ps1` to cover the reorganized LLM action row and Prompt management dialog across 96, 144, 192, and 288 DPI.
+- Added comprehensive unit and protocol regression tests in `tests/asr_json_protocol_test.cpp` verifying `enable_llm` serialization, roundtrip, legacy migration, and preset/custom backup retention.
+- Passed all 17 architecture invariants and 6 offline test suites.
+
 ## v0.10.5 (2026-09-21)
 
 ### Features

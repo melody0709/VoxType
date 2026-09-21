@@ -22,9 +22,12 @@ public:
 
 private:
     void AddLlmControl(HWND hwnd) { if (hwnd) m_controls.push_back(hwnd); }
+    void UpdateControlEnableState(HWND parent);
 
     std::vector<HWND> m_controls;
     bool m_keyVisible = false;
+    std::wstring m_currentPrompt;
+    std::wstring m_customPromptBackup;
 };
 
 void RefreshProviderDropdown(HWND hwnd);

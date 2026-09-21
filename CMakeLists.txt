@@ -92,7 +92,6 @@ add_executable(VoxType WIN32
     src/ui/tabs/tab_recognition.cpp
     src/ui/tabs/tab_cloud_asr.cpp
     src/ui/tabs/tab_llm.cpp
-    src/ui/tabs/tab_prompt.cpp
     src/ui/tabs/tab_vocabulary.cpp
     src/ui/providers/provider_baidu.cpp
     src/ui/providers/provider_volcengine.cpp

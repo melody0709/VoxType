@@ -48,6 +48,7 @@ struct Config {
     bool enablePartial = false;
     std::wstring postprocess = L"itn";
     std::wstring hotkey = L"CapsLock";
+    bool enableLlm = false;
     std::wstring llmProvider = L"DeepSeek";
     std::wstring llmEndpoint = L"https://api.deepseek.com";
     std::wstring llmApiKey;

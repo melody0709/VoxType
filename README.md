@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.10.5</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.10.6</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -132,25 +132,30 @@ the packager re-extracts and hashes each result before publishing it.
 - `Punctuation` — Post-recognition processing:
   - `Disabled` — No processing, outputs ASR raw text
   - `Auto punctuate` — Local CT-Transformer auto-punctuation (no network required)
-  - `Auto punctuate + LLM` — Local punctuation + cloud LLM correction (requires configuring provider and API Key in LLM tab, see LLM Correction section below)
 - `Hold hotkey` — Click the input box then press the hotkey to record
   - `Esc` cancels this recording, `Backspace/Delete` clears the hotkey
   - Default CapsLock: Short press toggles Caps Lock, long press 300ms triggers voice input
 
 **LLM tab**
+- `Enable LLM Refinement` — Master toggle for LLM refinement and error correction. When disabled, configuration fields below are grayed out
 - `Provider` — Provider dropdown with DeepSeek (`deepseek-v4-flash`), OpenRouter (`qwen/qwen3.5-9b`), and SiliconFlow (`Qwen/Qwen3.6-35B-A3B`) presets; selecting one auto-fills the fields below
 - `API Base URL` — Provider API address (auto-filled by presets)
 - `API Key` — API key, stored encrypted with DPAPI in local config
 - `Model` — Model name (e.g., `deepseek-v4-flash`)
-- `Test Connection` — Sends the same provider parameters as real correction and reports the result in the Status area below
 - `Extra Params` — Additional JSON object fields merged into the request body; outer braces are optional. Values are saved independently for each provider, and malformed merged JSON is rejected before network I/O
 - A malformed legacy provider store is preserved byte-for-byte during Save instead
   of being reset and silently deleting unrelated provider entries.
 - `[+]` / `[−]` — Add/delete custom providers (presets cannot be deleted)
+- `Prompt` — Preset dropdown (`Basic Fix`, `Deep Fix`, `Polish`, `Custom`) + `[Manage...]` button. Clicking `[Manage...]` opens the modal System Prompt Management dialog with a spacious multiline editor, preset descriptions, and reset button
+- `Test Connection` — Sends the same provider parameters as real correction and reports the result in the Status area below
+- `Log refine before/after` & `Open Log Folder` — Records raw ASR and refined text to `llm_refine_YYYYMMDD.log` for debugging; the button opens the log directory directly in Explorer
 
-**LLM Prompt tab**
-- `System Prompt` — Multi-line editor, customize LLM correction system prompt (leave empty to use built-in default)
-- `Basic Fix` / `Deep Fix` — Preset buttons, one-click fill for different correction intensity System Prompts
+**Vocabulary tab**
+- Universal custom vocabulary shared across Qwen and Volcano Engine
+- `Edit in External Editor` — Opens `vocabulary.json` in default text editor
+- `Reload from File` — Reloads vocabulary from file
+- `Format JSON` — Formats and indents the JSON text
+- `Open Folder` — Opens the directory containing `vocabulary.json` in Windows Explorer
 
 **Cloud ASR tab**
 - `Provider` — Select between `Volcano Engine (Doubao)`, `Baidu Cloud`, `Qwen ASR (DashScope)`, `MiMo ASR (Xiaomi)`, `Microsoft MAI Transcribe 2`, `Doubao IME (Free)`, and `Qwen IME (Free)`, controls below update dynamically

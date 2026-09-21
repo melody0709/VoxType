@@ -9,6 +9,7 @@
 #include "ui_theme.h"
 #include "vocabulary_manager.h"
 #include "utils.h"
+#include "llm_refine.h"
 
 #include <commctrl.h>
 #include <windowsx.h>
@@ -681,6 +682,248 @@ LRESULT CALLBACK VolcExtraWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lPa
     return DefWindowProcW(hDlg, msg, wParam, lParam);
 }
 
+void LayoutPromptManageDlg(HWND hDlg) {
+    const int margin = S(UiStyle::PromptDlgMarginX);
+    const int labelW = S(UiStyle::PromptDlgPresetLabelW);
+    const int comboW = S(UiStyle::PromptDlgPresetComboW);
+    const int descW = S(UiStyle::PromptDlgPresetDescW);
+    const int presetY = S(UiStyle::PromptDlgPresetY);
+    const int editY = S(UiStyle::PromptDlgEditY);
+    const int editW = S(UiStyle::PromptDlgEditW);
+    const int editH = S(UiStyle::PromptDlgEditH);
+    const int btnY = S(UiStyle::PromptDlgBtnY);
+    const int btnH = S(UiStyle::BtnH);
+    const int resetW = S(UiStyle::PromptDlgResetBtnW);
+    const int footerBtnW = S(UiStyle::FooterBtnW);
+
+    HWND presetLabel = GetDlgItem(hDlg, IDC_PROMPT_DLG_LABEL);
+    HWND presetCombo = GetDlgItem(hDlg, IDC_PROMPT_DLG_PRESET);
+    HWND presetDesc = GetDlgItem(hDlg, IDC_PROMPT_DLG_DESC);
+    HWND edit = GetDlgItem(hDlg, IDC_PROMPT_DLG_EDIT);
+    HWND resetBtn = GetDlgItem(hDlg, IDC_PROMPT_DLG_RESET);
+    HWND okBtn = GetDlgItem(hDlg, IDOK);
+    HWND cancelBtn = GetDlgItem(hDlg, IDCANCEL);
+
+    if (presetLabel) MoveWindow(presetLabel, margin, presetY + S(UiStyle::LabelYOffset), labelW, S(UiStyle::LabelH), TRUE);
+    if (presetCombo) MoveWindow(presetCombo, margin + labelW + S(8), presetY, comboW, S(200), TRUE);
+    if (presetDesc) MoveWindow(presetDesc, margin + labelW + S(8) + comboW + S(16), presetY + S(UiStyle::LabelYOffset), descW, S(UiStyle::LabelH), TRUE);
+    if (edit) MoveWindow(edit, margin, editY, editW, editH, TRUE);
+    if (resetBtn) MoveWindow(resetBtn, margin, btnY, resetW, btnH, TRUE);
+    if (okBtn) MoveWindow(okBtn, margin + editW - footerBtnW * 2 - S(12), btnY, footerBtnW, btnH, TRUE);
+    if (cancelBtn) MoveWindow(cancelBtn, margin + editW - footerBtnW, btnY, footerBtnW, btnH, TRUE);
+}
+
+LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_CREATE: {
+        UpdateUiScale(hDlg);
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        auto* data = reinterpret_cast<PromptManageDlgData*>(cs->lpCreateParams);
+        SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(data));
+        HINSTANCE hInst = cs->hInstance;
+
+        HWND presetLabel = CreateWindowW(L"STATIC", L"Preset", WS_CHILD | WS_VISIBLE,
+                                         0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_LABEL)), hInst, nullptr);
+        HWND presetCombo = CreateWindowW(WC_COMBOBOXW, nullptr,
+                                         WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+                                         0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_PRESET)), hInst, nullptr);
+        HWND presetDesc = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE,
+                                        0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_DESC)), hInst, nullptr);
+        HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
+                                    0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_EDIT)), hInst, nullptr);
+        HWND resetBtn = CreateWindowW(L"BUTTON", L"Reset to Default", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                      0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_RESET)), hInst, nullptr);
+        HWND okBtn = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                   0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDOK)), hInst, nullptr);
+        HWND cancelBtn = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                       0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)), hInst, nullptr);
+
+        ApplyUiFont(presetLabel);
+        ApplyUiFont(presetCombo);
+        ApplyUiFont(presetDesc);
+        ApplyUiFont(edit);
+        ApplyUiFont(resetBtn);
+        ApplyUiFont(okBtn);
+        ApplyUiFont(cancelBtn);
+
+        MarkSettingsHint(presetDesc);
+
+        for (int i = 0; i < llm::kPromptPresetCount; ++i) {
+            ComboBox_AddString(presetCombo, llm::kPromptPresets[i].name);
+        }
+        ComboBox_AddString(presetCombo, L"Custom");
+
+        int matchedPreset = -1;
+        if (data) {
+            for (int i = 0; i < llm::kPromptPresetCount; ++i) {
+                if (data->prompt == llm::kPromptPresets[i].prompt) {
+                    matchedPreset = i;
+                    break;
+                }
+            }
+        }
+
+        if (matchedPreset >= 0) {
+            ComboBox_SetCurSel(presetCombo, matchedPreset);
+            SetWindowTextW(presetDesc, llm::kPromptPresets[matchedPreset].description);
+            if (data) {
+                SetWindowTextW(edit, data->prompt.c_str());
+                if (data->customBackup.empty()) {
+                    data->customBackup = data->prompt.empty() ? llm::kPromptPresets[0].prompt : data->prompt;
+                }
+            }
+            SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
+        } else {
+            ComboBox_SetCurSel(presetCombo, llm::kPromptPresetCount);
+            SetWindowTextW(presetDesc, L"Custom prompt");
+            if (data) {
+                SetWindowTextW(edit, data->prompt.c_str());
+                data->customBackup = data->prompt;
+            }
+            SendMessageW(edit, EM_SETREADONLY, FALSE, 0);
+        }
+
+        LayoutPromptManageDlg(hDlg);
+        SetFocus(edit);
+        return 0;
+    }
+    case WM_DPICHANGED: {
+        const UINT newDpi = HIWORD(wParam);
+        UpdateUiScaleForDpi(newDpi);
+        RECT* suggested = reinterpret_cast<RECT*>(lParam);
+        if (suggested) {
+            SetWindowPos(hDlg, nullptr, suggested->left, suggested->top,
+                         suggested->right - suggested->left,
+                         suggested->bottom - suggested->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        HFONT newFont = ui_theme::UiFontForDpi(newDpi);
+        EnumChildWindows(hDlg, [](HWND child, LPARAM lp) -> BOOL {
+            SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(lp), TRUE);
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(newFont));
+        LayoutPromptManageDlg(hDlg);
+        InvalidateRect(hDlg, nullptr, TRUE);
+        return 0;
+    }
+    case WM_CTLCOLORDLG:
+        return reinterpret_cast<LRESULT>(ui_theme::SettingsBgBrush());
+    case WM_CTLCOLORSTATIC: {
+        HDC hdc = reinterpret_cast<HDC>(wParam);
+        HWND control = reinterpret_cast<HWND>(lParam);
+        if (control == GetDlgItem(hDlg, IDC_PROMPT_DLG_EDIT)) {
+            SetTextColor(hdc, kInputTextColor);
+            SetBkColor(hdc, kControlBgColor);
+            return reinterpret_cast<LRESULT>(ui_theme::ControlBgBrush());
+        }
+        SetTextColor(hdc, IsSettingsHint(control) ? kHintTextColor : kTextColor);
+        SetBkColor(hdc, kBgColor);
+        return reinterpret_cast<LRESULT>(ui_theme::SettingsBgBrush());
+    }
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORLISTBOX: {
+        HDC hdc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(hdc, kInputTextColor);
+        SetBkColor(hdc, kControlBgColor);
+        return reinterpret_cast<LRESULT>(ui_theme::ControlBgBrush());
+    }
+    case WM_ERASEBKGND: {
+        RECT rc;
+        GetClientRect(hDlg, &rc);
+        FillRect(reinterpret_cast<HDC>(wParam), &rc, ui_theme::SettingsBgBrush());
+        return 1;
+    }
+    case WM_COMMAND: {
+        auto* data = reinterpret_cast<PromptManageDlgData*>(GetWindowLongPtrW(hDlg, GWLP_USERDATA));
+        const WORD controlId = LOWORD(wParam);
+        const WORD notifyCode = HIWORD(wParam);
+
+        if (controlId == IDC_PROMPT_DLG_PRESET && notifyCode == CBN_SELCHANGE) {
+            HWND combo = GetDlgItem(hDlg, IDC_PROMPT_DLG_PRESET);
+            HWND edit = GetDlgItem(hDlg, IDC_PROMPT_DLG_EDIT);
+            HWND desc = GetDlgItem(hDlg, IDC_PROMPT_DLG_DESC);
+            int sel = ComboBox_GetCurSel(combo);
+            if (sel >= 0 && sel < llm::kPromptPresetCount) {
+                if (data && (GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) == 0) {
+                    int len = GetWindowTextLengthW(edit);
+                    std::wstring text(len + 1, L'\0');
+                    GetWindowTextW(edit, text.data(), len + 1);
+                    text.resize(len);
+                    data->customBackup = text;
+                }
+                SetWindowTextW(edit, llm::kPromptPresets[sel].prompt);
+                SetWindowTextW(desc, llm::kPromptPresets[sel].description);
+                SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
+            } else if (sel == llm::kPromptPresetCount) {
+                if (data) {
+                    if (data->customBackup.empty()) {
+                        data->customBackup = data->prompt.empty() ? llm::kPromptPresets[0].prompt : data->prompt;
+                    }
+                    SetWindowTextW(edit, data->customBackup.c_str());
+                }
+                SetWindowTextW(desc, L"Custom prompt");
+                SendMessageW(edit, EM_SETREADONLY, FALSE, 0);
+                SetFocus(edit);
+            }
+            return 0;
+        }
+        if (controlId == IDC_PROMPT_DLG_RESET) {
+            HWND combo = GetDlgItem(hDlg, IDC_PROMPT_DLG_PRESET);
+            HWND edit = GetDlgItem(hDlg, IDC_PROMPT_DLG_EDIT);
+            HWND desc = GetDlgItem(hDlg, IDC_PROMPT_DLG_DESC);
+            if (data && (GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) == 0) {
+                int len = GetWindowTextLengthW(edit);
+                std::wstring text(len + 1, L'\0');
+                GetWindowTextW(edit, text.data(), len + 1);
+                text.resize(len);
+                data->customBackup = text;
+            }
+            ComboBox_SetCurSel(combo, 0);
+            SetWindowTextW(edit, llm::kPromptPresets[0].prompt);
+            SetWindowTextW(desc, llm::kPromptPresets[0].description);
+            SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
+            SetFocus(edit);
+            return 0;
+        }
+        if (controlId == IDOK) {
+            if (data) {
+                HWND edit = GetDlgItem(hDlg, IDC_PROMPT_DLG_EDIT);
+                int len = GetWindowTextLengthW(edit);
+                std::wstring text(len + 1, L'\0');
+                GetWindowTextW(edit, text.data(), len + 1);
+                text.resize(len);
+                data->prompt = text;
+                if ((GetWindowLongPtrW(edit, GWL_STYLE) & ES_READONLY) == 0) {
+                    data->customBackup = text;
+                }
+                data->ok = true;
+            }
+            DestroyWindow(hDlg);
+            return 0;
+        }
+        if (controlId == IDCANCEL) {
+            DestroyWindow(hDlg);
+            return 0;
+        }
+        break;
+    }
+    case WM_CLOSE:
+        DestroyWindow(hDlg);
+        return 0;
+    case WM_DESTROY: {
+        HWND parent = GetWindow(hDlg, GW_OWNER);
+        if (!parent) parent = GetParent(hDlg);
+        if (parent && !IsWindowEnabled(parent)) {
+            EnableWindow(parent, TRUE);
+            SetForegroundWindow(parent);
+        }
+        return 0;
+    }
+    }
+    return DefWindowProcW(hDlg, msg, wParam, lParam);
+}
+
 }  // namespace
 
 bool ShowInputDialog(HWND parent, const wchar_t* title, std::wstring& out) {
@@ -778,3 +1021,46 @@ bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvan
     RunModalDialogLoop(dialog, parent);
     return data.ok;
 }
+
+bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* customBackup) {
+    HINSTANCE hInst = GetParentInstance(parent);
+    static bool registered = false;
+    static HBRUSH s_dialogBgBrush = CreateSolidBrush(kBgColor);
+    if (!registered) {
+        WNDCLASSEXW wc = {};
+        wc.cbSize = sizeof(wc);
+        wc.lpfnWndProc = PromptManageWndProc;
+        wc.hInstance = hInst;
+        wc.hbrBackground = s_dialogBgBrush;
+        wc.lpszClassName = L"VoxTypePromptManageDlg";
+        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        RegisterClassExW(&wc);
+        registered = true;
+    }
+
+    PromptManageDlgData data;
+    data.prompt = outPrompt;
+    if (customBackup && !customBackup->empty()) {
+        data.customBackup = *customBackup;
+    }
+    UpdateUiScale(parent);
+    const int width = S(UiStyle::PromptDlgW);
+    const int height = S(UiStyle::PromptDlgH);
+    POINT pos = CalculateCenteredDialogPos(parent, width, height);
+
+    HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
+                               L"VoxTypePromptManageDlg", L"System Prompt Management",
+                               WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                               pos.x, pos.y, width, height, parent, nullptr, hInst, &data);
+    if (!dlg) return false;
+    RunModalDialogLoop(dlg, parent);
+    if (data.ok) {
+        outPrompt = data.prompt;
+        if (customBackup && !data.customBackup.empty()) {
+            *customBackup = data.customBackup;
+        }
+        return true;
+    }
+    return false;
+}
+

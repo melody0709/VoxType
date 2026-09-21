@@ -173,10 +173,10 @@ Tray menu:
 Settings is a standard Win32 window with 5 tabs:
 
 - `General`: recording hotkey, optional current-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoxType` startup registration, and shared recording diagnostics (`Off` / `Failures only` / `All recordings`) with folder and managed-delete actions.
-- `Recognition`: ASR Backend, optional Fallback backend, model, model directory, threads, VAD, VAD model, and Punctuation.
-- `LLM`: Provider selection (Provider dropdown + [+] / [−]), API Base URL, API Key, Model, Test Connection, Debug log, Extra Params.
-- `LLM Prompt`: System Prompt editor (multi-line), Basic Fix / Deep Fix preset buttons.
+- `Recognition`: ASR Backend, optional Fallback backend, model, model directory, threads, VAD, VAD model, and Punctuation (`Disabled` / `Auto punctuate`).
 - `Cloud ASR`: Cloud provider selection and Baidu/Volcengine/Qwen/MiMo/MAI/Doubao IME/Qwen IME Free provider-specific fields.
+- `Vocabulary`: Universal vocabulary management (%APPDATA%\VoxType\vocabulary.json), shared with Qwen and Volcano Engine.
+- `LLM`: Master toggle (`Enable LLM Refinement`), Provider selection (Provider dropdown + [+] / [−]), API Base URL, API Key, Model, Extra Params, Prompt preset selection with modal `Manage...` dialog (spacious multiline System Prompt editor, presets, and reset), Test Connection, and Debug log.
 
 When Settings is opened:
 

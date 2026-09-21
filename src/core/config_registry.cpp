@@ -258,6 +258,7 @@ void InitializeRegistry() {
     reg.Register({"enable_partial", &Config::enablePartial, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"postprocess", &Config::postprocess});
     reg.Register({"hotkey", &Config::hotkey});
+    reg.Register({"enable_llm", &Config::enableLlm, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"llm_provider", &Config::llmProvider});
     reg.Register({"llm_providers_json", &Config::llmProvidersJson});
     reg.Register({"llm_endpoint", &Config::llmEndpoint});

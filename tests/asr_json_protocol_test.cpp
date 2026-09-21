@@ -17,6 +17,7 @@
 #include "volcengine_asr.h"  // BuildExtraParamsJson
 #include "asr_result.h"
 #include "path_service.h"
+#include "llm_refine.h"
 
 // 离线测试桩：不链接真实日志实现（其依赖 globals.h → sherpa-onnx 等重头文件），
 // 本测试只验证协议解析行为，日志调用直接吞掉。
@@ -430,11 +431,11 @@ int wmain() {
         CHECK(loaded.modelId == L"foo", "loaded value deserialized");
         CHECK(loaded.configVersion == 110, "postload hook executed on loaded config");
     }
-    // 27) 全量 92 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 27) 全量 93 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 92, "registry total entry count is 92");
+        CHECK(reg.GetEntries().size() == 93, "registry total entry count is 93");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -623,9 +624,80 @@ int wmain() {
         CHECK(cfg.llmApiKey == L"llm_secret_key_abc", "legacy fixture 86: llmApiKey");
         CHECK(cfg.llmModel == L"deepseek-chat", "legacy fixture 87: llmModel");
         CHECK(cfg.llmPrompt == L"Custom prompt text", "legacy fixture 88: llmPrompt");
+        CHECK(cfg.enableLlm == false, "legacy fixture: enableLlm default false");
         CHECK(cfg.enableLlmDebug == true, "legacy fixture 89: enableLlmDebug");
         CHECK(cfg.enableDebugMode == true, "legacy fixture 90: enableDebugMode");
         CHECK(cfg.forceUnicodeInput == true, "legacy fixture 91: forceUnicodeInput");
+    }
+
+    // LLM enable & ShouldRunLlmRefine tests
+    {
+        Config cfg;
+        cfg.postprocess = L"auto";
+        cfg.enableLlm = false;
+        cfg.llmEndpoint = L"https://api.example.com";
+        cfg.llmApiKey = L"key";
+        CHECK(!ShouldRunLlmRefine(cfg, L"识别文本"), "ShouldRunLlmRefine false when enableLlm is false");
+
+        cfg.enableLlm = true;
+        CHECK(ShouldRunLlmRefine(cfg, L"识别文本"), "ShouldRunLlmRefine true when enableLlm is true and usable text");
+
+        cfg.postprocess = L"none";
+        CHECK(ShouldRunLlmRefine(cfg, L"识别文本"), "ShouldRunLlmRefine independent of postprocess punctuation setting");
+
+        cfg.enableLlm = false;
+        CHECK(!ShouldRunLlmRefine(cfg, L"识别文本"), "ShouldRunLlmRefine false when enableLlm false even if postprocess is auto");
+
+        auto& reg = config_registry::Registry::Instance();
+        std::string serialized = reg.SaveJson(cfg);
+        CHECK(serialized.find("\"enable_llm\": false") != std::string::npos, "enable_llm serialized as false literal");
+
+        cfg.enableLlm = true;
+        serialized = reg.SaveJson(cfg);
+        CHECK(serialized.find("\"enable_llm\": true") != std::string::npos, "enable_llm serialized as true literal");
+
+        Config loaded;
+        reg.LoadJson(loaded, serialized);
+        CHECK(loaded.enableLlm == true, "enable_llm roundtrip true");
+
+        // Backward compatibility migration test: postprocess == "llm" with missing enable_llm
+        const std::string legacyOldJson = "{\"config_version\":14,\"postprocess\":\"llm\"}";
+        Config cfgOld;
+        reg.LoadJson(cfgOld, legacyOldJson);
+        if (legacyOldJson.find("\"enable_llm\"") == std::string::npos && cfgOld.postprocess == L"llm") {
+            cfgOld.enableLlm = true;
+            cfgOld.postprocess = L"auto";
+        }
+        CHECK(cfgOld.enableLlm == true, "legacy config migration: enableLlm migrated from postprocess==llm");
+        CHECK(cfgOld.postprocess == L"auto", "legacy config migration: postprocess migrated to auto");
+
+        // Prompt preset and backup state logic
+        std::wstring customBackup = L"My Custom System Prompt";
+        std::wstring currentPrompt = llm::kPromptPresets[0].prompt;
+        int matchedPreset = -1;
+        for (int i = 0; i < llm::kPromptPresetCount; ++i) {
+            if (currentPrompt == llm::kPromptPresets[i].prompt) {
+                matchedPreset = i;
+                break;
+            }
+        }
+        CHECK(matchedPreset == 0, "preset 0 matches Basic Fix");
+        CHECK(!customBackup.empty(), "custom backup preserved when browsing preset 0");
+
+        // Switch to preset 1: customBackup must NOT be overwritten
+        currentPrompt = llm::kPromptPresets[1].prompt;
+        CHECK(customBackup == L"My Custom System Prompt", "custom backup unaffected by switching presets");
+
+        // Restore custom
+        currentPrompt = customBackup;
+        matchedPreset = -1;
+        for (int i = 0; i < llm::kPromptPresetCount; ++i) {
+            if (currentPrompt == llm::kPromptPresets[i].prompt) {
+                matchedPreset = i;
+                break;
+            }
+        }
+        CHECK(matchedPreset == -1, "custom prompt is not recognized as built-in preset");
     }
 
     // Vocabulary Manager Unit & Regression Tests

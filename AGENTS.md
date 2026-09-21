@@ -27,7 +27,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **机械守卫**：`tools\check_architecture.ps1`（当前 **17 项检查**，含 5 项防绕过）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
-- **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。当前最新基线：`0 / 0 / 0 / 148 / 400 / 2`（`globals.h` 彻底消除，`main.cpp` 为 148 行，`settings.cpp` 降至 397 行，跨层 include 违规降至 1 处）。
+- **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。当前最新基线：`0 / 0 / 0 / 148 / 400 / 2`（`globals.h` 彻底消除，`main.cpp` 为 148 行，`settings.cpp` 降至 389 行，跨层 include 违规降至 1 处）。
 - **契约同步是每个阶段的 DoD**：涉及类名、路径、配置项搬迁时，必须同步更新 `ARCHITECTURE.md`、`AGENTS.md`（本文）与守卫脚本里的基线数值。
 - **开工前先做备份**：`.bak\`（仓库根，已在 `.gitignore` 中）。禁止把人工备份放进 `build\`。
 

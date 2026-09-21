@@ -132,10 +132,10 @@ flowchart LR
 Settings 是普通 Win32 窗口，目前分 5 个 tab：
 
 - `General`: 录音快捷键、可选的当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoxType` 开机启动注册，以及共用录音诊断（`Off` / `Failures only` / `All recordings`）、打开目录和受管删除入口。
-- `Recognition`: ASR Backend、可选 Fallback 后端、模型、模型目录、线程、VAD、VAD 模型、Punctuation、快捷键配置。
-- `LLM`: 供应商选择（Provider dropdown + [+] / [−]）、API Base URL、API Key、Model、Test Connection、Debug log、Extra Params。
-- `LLM Prompt`: System Prompt 编辑（多行）、Basic Fix / Deep Fix 预设按钮。
-- `Cloud ASR`: 云端供应商选择、百度/火山引擎/Qwen/MiMo/豆包输入法/千问 IME Free 专属字段。
+- `Recognition`: ASR Backend、可选 Fallback 后端、模型、模型目录、线程、VAD、VAD 模型、Punctuation（`Disabled` / `Auto punctuate`）。
+- `Cloud ASR`: 云端供应商选择、百度/火山引擎/Qwen/MiMo/MAI/豆包输入法/千问 IME Free 专属字段。
+- `Vocabulary`: 通用词汇表管理（%APPDATA%\VoxType\vocabulary.json），与千问及火山引擎共享。
+- `LLM`: 总开关（`Enable LLM Refinement`）、供应商选择（Provider dropdown + [+] / [−]）、API Base URL、API Key、Model、Extra Params、提示词预设切换与二级弹窗管理（`Manage...` 对话框，内含超大 System Prompt 多行编辑、预设说明与重置按钮）、Test Connection 及调试日志开关。
 
 打开 Settings 时：
 

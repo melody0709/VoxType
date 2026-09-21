@@ -77,6 +77,11 @@ $volcDlgH = Get-UiInt 'VolcExtraDlgH'
 $volcDlgEditW = Get-UiInt 'VolcExtraDlgEditW'
 $volcDlgEditH = Get-UiInt 'VolcExtraDlgEditH'
 $volcDlgBtnY = Get-UiInt 'VolcExtraDlgBtnY'
+$promptDlgW = Get-UiInt 'PromptDlgW'
+$promptDlgH = Get-UiInt 'PromptDlgH'
+$promptDlgEditW = Get-UiInt 'PromptDlgEditW'
+$promptDlgEditH = Get-UiInt 'PromptDlgEditH'
+$promptDlgBtnY = Get-UiInt 'PromptDlgBtnY'
 
 $startupY = $firstRowY + $shortcutHeight + $startupGap
 $startupBottom = $startupY + $startupHeight
@@ -143,6 +148,16 @@ if (($volcDlgEditW + 36) -gt $volcDlgW) {
 if (($volcDlgBtnY + $actionButtonH) -gt ($volcDlgH - 48)) {
     throw 'Volcengine extra dialog buttons exceed the estimated client area'
 }
+if (($promptDlgEditW + 60) -gt $promptDlgW) {
+    throw 'Prompt dialog edit field exceeds the dialog width'
+}
+if (($promptDlgBtnY + $actionButtonH) -gt ($promptDlgH - 48)) {
+    throw 'Prompt dialog buttons exceed the estimated client area'
+}
+$llmActionBottom = $firstRowY + (7 * $rowHeight) + 6 + $actionButtonH
+if ($llmActionBottom -gt ($footerMinTop - 4)) {
+    throw 'LLM settings action row reaches the footer'
+}
 
 foreach ($dpi in @(96, 144, 192, 288)) {
     $scale = $dpi / 144.0
@@ -175,6 +190,15 @@ foreach ($dpi in @(96, 144, 192, 288)) {
     }
     if ((Scale ($volcDlgBtnY + $actionButtonH) $scale) -gt (Scale ($volcDlgH - 48) $scale)) {
         throw "Volcengine extra dialog buttons exceed the estimated client area at $dpi DPI"
+    }
+    if ((Scale ($promptDlgEditW + 60) $scale) -gt (Scale $promptDlgW $scale)) {
+        throw "Prompt dialog edit field exceeds the dialog width at $dpi DPI"
+    }
+    if ((Scale ($promptDlgBtnY + $actionButtonH) $scale) -gt (Scale ($promptDlgH - 48) $scale)) {
+        throw "Prompt dialog buttons exceed the estimated client area at $dpi DPI"
+    }
+    if ((Scale $llmActionBottom $scale) -gt (Scale ($footerMinTop - 4) $scale)) {
+        throw "LLM settings action row overlaps the footer at $dpi DPI"
     }
     if ((Scale $maiHintBottom $scale) -gt (Scale ($footerMinTop - 4) $scale)) {
         throw "MAI settings overlap the footer at $dpi DPI"

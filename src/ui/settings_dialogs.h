@@ -28,6 +28,20 @@ struct VolcExtraDlgData {
 
 bool ShowVolcExtraDialog(HWND parent, std::wstring& out);
 
+constexpr int IDC_PROMPT_DLG_PRESET = 3010;
+constexpr int IDC_PROMPT_DLG_DESC = 3011;
+constexpr int IDC_PROMPT_DLG_EDIT = 3012;
+constexpr int IDC_PROMPT_DLG_RESET = 3013;
+constexpr int IDC_PROMPT_DLG_LABEL = 3014;
+
+struct PromptManageDlgData {
+    std::wstring prompt;
+    std::wstring customBackup;
+    bool ok = false;
+};
+
+bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* customBackup = nullptr);
+
 struct QwenAdvancedDialogData {
     bool streaming = false;
     bool ok = false;

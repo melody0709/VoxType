@@ -260,10 +260,7 @@ void TabRecognition::LoadControls(HWND parent, const Config& cfg) {
         ComboBox_ResetContent(post);
         ComboBox_AddString(post, L"Disabled");
         ComboBox_AddString(post, L"Auto punctuate");
-        ComboBox_AddString(post, L"Auto punctuate + LLM");
-        int postIndex = 1;
-        if (cfg.postprocess == L"none") postIndex = 0;
-        else if (cfg.postprocess == L"llm") postIndex = 2;
+        int postIndex = (cfg.postprocess == L"none") ? 0 : 1;
         ComboBox_SetCurSel(post, postIndex);
     }
 
@@ -314,8 +311,7 @@ void TabRecognition::SaveControls(HWND parent, Config& cfg) {
     cfg.enablePartial = Button_GetCheck(GetDlgItem(parent, IDC_PARTIAL)) == BST_CHECKED;
 
     int postSel = ComboBox_GetCurSel(GetDlgItem(parent, IDC_POSTPROCESS));
-    const wchar_t* postValues[] = { L"none", L"auto", L"llm" };
-    cfg.postprocess = (postSel >= 0 && postSel < 3) ? postValues[postSel] : L"auto";
+    cfg.postprocess = (postSel == 0) ? L"none" : L"auto";
 
     int vadIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VAD_MODEL));
     cfg.vadModel = (vadIdx == 1) ? L"firered" : L"silero";

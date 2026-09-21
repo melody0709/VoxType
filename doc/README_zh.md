@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.10.5</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.10.6</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -103,24 +103,29 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 - `Punctuation` — 识别后处理：
   - `Disabled` — 不处理，输出 ASR 原文
   - `Auto punctuate` — 本地 CT-Transformer 自动补标点（无需网络）
-  - `Auto punctuate + LLM` — 本地标点 + 云端 LLM 纠错（需在 LLM tab 配置供应商和 API Key，详见下方 LLM 纠错区块）
 - `Hold hotkey` — 点击输入框后按快捷键录入
   - `Esc` 取消本次录入，`Backspace/Delete` 清空快捷键
   - 默认 CapsLock：短按切换大小写，长按 300ms 触发语音输入
 
 **LLM tab**
+- `Enable LLM Refinement` — 大模型纠错与润色总开关，未开启时下方配置置灰禁用
 - `Provider` — 供应商下拉框，内置 DeepSeek（`deepseek-v4-flash`）、OpenRouter（`qwen/qwen3.5-9b`）和 SiliconFlow（`Qwen/Qwen3.6-35B-A3B`）预设，选择后自动填充下方字段
 - `API Base URL` — 供应商 API 地址（预设自动填入）
 - `API Key` — API 密钥，使用 DPAPI 加密存储到本地配置
 - `Model` — 模型名称（如 `deepseek-v4-flash`）
-- `Test Connection` — 使用与真实纠错相同的供应商参数发起测试，结果在下方 Status 区域显示
 - `Extra Params` — 合并到请求体的附加 JSON 对象字段，最外层花括号可省略。内容按供应商分别保存；合并后 JSON 无效时会在联网前直接报错
 - 旧配置中的供应商存储即使已损坏，Save 也会原样保留，不会重置后静默删除其他供应商条目。
 - `[+]` / `[−]` — 添加/删除自定义供应商（预设不可删除）
+- `Prompt` — 预设下拉选择（`Basic Fix`、`Deep Fix`、`Polish`、`Custom`）+ `[Manage...]` 二级弹窗管理按钮。点击呼出专属大尺寸提示词管理窗口，包含多行编辑、预设说明与重置按钮
+- `Test Connection` — 使用与真实纠错相同的供应商参数发起测试，结果在下方 Status 区域显示
+- `Log refine before/after` 与 `Open Log Folder` — 开启后将识别原文和润色后文本追加写入 `llm_refine_YYYYMMDD.log`；右侧按钮可一键在资源管理器中直接打开日志目录
 
-**LLM Prompt tab**
-- `System Prompt` — 多行编辑器，自定义 LLM 纠错的系统提示词（留空使用内置默认）
-- `Basic Fix` / `Deep Fix` — 预设按钮，一键填入不同纠错力度的 System Prompt
+**Vocabulary tab**
+- 通用词汇表，与千问及火山引擎共享热词
+- `Edit in External Editor` — 在系统默认文本编辑器中打开 `vocabulary.json`
+- `Reload from File` — 从文件重新载入词汇表
+- `Format JSON` — 格式化与美化 JSON 文本
+- `Open Folder` — 在资源管理器中打开 `vocabulary.json` 所在的文件夹
 
 **Cloud ASR tab**
 - `Provider` — 选择 `Volcano Engine (Doubao)` / `Baidu Cloud` / `Qwen ASR (DashScope)` / `MiMo ASR (Xiaomi)` / `Microsoft MAI Transcribe 2` / `Doubao IME (Free)` / `Qwen IME (Free)`，下方控件动态切换

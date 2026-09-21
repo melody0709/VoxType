@@ -137,9 +137,16 @@ void LoadConfig(Config& config) {
     const std::string json = buffer.str();
     bool migratePlaintextQwenUtdid = false;
     bool migrateLlmProvider = false;
+    bool migrateEnableLlm = false;
 
     EnsureRegistryInitialized();
     config_registry::Registry::Instance().LoadJson(config, json);
+
+    if (json.find("\"enable_llm\"") == std::string::npos && config.postprocess == L"llm") {
+        config.enableLlm = true;
+        config.postprocess = L"auto";
+        migrateEnableLlm = true;
+    }
 
     if (config.hotkey.empty() || config.hotkey == L"0xE5" || config.hotkey == L"0xe5") {
         config.hotkey = L"CapsLock";
@@ -267,7 +274,8 @@ void LoadConfig(Config& config) {
 
     if (config.configVersion < kCurrentConfigVersion ||
         migrateLlmProvider ||
-        migratePlaintextQwenUtdid) {
+        migratePlaintextQwenUtdid ||
+        migrateEnableLlm) {
         config.configVersion = kCurrentConfigVersion;
         SaveConfig(config);
     }

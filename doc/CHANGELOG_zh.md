@@ -2,6 +2,35 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.6 (2026-09-21)
+
+### 新增功能与界面架构重构
+
+- **LLM 模块全链路归一与独立总开关架构**：
+  - 彻底消除独立的顶层 `LLM Prompt` 标签页，将 LLM 所有的连接参数、模型配置与提示词控制收拢至单一清爽的 `LLM` 标签页，设置窗口顶层 Tab 由 6 个精简至 5 个（`General`、`Recognition`、`Cloud ASR`、`Vocabulary`、`LLM`）。
+  - 在 `LLM` 标签页首行设立独立总开关 `[√] Enable LLM Refinement`（持久化映射为 `Config::enableLlm`），彻底解耦 LLM 文本润色与底层 ASR 识别流程。
+  - 联动体验：取消勾选总开关时，下方所有服务商选择、密钥、参数与提示词控件整体置灰禁用；勾选后即时激活。
+  - 解绑 `Recognition` 标签页中混杂的标点下拉框，恢复为纯粹的 ASR 标点后处理选项（`Disabled` 禁用 / `Auto punctuate` 自动加标点），彻底清除概念混淆的 `Auto punctuate + LLM` 项。
+- **层级化二级提示词管理弹窗（Modal Dialog）**：
+  - 主界面仅保留一行紧凑的预设选择器：`Prompt: [ 预设下拉选择 ▼ ] [ Manage... ]`，日常秒切预设无负担。
+  - 点击 `[ Manage... ]` 唤起专属的 **System Prompt Management** 模态管理对话框（760×580）：
+    - 支持快速切换 `Basic Fix`（基础纠错）、`Deep Fix`（深度纠错）、`Polish`（润色润饰）与 `Custom`（自定义提示词），动态显示预设说明。
+    - 提供 **700×380 像素的超大独立多行带垂直滚动条文本编辑框**，提示词查阅与精细化编写极为舒展。
+    - 配备 `[ Reset to Default ]`、`[ OK ]` 与 `[ Cancel ]` 按钮。
+    - 具备智能防覆盖备份机制，在内置预设间切换浏览时绝不会意外抹除用户的自定义提示词。
+- **一键直达润色日志与热词目录**：
+  - 在 `LLM` 标签页的 `[√] Log refine before/after` 旁新增 `[ Open Log Folder ]` 动作按钮，一键通过 Windows 资源管理器直接定位并打开存放 `llm_refine_YYYYMMDD.log` 的日志目录（`%LOCALAPPDATA%\VoxType\log\` 或便携目录 `<ExeDir>\log\`）。
+  - 将 `Vocabulary` 标签页顶部操作行被宽度截断的静态路径提示 `%APPDATA%\VoxType\vocabulary.json` 替换为交互式 `[ Open Folder ]`（打开文件夹）按钮（`IDC_VOCAB_TAB_OPEN_FOLDER`），一键通过 Windows 资源管理器直接定位并打开 `vocabulary.json` 所在的目录。
+- **无感向下兼容与平滑数据迁移**：
+  - 启动阶段自动检测旧版配置文件：若历史配置为 `postprocess == "llm"` 且尚未持久化 `enable_llm`，自动无感升级为 `enableLlm = true` 并将 `postprocess` 规范化为 `"auto"`。
+  - `ShouldRunLlmRefine` 决策逻辑改为直接判断 `config.enableLlm`，标点设置与大模型纠错彻底互不干扰。
+
+### 质量与布局守卫
+
+- 在 `scripts/validate_settings_layout.ps1` 中新增 LLM 操作行底端边界与提示词管理弹窗的多 DPI 静态约束，并在 96/144/192/288 DPI 下全部通过。
+- 在 `tests/asr_json_protocol_test.cpp` 中新增 `enable_llm` 序列化/反序列化、旧版配置平滑升级、预设匹配与自定义备份留存全套回归断言。
+- 17 项机械架构守卫与 6 组离线测试套件全部 PASS。
+
 ## v0.10.5 (2026-09-21)
 
 ### 新增功能

@@ -58,8 +58,8 @@ void TabVocabulary::CreateControls(HWND parent) {
     HWND btnFormat = CreateButton(parent, IDC_VOCAB_TAB_FORMAT, S(400), topY, S(120), S(UiStyle::ActionBtnH), L"Format JSON");
     AddVocabControl(btnFormat);
 
-    HWND pathHint = CreateHint(parent, S(532), topY + S(UiStyle::LabelYOffset), S(286), S(UiStyle::LabelH), L"%APPDATA%\\VoxType\\vocabulary.json");
-    AddVocabControl(pathHint);
+    HWND btnOpenFolder = CreateButton(parent, IDC_VOCAB_TAB_OPEN_FOLDER, S(530), topY, S(140), S(UiStyle::ActionBtnH), L"Open Folder");
+    AddVocabControl(btnOpenFolder);
 
     const int groupBoxY = topY + S(UiStyle::ActionBtnH) + S(10);
     const int groupH = S(416);
@@ -90,7 +90,7 @@ void TabVocabulary::CreateControls(HWND parent) {
     AddVocabControl(statusLabel);
 
     HWND hintLabel = CreateHint(parent, S(30), footerY + S(24), S(788), S(UiStyle::LabelH),
-                                L"Supports JSON (\"word\": weight) or line format (word [weight]). Weights: 1–5 or 50. Default weight: 50.");
+                                L"Supports JSON (\"word\": weight) or line format (word [weight]). Weights: 1–5 or 50 (default: 50).");
     AddVocabControl(hintLabel);
 }
 
@@ -163,6 +163,22 @@ bool TabVocabulary::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, 
             ShellExecuteW(parent, L"open", L"notepad.exe", quotedPath.c_str(), nullptr, SW_SHOWNORMAL);
         }
         SetStatus(parent, L"Opened vocabulary.json in external editor.");
+        return true;
+    }
+    case IDC_VOCAB_TAB_OPEN_FOLDER: {
+        vocabulary_manager::EnsureVocabularyFileTemplate();
+        const std::wstring vocabPath = vocabulary_manager::GetVocabularyFilePath();
+        const size_t slash = vocabPath.find_last_of(L"\\/");
+        const std::wstring vocabDir = (slash != std::wstring::npos) ? vocabPath.substr(0, slash) : PathService::AppDataDir();
+        HINSTANCE res = ShellExecuteW(parent, L"open", vocabDir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        if (reinterpret_cast<INT_PTR>(res) <= 32) {
+            res = ShellExecuteW(parent, L"open", L"explorer.exe", vocabDir.c_str(), nullptr, SW_SHOWNORMAL);
+        }
+        if (reinterpret_cast<INT_PTR>(res) <= 32) {
+            SetStatus(parent, L"Unable to open vocabulary folder.");
+        } else {
+            SetStatus(parent, L"Opened vocabulary folder.");
+        }
         return true;
     }
     case IDC_VOCAB_TAB_RELOAD: {

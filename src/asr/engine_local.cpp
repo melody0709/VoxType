@@ -220,7 +220,7 @@ std::wstring AsrEngine::Recognize(const std::vector<float>& samples, int sampleR
 
     if (text == L"<sil>" || text == L"<blk>") return L"";
 
-    if (config.postprocess == L"itn" || config.postprocess == L"punct" || config.postprocess == L"llm") {
+    if (config.postprocess == L"itn" || config.postprocess == L"punct" || config.postprocess == L"llm" || config.postprocess == L"auto") {
         HiResTimer tPunct;
         std::lock_guard<std::mutex> g(lock_);
         if (EnsurePunctuation(threads)) {
@@ -259,7 +259,7 @@ void PreloadAsrEngine(const Config& config) {
     engine.Lock();
     engine.EnsureRecognizer(config);
     if (config.enableVad) engine.EnsureVadForConfig(config, threads);
-    if (config.postprocess == L"itn" || config.postprocess == L"punct" || config.postprocess == L"llm") {
+    if (config.postprocess == L"itn" || config.postprocess == L"punct" || config.postprocess == L"llm" || config.postprocess == L"auto") {
         engine.EnsurePunctuation(threads);
     }
     engine.Unlock();
