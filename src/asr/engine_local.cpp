@@ -41,7 +41,7 @@ bool AsrEngine::EnsureRecognizer(const Config& config) {
     } else if (config.modelId == L"firered_aed") {
         rc.model_config.fire_red_asr.encoder = WideToUtf8(modelDir) + "\\encoder.int8.onnx";
         rc.model_config.fire_red_asr.decoder = WideToUtf8(modelDir) + "\\decoder.int8.onnx";
-    } else if (config.modelId == L"sensevoice") {
+    } else if (config.modelId == L"sensevoice" || config.modelId == L"sense_voice") {
         rc.model_config.sense_voice.model = WideToUtf8(modelDir) + "\\model.int8.onnx";
         rc.model_config.sense_voice.use_itn = true;
     }

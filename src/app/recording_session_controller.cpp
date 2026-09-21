@@ -28,6 +28,7 @@
 #include <audioclient.h>
 #include <algorithm>
 #include <vector>
+#include <mutex>
 
 std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
 
@@ -60,21 +61,28 @@ void SetStopDelayHeldForRepress(bool held) { g_stopDelayHeldForRepress = held; }
 void SetCaptureConfigStale(bool stale) { g_captureConfigStale = stale; }
 
 struct StreamingPartialHudCallbackContext {
-    const wchar_t* statusLine = nullptr;
+    std::mutex mutex;
+    std::wstring statusLine;
     uint64_t attemptId = 0;
 };
 
-static StreamingPartialHudCallbackContext g_qwenPartialHudContext{L"Listening... Qwen ASR"};
-static StreamingPartialHudCallbackContext g_doubaoImePartialHudContext{L"Listening... Doubao IME"};
-static StreamingPartialHudCallbackContext g_volcenginePartialHudContext{L"Listening... Volcano Engine"};
-static StreamingPartialHudCallbackContext g_qwenFreePartialHudContext{L"Listening... Qwen IME (Free)"};
+static StreamingPartialHudCallbackContext g_qwenPartialHudContext;
+static StreamingPartialHudCallbackContext g_doubaoImePartialHudContext;
+static StreamingPartialHudCallbackContext g_volcenginePartialHudContext;
+static StreamingPartialHudCallbackContext g_qwenFreePartialHudContext;
 
 void StreamingPartialHudCallback(const std::wstring& text, bool, void* userData) {
     if (text.empty()) return;
-    const auto* ctx = static_cast<const StreamingPartialHudCallbackContext*>(userData);
+    auto* ctx = static_cast<StreamingPartialHudCallbackContext*>(userData);
     auto* msg = new HudUpdateWithOptionsMessage;
-    msg->attemptId = ctx ? ctx->attemptId : 0;
-    msg->statusLine = (ctx && ctx->statusLine) ? ctx->statusLine : L"Listening...";
+    if (ctx) {
+        std::lock_guard<std::mutex> lock(ctx->mutex);
+        msg->attemptId = ctx->attemptId;
+        msg->statusLine = ctx->statusLine.empty() ? L"Listening..." : ctx->statusLine;
+    } else {
+        msg->attemptId = 0;
+        msg->statusLine = L"Listening...";
+    }
     msg->text = text;
     msg->maxWidthDip = kStreamingPartialHudMaxWidthDip;
     msg->maxScreenWidthFraction = kStreamingPartialHudMaxScreenFraction;
@@ -201,7 +209,7 @@ void ActivateStreamingSession(std::unique_ptr<IStreamingAsrSession> session,
     LeaveCriticalSection(&g_audioLock);
 }
 
-void StartStreamingWatchdog(const wchar_t* listeningText) {
+void StartStreamingWatchdog(const std::wstring& listeningText) {
     ShowHud(listeningText);
     DWORD watchdogMs = 18000;
     EnterCriticalSection(&g_streamingSessionCs);
@@ -440,7 +448,12 @@ void StartRecordingSession() {
         auto session = (attemptConfig.qwenModel == L"qwen-audio-3.0-asr-flash-streaming")
             ? CreateQwenAudioStreamingSession(attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr())
             : CreateQwenStreamingSession(attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr());
-        g_qwenPartialHudContext.attemptId = attemptId;
+        const std::wstring listeningText = L"Listening... " + AsrBackendDisplayName(attemptConfig);
+        {
+            std::lock_guard<std::mutex> lock(g_qwenPartialHudContext.mutex);
+            g_qwenPartialHudContext.attemptId = attemptId;
+            g_qwenPartialHudContext.statusLine = listeningText;
+        }
         session->SetPartialCallback(StreamingPartialHudCallback, &g_qwenPartialHudContext);
         session->SetFinalCallback(StreamingFinalCallback, reinterpret_cast<void*>(static_cast<UINT_PTR>(attemptId)));
 
@@ -456,13 +469,18 @@ void StartRecordingSession() {
         StartStreamingVadTrimmerForCloud(attemptConfig, L"Qwen thread", false);
         ActivateStreamingSession(std::move(session), /*useVadTrimmer=*/true);
 
-        StartStreamingWatchdog(L"Listening... Qwen ASR");
+        StartStreamingWatchdog(listeningText);
         return;
     }
 
     if (attemptConfig.asrBackend == L"doubao_ime") {
         auto session = CreateDoubaoImeStreamingSession(attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr());
-        g_doubaoImePartialHudContext.attemptId = attemptId;
+        const std::wstring listeningText = L"Listening... " + AsrBackendDisplayName(attemptConfig);
+        {
+            std::lock_guard<std::mutex> lock(g_doubaoImePartialHudContext.mutex);
+            g_doubaoImePartialHudContext.attemptId = attemptId;
+            g_doubaoImePartialHudContext.statusLine = listeningText;
+        }
         session->SetPartialCallback(StreamingPartialHudCallback, &g_doubaoImePartialHudContext);
         session->SetFinalCallback(StreamingFinalCallback, reinterpret_cast<void*>(static_cast<UINT_PTR>(attemptId)));
 
@@ -477,14 +495,19 @@ void StartRecordingSession() {
 
         ActivateStreamingSession(std::move(session), /*useVadTrimmer=*/false);
 
-        StartStreamingWatchdog(L"Listening... Doubao IME");
+        StartStreamingWatchdog(listeningText);
         return;
     }
 
     if (attemptConfig.asrBackend == L"qwen_free") {
         auto session = CreateQwenFreeStreamingSession(
             attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr(), selection);
-        g_qwenFreePartialHudContext.attemptId = attemptId;
+        const std::wstring listeningText = L"Listening... " + AsrBackendDisplayName(attemptConfig);
+        {
+            std::lock_guard<std::mutex> lock(g_qwenFreePartialHudContext.mutex);
+            g_qwenFreePartialHudContext.attemptId = attemptId;
+            g_qwenFreePartialHudContext.statusLine = listeningText;
+        }
         session->SetPartialCallback(StreamingPartialHudCallback, &g_qwenFreePartialHudContext);
         session->SetFinalCallback(StreamingFinalCallback, reinterpret_cast<void*>(static_cast<UINT_PTR>(attemptId)));
 
@@ -502,7 +525,7 @@ void StartRecordingSession() {
         ResetStreamingVadTrimmerState();
         ActivateStreamingSession(std::move(session), /*useVadTrimmer=*/false);
 
-        StartStreamingWatchdog(L"Listening... Qwen IME (Free)");
+        StartStreamingWatchdog(listeningText);
         return;
     }
 
@@ -510,7 +533,12 @@ void StartRecordingSession() {
         VolcengineResetForNewSession();
 
         auto session = CreateVolcengineStreamingSession(attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr());
-        g_volcenginePartialHudContext.attemptId = attemptId;
+        const std::wstring listeningText = L"Listening... " + AsrBackendDisplayName(attemptConfig);
+        {
+            std::lock_guard<std::mutex> lock(g_volcenginePartialHudContext.mutex);
+            g_volcenginePartialHudContext.attemptId = attemptId;
+            g_volcenginePartialHudContext.statusLine = listeningText;
+        }
         session->SetPartialCallback(StreamingPartialHudCallback, &g_volcenginePartialHudContext);
         session->SetFinalCallback(StreamingFinalCallback, reinterpret_cast<void*>(static_cast<UINT_PTR>(attemptId)));
 
@@ -526,7 +554,7 @@ void StartRecordingSession() {
         StartStreamingVadTrimmerForCloud(attemptConfig, L"Volc thread", false);
         ActivateStreamingSession(std::move(session), /*useVadTrimmer=*/true);
 
-        StartStreamingWatchdog(L"Listening... Volcano Engine");
+        StartStreamingWatchdog(listeningText);
         return;
     }
 

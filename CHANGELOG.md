@@ -2,6 +2,33 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.5 (2026-09-21)
+
+### Features
+
+- **Hierarchical Secondary ASR Model Display in HUD (Scheme A)**:
+  - Upgraded HUD status reporting across all recording states (Initial Listening, Streaming Partial Status line, Final Recognizing, and Fallback) to display the active second-level model under each provider (`Provider / Model`).
+  - **Qwen ASR**: Dynamically displays concrete models (`Qwen ASR / qwen-audio-3.0-asr-flash-streaming`, `Qwen ASR / qwen-audio-3.0-asr-flash`, `Qwen ASR / qwen3-asr-flash-realtime`, or custom models) instead of a generic backend title.
+  - **Volcano Engine**: Resolves resource IDs to friendly names (`Volcano Engine / Seed-ASR 2.0 (duration)`, `Volcano Engine / BigASR 1.0 (concurrent)`, or custom resource IDs).
+  - **Local (sherpa-onnx)**: Formatted as `Local / FireRedASR2 CTC`, `Local / FireRedASR2 AED`, or `Local / SenseVoiceSmall`.
+  - **Baidu Cloud**: Identifies language dev_pid profiles (`Baidu Cloud / Mandarin (1537)`, `Baidu Cloud / English (1737)`, `Baidu Cloud / Cantonese (1637)`, `Baidu Cloud / Sichuanese (1837)`, etc.).
+  - **MiMo ASR & Microsoft MAI**: Identifies model and provider variant (`MiMo ASR / mimo-v2.5-asr`, `Microsoft MAI Transcribe 2 / Azure Fast Transcription` or `OpenRouter`).
+  - **Single-model channels**: Preserves clean single-level presentation for fixed reverse-engineered IMEs (`Doubao IME`, `Qwen IME (Free)`).
+  - **Fallback Transparency**: Fallback states display the target provider and model directly (e.g. `Fallback... Local / FireRedASR2 CTC` and `Fallback failed: ...`).
+
+### Fixes & Reliability
+
+- **Local Model Alias Normalization**:
+  - Reconciled `sense_voice` (with underscore, saved by Settings UI) and `sensevoice` (without underscore, used by offline recognizer and path service) to eliminate model loading mismatches, incorrect model directory resolution, and UI selection reset.
+  - Removed duplicate shadowed `ModelIndex` and `ModelIdFromIndex` functions from `tab_recognition.cpp`, delegating directly to canonical definitions in `path_service.h`.
+- **Thread-Safe Streaming HUD Context**:
+  - Replaced raw string pointer with owned `std::wstring statusLine` in `StreamingPartialHudCallbackContext` protected by `std::mutex`, eliminating race conditions between the main UI thread and background WebSocket callback threads.
+
+### Tests
+
+- Added 20+ regression test assertions in `tests/asr_json_protocol_test.cpp` covering hierarchical naming, alias mapping, and fallback propagation.
+- Verified all 17 architecture invariants via `tools/check_architecture.ps1`.
+
 ## v0.10.4 (2026-09-20)
 
 ### Features

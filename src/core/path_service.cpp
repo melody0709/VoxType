@@ -189,7 +189,7 @@ std::wstring DefaultModelDir(const std::wstring& modelId) {
     if (modelId == L"firered_aed") {
         return base + L"sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26";
     }
-    if (modelId == L"sensevoice") {
+    if (modelId == L"sensevoice" || modelId == L"sense_voice") {
         return base + L"sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17";
     }
     return base + L"sherpa-onnx-fire-red-asr2-ctc-zh_en-int8-2026-02-25";
@@ -267,17 +267,18 @@ bool RunModelDownloader(HWND hwnd, const std::wstring& modelId) {
 
 std::wstring ModelDisplayName(const std::wstring& modelId) {
     if (modelId == L"firered_aed") return L"FireRedASR2 AED";
-    if (modelId == L"sensevoice") return L"SenseVoiceSmall";
+    if (modelId == L"sensevoice" || modelId == L"sense_voice") return L"SenseVoiceSmall";
     if (modelId == L"baidu") return L"Baidu Cloud";
     if (modelId == L"volcengine") return L"Volcano Engine";
     if (modelId == L"mimo") return L"MiMo ASR";
     if (modelId == L"doubao_ime") return L"Doubao IME";
-    return L"FireRedASR2 CTC";
+    if (modelId == L"firered_ctc" || modelId.empty()) return L"FireRedASR2 CTC";
+    return modelId;
 }
 
 int ModelIndex(const std::wstring& modelId) {
     if (modelId == L"firered_aed") return 1;
-    if (modelId == L"sensevoice") return 2;
+    if (modelId == L"sensevoice" || modelId == L"sense_voice") return 2;
     return 0;
 }
 

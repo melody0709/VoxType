@@ -81,18 +81,6 @@ std::wstring BackendIdFromCombo(HWND combo, bool fallback) {
     return fallback ? L"none" : L"local";
 }
 
-int ModelIndex(const std::wstring& id) {
-    if (id == L"firered_aed") return 1;
-    if (id == L"sense_voice") return 2;
-    return 0;
-}
-
-std::wstring ModelIdFromIndex(int idx) {
-    if (idx == 1) return L"firered_aed";
-    if (idx == 2) return L"sense_voice";
-    return L"firered_ctc";
-}
-
 } // namespace
 
 void TabRecognition::ShowVadSubGroup(int vadModelIdx) {

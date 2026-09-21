@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <format>
 
 namespace {
 
@@ -113,14 +114,65 @@ bool ShouldRunLlmRefine(const Config& config, const std::wstring& text) {
 }
 
 std::wstring AsrBackendDisplayName(const Config& config) {
-    if (config.asrBackend == L"baidu") return L"Baidu Cloud";
-    if (config.asrBackend == L"volcengine") return L"Volcano Engine";
-    if (config.asrBackend == L"qwen") return L"Qwen ASR";
-    if (config.asrBackend == L"mimo") return L"MiMo ASR";
-    if (config.asrBackend == L"mai") return L"Microsoft MAI Transcribe 2";
-    if (config.asrBackend == L"doubao_ime") return L"Doubao IME";
-    if (config.asrBackend == L"qwen_free") return L"Qwen IME (Free)";
-    return ModelDisplayName(config.modelId);
+    if (config.asrBackend == L"qwen") {
+        const std::wstring model = config.qwenModel.empty()
+            ? L"qwen-audio-3.0-asr-flash-streaming"
+            : config.qwenModel;
+        return L"Qwen ASR / " + model;
+    }
+    if (config.asrBackend == L"volcengine") {
+        std::wstring model = config.volcResourceId;
+        if (model == L"volc.seedasr.sauc.duration" || model.empty()) {
+            model = L"Seed-ASR 2.0 (duration)";
+        } else if (model == L"volc.seedasr.sauc.concurrent") {
+            model = L"Seed-ASR 2.0 (concurrent)";
+        } else if (model == L"volc.bigasr.sauc.duration") {
+            model = L"BigASR 1.0 (duration)";
+        } else if (model == L"volc.bigasr.sauc.concurrent") {
+            model = L"BigASR 1.0 (concurrent)";
+        }
+        return L"Volcano Engine / " + model;
+    }
+    if (config.asrBackend == L"baidu") {
+        std::wstring model;
+        if (config.baiduDevPid == 1537 || config.baiduDevPid == 0) {
+            model = L"Mandarin (1537)";
+        } else if (config.baiduDevPid == 1737) {
+            model = L"English (1737)";
+        } else if (config.baiduDevPid == 1637) {
+            model = L"Cantonese (1637)";
+        } else if (config.baiduDevPid == 1837) {
+            model = L"Sichuanese (1837)";
+        } else {
+            model = std::format(L"DevPid ({})", config.baiduDevPid);
+        }
+        return L"Baidu Cloud / " + model;
+    }
+    if (config.asrBackend == L"mimo") {
+        const std::wstring model = config.mimoModel.empty()
+            ? L"mimo-v2.5-asr"
+            : config.mimoModel;
+        return L"MiMo ASR / " + model;
+    }
+    if (config.asrBackend == L"mai") {
+        const std::wstring model = (config.maiApiProvider == L"azure")
+            ? L"Azure Fast Transcription"
+            : L"OpenRouter";
+        return L"Microsoft MAI Transcribe 2 / " + model;
+    }
+    if (config.asrBackend == L"doubao_ime") {
+        return L"Doubao IME";
+    }
+    if (config.asrBackend == L"qwen_free") {
+        return L"Qwen IME (Free)";
+    }
+    if (config.asrBackend == L"none") {
+        return L"None";
+    }
+    if (!config.asrBackend.empty() && config.asrBackend != L"local") {
+        return config.asrBackend;
+    }
+    return L"Local / " + ModelDisplayName(config.modelId);
 }
 
 const char* AsrBackendDebugName(const std::wstring& asrBackend) {

@@ -247,6 +247,7 @@ add_test(NAME audio_diagnostics_test COMMAND audio_diagnostics_test)
 add_executable(asr_json_protocol_test
     tests/asr_json_protocol_test.cpp
     src/audio/audio_diagnostics.cpp
+    src/asr/asr_result.cpp
     src/asr/cloud_http_common.cpp
     src/asr/mai_transcribe.cpp
     src/core/config_registry.cpp

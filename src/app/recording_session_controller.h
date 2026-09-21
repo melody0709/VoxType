@@ -33,7 +33,10 @@ std::unique_ptr<IStreamingAsrSession> TakeActiveStreamingSession();
 bool HasActiveStreamingSession();
 void AbortAndResetActiveStreamingSession();
 void ActivateStreamingSession(std::unique_ptr<IStreamingAsrSession> session, bool useVadTrimmer);
-void StartStreamingWatchdog(const wchar_t* listeningText);
+void StartStreamingWatchdog(const std::wstring& listeningText);
+inline void StartStreamingWatchdog(const wchar_t* listeningText) {
+    StartStreamingWatchdog(listeningText ? std::wstring(listeningText) : std::wstring());
+}
 
 void ResetStreamingVadTrimmerState();
 bool StartStreamingVadTrimmerForCloud(const Config& config, const wchar_t* debugPrefix, bool markReady = true);

@@ -15,6 +15,8 @@
 #include "baidu_asr.h"       // ExtractJsonInt / ExtractBaiduResultText
 #include "mai_transcribe.h"
 #include "volcengine_asr.h"  // BuildExtraParamsJson
+#include "asr_result.h"
+#include "path_service.h"
 
 // 离线测试桩：不链接真实日志实现（其依赖 globals.h → sherpa-onnx 等重头文件），
 // 本测试只验证协议解析行为，日志调用直接吞掉。
@@ -773,6 +775,145 @@ int wmain() {
         // 11. FormatVocabularyJson CRLF verification
         std::string formatted = vocabulary_manager::FormatVocabularyJson(volcEntries, true);
         CHECK(formatted.find("\r\n") != std::string::npos, "format vocab uses crlf");
+    }
+
+    // 12. Scheme A: AsrBackendDisplayName hierarchical (Provider / Model) tests
+    {
+        // 1. Local
+        {
+            Config cfg;
+            cfg.asrBackend = L"local";
+            cfg.modelId = L"firered_ctc";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / FireRedASR2 CTC", "local firered_ctc");
+            cfg.modelId = L"firered_aed";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / FireRedASR2 AED", "local firered_aed");
+            cfg.modelId = L"sensevoice";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / SenseVoiceSmall", "local sensevoice");
+            cfg.modelId = L"sense_voice";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / SenseVoiceSmall", "local sense_voice alias");
+            cfg.modelId = L"";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / FireRedASR2 CTC", "local empty modelId default");
+            cfg.modelId = L"custom_onnx_model";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / custom_onnx_model", "local custom modelId preserved");
+            cfg.asrBackend = L"";
+            cfg.modelId = L"firered_ctc";
+            CHECK(AsrBackendDisplayName(cfg) == L"Local / FireRedASR2 CTC", "empty asrBackend default");
+
+            // ModelIndex / ModelIdFromIndex / DefaultModelDir consistency
+            CHECK(ModelIndex(L"firered_ctc") == 0, "model index firered_ctc");
+            CHECK(ModelIndex(L"firered_aed") == 1, "model index firered_aed");
+            CHECK(ModelIndex(L"sensevoice") == 2, "model index sensevoice");
+            CHECK(ModelIndex(L"sense_voice") == 2, "model index sense_voice alias");
+            CHECK(ModelIndex(L"") == 0, "model index empty");
+            CHECK(ModelIndex(L"custom_model") == 0, "model index custom");
+
+            CHECK(ModelIdFromIndex(0) == L"firered_ctc", "model id from index 0");
+            CHECK(ModelIdFromIndex(1) == L"firered_aed", "model id from index 1");
+            CHECK(ModelIdFromIndex(2) == L"sensevoice", "model id from index 2");
+            CHECK(ModelIdFromIndex(99) == L"firered_ctc", "model id from index out of range");
+
+            CHECK(DefaultModelDir(L"sense_voice") == DefaultModelDir(L"sensevoice"), "default model dir sense_voice alias matches");
+        }
+        // 2. Qwen ASR
+        {
+            Config cfg;
+            cfg.asrBackend = L"qwen";
+            cfg.qwenModel = L"qwen-audio-3.0-asr-flash-streaming";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.0-asr-flash-streaming", "qwen flash streaming");
+            cfg.qwenModel = L"qwen-audio-3.0-asr-flash";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.0-asr-flash", "qwen audio flash");
+            cfg.qwenModel = L"qwen3-asr-flash-realtime";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen3-asr-flash-realtime", "qwen realtime");
+            cfg.qwenModel = L"";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.0-asr-flash-streaming", "qwen empty default");
+            cfg.qwenModel = L"qwen-audio-turbo";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-turbo", "qwen custom model");
+        }
+        // 3. Volcano Engine
+        {
+            Config cfg;
+            cfg.asrBackend = L"volcengine";
+            cfg.volcResourceId = L"volc.seedasr.sauc.duration";
+            CHECK(AsrBackendDisplayName(cfg) == L"Volcano Engine / Seed-ASR 2.0 (duration)", "volc seedasr duration");
+            cfg.volcResourceId = L"volc.seedasr.sauc.concurrent";
+            CHECK(AsrBackendDisplayName(cfg) == L"Volcano Engine / Seed-ASR 2.0 (concurrent)", "volc seedasr concurrent");
+            cfg.volcResourceId = L"volc.bigasr.sauc.duration";
+            CHECK(AsrBackendDisplayName(cfg) == L"Volcano Engine / BigASR 1.0 (duration)", "volc bigasr duration");
+            cfg.volcResourceId = L"volc.bigasr.sauc.concurrent";
+            CHECK(AsrBackendDisplayName(cfg) == L"Volcano Engine / BigASR 1.0 (concurrent)", "volc bigasr concurrent");
+            cfg.volcResourceId = L"";
+            CHECK(AsrBackendDisplayName(cfg) == L"Volcano Engine / Seed-ASR 2.0 (duration)", "volc empty default");
+            cfg.volcResourceId = L"volc.custom.model";
+            CHECK(AsrBackendDisplayName(cfg) == L"Volcano Engine / volc.custom.model", "volc custom model");
+        }
+        // 4. Baidu Cloud
+        {
+            Config cfg;
+            cfg.asrBackend = L"baidu";
+            cfg.baiduDevPid = 1537;
+            CHECK(AsrBackendDisplayName(cfg) == L"Baidu Cloud / Mandarin (1537)", "baidu mandarin 1537");
+            cfg.baiduDevPid = 0;
+            CHECK(AsrBackendDisplayName(cfg) == L"Baidu Cloud / Mandarin (1537)", "baidu 0 default");
+            cfg.baiduDevPid = 1737;
+            CHECK(AsrBackendDisplayName(cfg) == L"Baidu Cloud / English (1737)", "baidu english 1737");
+            cfg.baiduDevPid = 1637;
+            CHECK(AsrBackendDisplayName(cfg) == L"Baidu Cloud / Cantonese (1637)", "baidu cantonese 1637");
+            cfg.baiduDevPid = 1837;
+            CHECK(AsrBackendDisplayName(cfg) == L"Baidu Cloud / Sichuanese (1837)", "baidu sichuanese 1837");
+            cfg.baiduDevPid = 1536;
+            CHECK(AsrBackendDisplayName(cfg) == L"Baidu Cloud / DevPid (1536)", "baidu custom devpid");
+        }
+        // 5. MiMo ASR
+        {
+            Config cfg;
+            cfg.asrBackend = L"mimo";
+            cfg.mimoModel = L"mimo-v2.5-asr";
+            CHECK(AsrBackendDisplayName(cfg) == L"MiMo ASR / mimo-v2.5-asr", "mimo default model");
+            cfg.mimoModel = L"";
+            CHECK(AsrBackendDisplayName(cfg) == L"MiMo ASR / mimo-v2.5-asr", "mimo empty default");
+            cfg.mimoModel = L"mimo-v3-pro";
+            CHECK(AsrBackendDisplayName(cfg) == L"MiMo ASR / mimo-v3-pro", "mimo custom model");
+        }
+        // 6. MAI
+        {
+            Config cfg;
+            cfg.asrBackend = L"mai";
+            cfg.maiApiProvider = L"openrouter";
+            CHECK(AsrBackendDisplayName(cfg) == L"Microsoft MAI Transcribe 2 / OpenRouter", "mai openrouter");
+            cfg.maiApiProvider = L"azure";
+            CHECK(AsrBackendDisplayName(cfg) == L"Microsoft MAI Transcribe 2 / Azure Fast Transcription", "mai azure");
+            cfg.maiApiProvider = L"";
+            CHECK(AsrBackendDisplayName(cfg) == L"Microsoft MAI Transcribe 2 / OpenRouter", "mai empty default");
+        }
+        // 7. Single-level backends
+        {
+            Config cfg;
+            cfg.asrBackend = L"doubao_ime";
+            CHECK(AsrBackendDisplayName(cfg) == L"Doubao IME", "doubao_ime single-level");
+            cfg.asrBackend = L"qwen_free";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen IME (Free)", "qwen_free single-level");
+        }
+        // 8. None & Fallback integration
+        {
+            Config cfg;
+            cfg.asrBackend = L"none";
+            CHECK(AsrBackendDisplayName(cfg) == L"None", "none backend");
+
+            Config primary;
+            primary.asrBackend = L"qwen";
+            primary.qwenModel = L"qwen-audio-3.0-asr-flash-streaming";
+            primary.fallbackAsrBackend = L"local";
+            primary.modelId = L"firered_ctc";
+            CHECK(AsrBackendDisplayName(primary) == L"Qwen ASR / qwen-audio-3.0-asr-flash-streaming", "primary qwen");
+
+            Config fallback = BuildFallbackConfig(primary);
+            CHECK(AsrBackendDisplayName(fallback) == L"Local / FireRedASR2 CTC", "fallback local scheme A");
+
+            primary.fallbackAsrBackend = L"baidu";
+            primary.baiduDevPid = 1537;
+            fallback = BuildFallbackConfig(primary);
+            CHECK(AsrBackendDisplayName(fallback) == L"Baidu Cloud / Mandarin (1537)", "fallback baidu scheme A");
+        }
     }
 
     if (g_failures == 0) {

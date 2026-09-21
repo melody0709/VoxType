@@ -2,6 +2,33 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.5 (2026-09-21)
+
+### 新增功能
+
+- **HUD 全流程 2 级具体 ASR 模型层级展示（方案 A）**：
+  - 全面升级 HUD 状态反馈，在按键录音中（Listening）、实时流式转写首行状态（Partial Status）、松开按键识别中（Recognizing）及自动降级容灾（Fallback）四大阶段，展示具体的两级模型名称（`Provider / Model`）。
+  - **千问 ASR**：动态精确显示实际激活模型（如 `Qwen ASR / qwen-audio-3.0-asr-flash-streaming`、`Qwen ASR / qwen-audio-3.0-asr-flash`、`Qwen ASR / qwen3-asr-flash-realtime` 或自定义模型名），彻底消除以往无论选何模型均只显示 `Qwen ASR` 的黑盒盲区。
+  - **火山引擎 (豆包)**：自动解析资源 ID 为易读模型名（`Volcano Engine / Seed-ASR 2.0 (duration)`、`Volcano Engine / BigASR 1.0 (concurrent)` 或自定义 Resource ID）。
+  - **Local (本地离线)**：规范呈现为 `Local / FireRedASR2 CTC`、`Local / FireRedASR2 AED`、`Local / SenseVoiceSmall`。
+  - **百度智能云**：自动映射当前语言模型与 DevPid（`Baidu Cloud / Mandarin (1537)`、`Baidu Cloud / English (1737)`、`Baidu Cloud / Cantonese (1637)`、`Baidu Cloud / Sichuanese (1837)` 等）。
+  - **小米 MiMo 与微软 MAI**：精确显示模型及通道变体（`MiMo ASR / mimo-v2.5-asr`、`Microsoft MAI Transcribe 2 / Azure Fast Transcription` 或 `OpenRouter`）。
+  - **单模型通道策略**：针对逆向协议通道（`Doubao IME`、`Qwen IME (Free)`）保持单级清爽呈现，不产生冗余多余后缀。
+  - **容灾降级透明度**：触发 Fallback 时精确显示降级目标模型（如 `Fallback... Local / FireRedASR2 CTC` 及 `Fallback failed: ...`）。
+
+### 修复与稳定性
+
+- **本地模型别名归一化与设置联动修复**：
+  - 彻底解决设置面板 `IDC_MODEL` 保存 `sense_voice`（带下划线）与底层引擎 `sensevoice`（无下划线）不一致导致的模型加载匹配失败、目录解析异常及面板重置问题。
+  - 移除 `tab_recognition.cpp` 匿名命名空间中重复遮蔽的 `ModelIndex` 与 `ModelIdFromIndex`，统一委托给 `path_service.h` 规范定义。
+- **流式 HUD 回调线程安全加固**：
+  - 将 `StreamingPartialHudCallbackContext` 中的原始字符串指针升级为自带内存管理的 `std::wstring statusLine`，并引入 `std::mutex` 互斥保护，杜绝 UI 主线程与后台 WebSocket 回调线程之间的跨线程读写竞态。
+
+### 测试
+
+- 在 `asr_json_protocol_test.cpp` 中新增 20+ 组层级命名、别名映射、默认回退与降级透传专项回归断言。
+- 17 项机械架构守卫（`tools/check_architecture.ps1`）全部通过。
+
 ## v0.10.4 (2026-09-20)
 
 ### 新增功能
