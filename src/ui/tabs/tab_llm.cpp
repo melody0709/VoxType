@@ -260,6 +260,7 @@ void TabLlm::LoadControls(HWND parent, const Config& cfg) {
     if (m_currentPrompt.empty()) {
         m_currentPrompt = llm::kPromptPresets[0].prompt;
     }
+    m_currentPromptPresetId = cfg.llmPromptPreset;
 
     HWND presetCombo = GetDlgItem(parent, IDC_LLM_PRESET_COMBO);
     if (presetCombo) {
@@ -269,13 +270,8 @@ void TabLlm::LoadControls(HWND parent, const Config& cfg) {
         }
         ComboBox_AddString(presetCombo, L"Custom");
 
-        int matchedPreset = -1;
-        for (int i = 0; i < llm::kPromptPresetCount; ++i) {
-            if (m_currentPrompt == llm::kPromptPresets[i].prompt) {
-                matchedPreset = i;
-                break;
-            }
-        }
+        const int matchedPreset =
+            llm::ResolvePromptPresetIndex(m_currentPrompt, m_currentPromptPresetId);
         if (matchedPreset >= 0) {
             ComboBox_SetCurSel(presetCombo, matchedPreset);
             m_customPromptBackup.clear();
@@ -295,7 +291,9 @@ void TabLlm::SaveControls(HWND parent, Config& cfg) {
     StoreVisibleProvider(parent, cfg);
     cfg.enableLlmDebug = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_DEBUG)) == BST_CHECKED);
     cfg.llmPrompt = m_currentPrompt;
-    cfg.llmPromptPreset = llm::PromptPresetIdForText(m_currentPrompt);
+    cfg.llmPromptPreset = m_currentPromptPresetId.empty()
+        ? llm::PromptPresetIdForText(m_currentPrompt)
+        : m_currentPromptPresetId;
     cfg.llmPromptPresetVersion = llm::kPromptPresetVersion;
 }
 
@@ -341,29 +339,28 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
                     m_customPromptBackup = m_currentPrompt;
                 }
                 m_currentPrompt = llm::kPromptPresets[sel].prompt;
+                m_currentPromptPresetId = llm::kPromptPresets[sel].id;
             } else if (sel == llm::kPromptPresetCount) {
                 if (m_customPromptBackup.empty()) {
                     m_customPromptBackup = m_currentPrompt;
                 } else {
                     m_currentPrompt = m_customPromptBackup;
                 }
+                m_currentPromptPresetId = llm::kPromptPresetCustomId;
             }
             return true;
         }
         return false;
     case IDC_LLM_MANAGE_PROMPT: {
         std::wstring prompt = m_currentPrompt;
-        if (ShowPromptManageDialog(parent, prompt, &m_customPromptBackup)) {
+        std::wstring presetId = m_currentPromptPresetId;
+        if (ShowPromptManageDialog(parent, prompt, &m_customPromptBackup, &presetId)) {
             m_currentPrompt = prompt;
+            m_currentPromptPresetId = presetId;
             HWND combo = GetDlgItem(parent, IDC_LLM_PRESET_COMBO);
             if (combo) {
-                int matched = -1;
-                for (int i = 0; i < llm::kPromptPresetCount; ++i) {
-                    if (m_currentPrompt == llm::kPromptPresets[i].prompt) {
-                        matched = i;
-                        break;
-                    }
-                }
+                const int matched =
+                    llm::ResolvePromptPresetIndex(m_currentPrompt, m_currentPromptPresetId);
                 if (matched >= 0) {
                     ComboBox_SetCurSel(combo, matched);
                 } else {

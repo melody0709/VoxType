@@ -253,6 +253,15 @@ int main() {
                    llm::PromptPresetIdForText(L"hand written prompt") == L"custom",
                "prompt text maps back to its preset id");
 
+        Expect(llm::ResolvePromptPresetIndex(llm::kPresetPolish, L"polish") == 2 &&
+                   llm::ResolvePromptPresetIndex(L"anything", L"deep_fix") == 1,
+               "a stored preset id takes precedence over the prompt text");
+        Expect(llm::ResolvePromptPresetIndex(L"anything", L"custom") == -1 &&
+                   llm::ResolvePromptPresetIndex(L"hand written", L"") == -1,
+               "custom and unrecognised prompts resolve to no built-in preset");
+        Expect(llm::ResolvePromptPresetIndex(llm::kPresetBasicFix, L"") == 0,
+               "a configuration without a preset id falls back to matching text");
+
         Expect(std::wstring(llm::kLegacyPresetTexts[1]) ==
                    L"语音识别纠错助手。修正ASR错误，不改写润色。\n"
                    L"可修正：同音错字（根据语境）、英文术语大小写、数字规范化、标点、语法错误。\n"

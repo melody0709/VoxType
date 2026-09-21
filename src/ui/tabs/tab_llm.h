@@ -27,6 +27,7 @@ private:
     std::vector<HWND> m_controls;
     bool m_keyVisible = false;
     std::wstring m_currentPrompt;
+    std::wstring m_currentPromptPresetId;
     std::wstring m_customPromptBackup;
 };
 

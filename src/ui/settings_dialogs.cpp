@@ -868,6 +868,13 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
     return DefWindowProcW(hDlg, msg, wParam, lParam);
 }
 
+// Names a built-in preset together with the version it is currently at, so a
+// user whose saved prompt was pinned to Custom can see the built-in text change.
+std::wstring PromptPresetVersionLabel(int index) {
+    return std::wstring(llm::kPromptPresets[index].name) + L" (v" +
+           std::to_wstring(llm::kPromptPresetVersion) + L")";
+}
+
 void LayoutPromptManageDlg(HWND hDlg) {
     const int margin = S(UiStyle::PromptDlgMarginX);
     const int labelW = S(UiStyle::PromptDlgPresetLabelW);
@@ -942,18 +949,14 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
 
         int matchedPreset = -1;
         if (data) {
-            for (int i = 0; i < llm::kPromptPresetCount; ++i) {
-                if (data->prompt == llm::kPromptPresets[i].prompt) {
-                    matchedPreset = i;
-                    break;
-                }
-            }
+            matchedPreset = llm::ResolvePromptPresetIndex(data->prompt, data->presetId);
         }
 
         if (matchedPreset >= 0) {
             ComboBox_SetCurSel(presetCombo, matchedPreset);
-            SetWindowTextW(presetDesc, llm::kPromptPresets[matchedPreset].description);
+            SetWindowTextW(presetDesc, PromptPresetVersionLabel(matchedPreset).c_str());
             if (data) {
+                data->presetId = llm::kPromptPresets[matchedPreset].id;
                 SetWindowTextW(edit, data->prompt.c_str());
                 if (data->customBackup.empty()) {
                     data->customBackup = data->prompt.empty() ? llm::kPromptPresets[0].prompt : data->prompt;
@@ -964,6 +967,7 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
             ComboBox_SetCurSel(presetCombo, llm::kPromptPresetCount);
             SetWindowTextW(presetDesc, L"Custom prompt");
             if (data) {
+                data->presetId = llm::kPromptPresetCustomId;
                 SetWindowTextW(edit, data->prompt.c_str());
                 data->customBackup = data->prompt;
             }
@@ -1039,7 +1043,8 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
                     data->customBackup = text;
                 }
                 SetWindowTextW(edit, llm::kPromptPresets[sel].prompt);
-                SetWindowTextW(desc, llm::kPromptPresets[sel].description);
+                SetWindowTextW(desc, PromptPresetVersionLabel(sel).c_str());
+                if (data) data->presetId = llm::kPromptPresets[sel].id;
                 SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
             } else if (sel == llm::kPromptPresetCount) {
                 if (data) {
@@ -1047,6 +1052,7 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
                         data->customBackup = data->prompt.empty() ? llm::kPromptPresets[0].prompt : data->prompt;
                     }
                     SetWindowTextW(edit, data->customBackup.c_str());
+                    data->presetId = llm::kPromptPresetCustomId;
                 }
                 SetWindowTextW(desc, L"Custom prompt");
                 SendMessageW(edit, EM_SETREADONLY, FALSE, 0);
@@ -1067,7 +1073,8 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
             }
             ComboBox_SetCurSel(combo, 0);
             SetWindowTextW(edit, llm::kPromptPresets[0].prompt);
-            SetWindowTextW(desc, llm::kPromptPresets[0].description);
+            SetWindowTextW(desc, PromptPresetVersionLabel(0).c_str());
+            if (data) data->presetId = llm::kPromptPresets[0].id;
             SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
             SetFocus(edit);
             return 0;
@@ -1213,7 +1220,8 @@ bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvan
     return data.ok;
 }
 
-bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* customBackup) {
+bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* customBackup,
+                            std::wstring* presetId) {
     HINSTANCE hInst = GetParentInstance(parent);
     static bool registered = false;
     static HBRUSH s_dialogBgBrush = CreateSolidBrush(kBgColor);
@@ -1231,6 +1239,7 @@ bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* 
 
     PromptManageDlgData data;
     data.prompt = outPrompt;
+    data.presetId = presetId ? *presetId : llm::PromptPresetIdForText(outPrompt);
     if (customBackup && !customBackup->empty()) {
         data.customBackup = *customBackup;
     }
@@ -1249,6 +1258,9 @@ bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* 
         outPrompt = data.prompt;
         if (customBackup && !data.customBackup.empty()) {
             *customBackup = data.customBackup;
+        }
+        if (presetId) {
+            *presetId = data.presetId;
         }
         return true;
     }

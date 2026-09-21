@@ -110,15 +110,14 @@ struct PromptPreset {
     const wchar_t* id;
     const wchar_t* name;
     const wchar_t* prompt;
-    const wchar_t* description;
 };
 
 constexpr wchar_t kPromptPresetCustomId[] = L"custom";
 
 constexpr PromptPreset kPromptPresets[] = {
-    {L"basic_fix", L"Basic Fix", kPresetBasicFix, L"Fix homophones, terms, numbers, and add missing punctuation"},
-    {L"deep_fix",  L"Deep Fix",  kPresetDeepFix,  L"Fix typos, terms, grammar, punctuation, and normalize numbers"},
-    {L"polish",    L"Polish",    kPresetPolish,   L"Fix errors and polish expression while preserving original meaning"},
+    {L"basic_fix", L"Basic Fix", kPresetBasicFix},
+    {L"deep_fix",  L"Deep Fix",  kPresetDeepFix},
+    {L"polish",    L"Polish",    kPresetPolish},
 };
 constexpr int kPromptPresetCount = sizeof(kPromptPresets) / sizeof(kPromptPresets[0]);
 
@@ -149,11 +148,28 @@ inline int PromptPresetIndexById(std::wstring_view id) {
 
 // Maps a stored prompt back to the preset it reproduces, so a saved
 // configuration always carries an id consistent with its text.
-inline std::wstring PromptPresetIdForText(const std::wstring& prompt) {
+inline int PromptPresetIndexForText(const std::wstring& prompt) {
     for (int i = 0; i < kPromptPresetCount; ++i) {
-        if (prompt == kPromptPresets[i].prompt) return kPromptPresets[i].id;
+        if (prompt == kPromptPresets[i].prompt) return i;
     }
-    return kPromptPresetCustomId;
+    return -1;
+}
+
+inline std::wstring PromptPresetIdForText(const std::wstring& prompt) {
+    const int index = PromptPresetIndexForText(prompt);
+    return index >= 0 ? std::wstring(kPromptPresets[index].id)
+                      : std::wstring(kPromptPresetCustomId);
+}
+
+// Resolves which built-in preset a saved configuration represents. The stored
+// id wins because it is what the user actually chose; the prompt text is only
+// consulted for configurations written before the id existed.
+inline int ResolvePromptPresetIndex(const std::wstring& prompt,
+                                    const std::wstring& presetId) {
+    if (!presetId.empty()) {
+        return PromptPresetIndexById(presetId);
+    }
+    return PromptPresetIndexForText(prompt);
 }
 
 struct PromptConfigMigration {

@@ -51,11 +51,16 @@ constexpr int IDC_PROMPT_DLG_LABEL = 3014;
 
 struct PromptManageDlgData {
     std::wstring prompt;
+    std::wstring presetId;
     std::wstring customBackup;
     bool ok = false;
 };
 
-bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* customBackup = nullptr);
+// presetId, when given, is the caller's current preset id and is updated to the
+// id of the preset the dialog was accepted with.
+bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt,
+                            std::wstring* customBackup = nullptr,
+                            std::wstring* presetId = nullptr);
 
 struct QwenAdvancedDialogData {
     bool streaming = false;
