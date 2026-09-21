@@ -46,7 +46,8 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **`std::print` / `std::println` 仅限离线测试工具与构建期脚本**。`VoxType` 是 `add_executable(... WIN32)` 子系统程序，**没有控制台**，stdout 无处可见；应用内日志继续走文件日志与 `DebugModeOpenConsole()` 调试通道。
 - **C++20/C++23 字符串字面量规范**：因标准中 `char8_t` 为独立类型，在 MSVC `/utf-8` 编译选项下，与 `std::string` 交互直接使用常规字符串字面量 `"..."`，避免使用 `u8"..."` 导致无法隐式转换。
 - C++ 新增依赖同步更新：`#pragma comment(lib)` + `CMakeLists.txt`；若新增运行时 DLL 或资源，还要更新 `cmake/VoxTypeRuntime.cmake` 的安装清单。
-- **版本号只改 `src/app/resource.h` 的 APP_VERSION_MAJOR/MINOR/PATCH/BUILD**，再同步 `README.md` 版本和 `CHANGELOG.md` 记录。`src/app/main.cpp` / `src/app/resources.rc` 用宏自动派生。
+- **版本号只改 `src/app/resource.h` 的 APP_VERSION_MAJOR/MINOR/PATCH/BUILD**，再同步 `README.md` **与 `doc/README_zh.md`** 的版本行，以及 `CHANGELOG.md` **与 `doc/CHANGELOG_zh.md`** 的记录。**两份 README、两份 CHANGELOG 缺一不可**（v0.10.8 曾漏掉 `doc/README_zh.md`，把中英版本号写得不一致）。`src/app/main.cpp` / `src/app/resources.rc` 用宏自动派生。
+- **发布收尾必须打附注 tag**：`git tag -a vX.Y.Z -m "Release vX.Y.Z: <一句话摘要>"`，落在那条带版本号与 CHANGELOG 的提交上。v0.10.0~v0.10.7 每个发布都有 tag，`git tag -l` 是判断"哪一版真的发过"的唯一依据——只 bump 不打 tag 会让下一次改动的起点无从判断。
 - sherpa-onnx `cxx-api.h` **含非 ASCII 字符串字面量**（不只是注释），编译必须 `/utf-8`：缺此项不是告警而是**硬错误**（`error C2001: newline in constant` 及连锁的 C2146/C2061/C2059，实测 MSVC 14.44.35207 + SDK 10.0.26100.0）。
 - **每个 `add_library` / `add_executable` 都必须继承 `/utf-8` 与 `/EHsc`**：新拆出的静态库若只写在 `VoxType` 上就会编译失败。统一走 `voxtype_build_flags` INTERFACE 目标（见重构方案 §3）。守卫对此硬 FAIL。
 - **`add_library(X STATIC/SHARED/MODULE)` 必须至少声明一个源文件**，否则 CMake 在 generate 阶段直接失败（`No SOURCES given to target`）。需要"先占位后填内容"时用 `INTERFACE`。
