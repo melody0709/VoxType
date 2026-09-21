@@ -291,12 +291,26 @@ int main() {
         Expect(llm::ResolvePromptPresetIndex(llm::kPresetBasicFix, L"") == 0,
                "a configuration without a preset id falls back to matching text");
 
+        // Pinned verbatim: these are the texts actually stored by shipped
+        // configurations, so editing the recognition table breaks real users.
+        Expect(std::wstring(llm::kLegacyPresetTexts[0]) ==
+                   L"语音识别纠错助手。修正ASR明显错误，不改写润色。\n"
+                   L"可修正：明确的同音错字（根据语境）、英文术语大小写、数字规范化、标点。\n"
+                   L"禁止：改写、增删、改变语气。无错误则原样输出。\n"
+                   L"只输出修正后文本。",
+               "v1 Basic Fix recognition text still matches the stored configuration");
         Expect(std::wstring(llm::kLegacyPresetTexts[1]) ==
                    L"语音识别纠错助手。修正ASR错误，不改写润色。\n"
                    L"可修正：同音错字（根据语境）、英文术语大小写、数字规范化、标点、语法错误。\n"
                    L"禁止：改写、增删、改变语气。无错误则原样输出。\n"
                    L"只输出修正后文本。",
                "v1 Deep Fix recognition text still matches the shipped configuration");
+        Expect(std::wstring(llm::kLegacyPresetTexts[2]) ==
+                   L"语音识别纠错助手。修正ASR错误并润色表达。\n"
+                   L"可修正：同音错字、英文术语大小写、数字、标点，保留中英文混合,并润色语句。\n"
+                   L"保持原意和语气。无错误则原样输出。\n"
+                   L"只输出修正后文本。",
+               "v1 Polish recognition text still matches the shipped configuration");
         Expect(std::wstring(llm::kLegacyPresetTexts[1]) !=
                    std::wstring(llm::kPresetDeepFix),
                "v2 Deep Fix is a different text than the recognised v1 text");
