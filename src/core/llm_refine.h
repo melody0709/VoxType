@@ -965,10 +965,54 @@ inline RequestResult SendRequestRaw(const RequestConfig& cfg,
     return res;
 }
 
-inline std::wstring Refine(const std::wstring& asrText, const RequestConfig& cfg) {
+// Words a chat assistant opens a reply with. Transcriptions legitimately begin
+// with the same words ("嗯，这个项目好吗？"), so a refined text that opens with
+// one is only evidence of a reply when the transcript does not.
+constexpr const wchar_t* kAssistantReplyOpeners[] = {
+    L"好的", L"嗯", L"是的", L"对", L"当然", L"抱歉",
+    L"我明白", L"没问题", L"收到", L"了解", L"可以", L"请提供",
+};
+
+inline bool StartsWithAssistantReplyOpener(const std::wstring& text) {
+    for (const wchar_t* opener : kAssistantReplyOpeners) {
+        if (text.starts_with(opener)) return true;
+    }
+    return false;
+}
+
+// Detects a model that answered the transcript instead of correcting it.
+//
+// This is deliberately a partial net: a reply opening with anything else (for
+// example "这个问题…") still gets through, so completeness rests on the prompt
+// declaring the transcript as data. It only catches the opener shape that
+// actually occurs in practice.
+inline bool IsLikelyAssistantReply(const std::wstring& asrText, const std::wstring& llmText) {
+    return StartsWithAssistantReplyOpener(llmText) &&
+           !StartsWithAssistantReplyOpener(asrText);
+}
+
+struct RefineResult {
+    // Text to insert. Falls back to the transcript when the model replied
+    // instead of correcting, because dictating a reply is worse than dictating
+    // an uncorrected transcript.
+    std::wstring text;
+    // What the model produced before the guard, or the transcript itself when
+    // the request did not produce anything. Kept so the debug log records what
+    // the model actually said even when the guard discarded it.
+    std::wstring rawLlmText;
+    bool guardRejected = false;
+};
+
+inline RefineResult Refine(const std::wstring& asrText, const RequestConfig& cfg) {
     std::string body = BuildRequestBody(asrText, cfg);
     RequestResult res = SendRequestRaw(cfg, body, kRefineTimeouts);
-    return (res.success && !res.responseText.empty()) ? res.responseText : asrText;
+
+    RefineResult result;
+    const bool usable = res.success && !res.responseText.empty();
+    result.rawLlmText = usable ? res.responseText : asrText;
+    result.guardRejected = usable && IsLikelyAssistantReply(asrText, result.rawLlmText);
+    result.text = result.guardRejected ? asrText : result.rawLlmText;
+    return result;
 }
 
 struct TestResult {

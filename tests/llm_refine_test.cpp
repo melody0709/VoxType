@@ -329,6 +329,38 @@ int main() {
                "a current preset version is left alone");
     }
 
+    // Assistant-reply guard: it must catch a model that answered the transcript
+    // and must not touch a transcript that merely opens with the same words.
+    {
+        Expect(llm::IsLikelyAssistantReply(
+                   L"你不要修改或者生成什么审核报告，直接在对话框给我说就行了。",
+                   L"好的，我明白了。之后直接在这里说，不生成审核报告。"),
+               "a reply to a command-shaped transcript is detected");
+        Expect(llm::IsLikelyAssistantReply(L"", L"没问题，我来处理。"),
+               "an empty transcript cannot excuse a reply opener");
+        Expect(!llm::IsLikelyAssistantReply(L"嗯，这个项目好吗？", L"嗯，这个项目好吗。"),
+               "a transcript opening with a reply word is not mistaken for a reply");
+        Expect(!llm::IsLikelyAssistantReply(L"帮我写一个排序算法。", L"帮我写一个排序算法。"),
+               "an unchanged transcript is never a reply");
+        Expect(!llm::IsLikelyAssistantReply(L"呃吹", L"区域"),
+               "an ordinary correction is not a reply");
+        Expect(!llm::IsLikelyAssistantReply(L"普通输入", L""),
+               "an empty model output is not a reply");
+
+        Expect(llm::StartsWithAssistantReplyOpener(L"好的，我明白了。") &&
+                   !llm::StartsWithAssistantReplyOpener(L"这个问题") &&
+                   llm::StartsWithAssistantReplyOpener(L"请提供一下"),
+               "reply openers are matched at the start of the text");
+        Expect(!llm::IsLikelyAssistantReply(L"对话记录在哪里？", L"对话记录在哪里。"),
+               "a transcript opening with a reply-word prefix is not a reply");
+        Expect(!llm::IsLikelyAssistantReply(L"对于这个方案，我同意。", L"对于这个方案，我同意。"),
+               "a transcript opening with a single-character opener is not a reply");
+
+        const llm::RefineResult fresh;
+        Expect(fresh.text.empty() && fresh.rawLlmText.empty() && !fresh.guardRejected,
+               "a default refine result reports no guard rejection");
+    }
+
     if (g_failures == 0) {
         std::cout << "LLM refine regression tests passed\n";
     }

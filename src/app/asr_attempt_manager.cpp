@@ -100,16 +100,16 @@ void RefineWithLlmAsync(const AsrFinalMessage& finalMessage) {
     bool debug = config.enableLlmDebug;
     std::thread([asrText, cfg, debug, finalMessage]() {
         HiResTimer tLlm;
-        std::wstring result = llm::Refine(asrText, cfg);
+        llm::RefineResult refined = llm::Refine(asrText, cfg);
         g_llmMs = tLlm.ElapsedMs();
         if (debug) {
-            WriteLlmLog(asrText, result);
+            WriteLlmLog(asrText, refined.rawLlmText);
         }
         auto* msg = new LlmFinalMessage;
         msg->attemptId = finalMessage.attemptId;
         msg->allowCancelledAttempt = finalMessage.allowCancelledAttempt;
         msg->bundledPostProcessApplied = finalMessage.bundledPostProcessApplied;
-        msg->text = result;
+        msg->text = std::move(refined.text);
         msg->rawAsrText = asrText;
         msg->resultConfig = finalMessage.resultConfig;
         msg->usedFallback = finalMessage.usedFallback;
