@@ -61,7 +61,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/core/asr_probe_service.h` / `src/core/asr_probe_service.cpp` | Decoupled ASR connection probe service interface and registration |
 | `src/app/asr_probe_service_impl.h` / `src/app/asr_probe_service_impl.cpp` | ASR probe service implementation connecting probe requests to backend providers |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | Application and models directory path resolution, log/config file path queries |
-| `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | Universal custom vocabulary manager: parsing (JSON/lines), linear weight scaling, and cross-ASR transpilation |
+| `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | Universal custom vocabulary manager: parsing (JSON/lines), linear weight scaling, and transpilation to the Volcano Engine hotword/correct table, the Qwen vocabulary, sherpa hotwords, and the LLM `【用户词表】` system section |
 | `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Direct text injection into active windows via clipboard paste or WM_CHAR character streaming (WeChat) |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | Local sherpa-onnx recognizer, VAD detector, punctuation model lifecycle, preload, DLL availability checks |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | Thread-safe performance latency metrics (VAD, ASR, Punctuation, Cloud API, LLM) |
@@ -89,7 +89,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/app/recording_session_controller.h` / `src/app/recording_session_controller.cpp` | State machine orchestrating recording lifecycle, VAD trimming, and ASR dispatch |
 | `src/app/asr_attempt_manager.h` / `src/app/asr_attempt_manager.cpp` | Dispatches ASR attempts across primary and fallback backends |
 | `src/app/debug_logger.h` / `src/app/debug_logger.cpp` | Application debugging output and console attachment |
-| `src/core/llm_refine.h` | LLM correction module: provider presets/migration, request JSON, endpoint normalization, bounded WinHTTP calls, and OpenAI-compatible response parsing (header-only, `llm::` namespace) |
+| `src/core/llm_refine.h` | LLM correction module: provider presets/migration, versioned prompt presets whose literals must declare the transcript as data rather than an instruction, the `【用户词表】` system section, a partial assistant-reply output guard, request JSON, endpoint normalization, bounded WinHTTP calls, and OpenAI-compatible response parsing (header-only, `llm::` namespace) |
 | `src/asr/baidu_asr.h` | Baidu Cloud ASR module (header-only) |
 | `src/asr/volcengine_asr.h` | Volcengine (豆包) ASR module (header-only, WebSocket) |
 | `src/asr/qwen_asr.h` / `src/asr/qwen_asr.cpp` | Qwen ASR realtime WebSocket client |
@@ -175,8 +175,8 @@ Settings is a standard Win32 window with 5 tabs:
 - `General`: recording hotkey, optional current-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoxType` startup registration, and shared recording diagnostics (`Off` / `Failures only` / `All recordings`) with folder and managed-delete actions.
 - `Recognition`: ASR Backend, optional Fallback backend, model, model directory, threads, VAD, VAD model, and Punctuation (`Disabled` / `Auto punctuate`).
 - `Cloud ASR`: Cloud provider selection and Baidu/Volcengine/Qwen/MiMo/MAI/Doubao IME/Qwen IME Free provider-specific fields.
-- `Vocabulary`: Universal vocabulary management (%APPDATA%\VoxType\vocabulary.json), shared with Qwen and Volcano Engine.
-- `LLM`: Master toggle (`Enable LLM Refinement`), Provider selection (Provider dropdown + [+] / [−]), API Base URL, API Key, Model, Extra Params, Prompt preset selection with modal `Manage...` dialog (spacious multiline System Prompt editor, presets, and reset), Test Connection, and Debug log.
+- `Vocabulary`: Universal vocabulary management (%APPDATA%\VoxType\vocabulary.json), shared with Qwen and Volcano Engine. Each entry is also offered to the LLM refine system prompt as a `【用户词表】` section when `Feed vocabulary to LLM` is on, where it only protects spellings that already appear and never replaces a recognised variant.
+- `LLM`: Master toggle (`Enable LLM Refinement`), Provider selection (Provider dropdown + [+] / [−]), API Base URL, API Key, Model, Extra Params, Prompt preset selection with modal `Manage...` dialog (spacious multiline System Prompt editor, presets labelled with their version and reset), `Feed vocabulary to LLM`, Test Connection, and Debug log. Prompts are recognised by a stored preset id and upgraded when the built-in preset text changes; anything hand-edited is pinned to `Custom`.
 
 When Settings is opened:
 
@@ -431,8 +431,11 @@ compatibility and are normalized to the same value at load/save time.
 
 - `llm_provider`: Currently selected provider name.
 - `llm_providers_json`: JSON string storing each provider's endpoint, api_key (DPAPI encrypted), model, and Extra Params independently.
-- `llm_prompt`: Custom System Prompt (leave empty to use built-in default).
-- `enable_llm_debug`: When enabled, records before/after ASR comparison to `log/llm_refine_YYYYMMDD.log`.
+- `llm_prompt`: System Prompt actually sent. Leave empty to fall back to the built-in default selected by `llm_prompt_preset`.
+- `llm_prompt_preset`: Stable id of the built-in prompt preset the stored `llm_prompt` came from (`basic_fix`, `deep_fix`, `polish`, or `custom`). `custom` is never overwritten; an empty id marks a configuration written before ids existed and is resolved from the prompt text.
+- `llm_prompt_preset_version`: Version of the stored preset. When it lags the built-in `kPromptPresetVersion`, the load path replaces `llm_prompt` with the current preset text so an upgraded build never keeps a stale prompt.
+- `llm_vocabulary_injection`: When enabled (default), the user vocabulary is rendered into a `【用户词表】` section appended to the system prompt, highest weight first and capped at 200 entries. With it off, or with an empty vocabulary, the request body is unchanged.
+- `enable_llm_debug`: When enabled, records before/after ASR comparison to `log/llm_refine_YYYYMMDD.log`. The recorded `[LLM]` line is the model's raw output, so a reply discarded by the output guard stays reviewable.
 - `asr_backend`: Active ASR backend (`local`, `baidu`, `volcengine`, `qwen`, `mimo`, `mai`, `doubao_ime`, or `qwen_free`).
 - `fallback_asr_backend`: Optional serial fallback (`none`, `local`, `baidu`, `qwen`, `mimo`, `mai`, `doubao_ime`, or `qwen_free`); it must differ from `asr_backend`. Volcengine is not a fallback target.
 - `diagnostic_audio_mode`: Shared recording diagnostics policy (`off`, `failures`, or `all`); defaults to `off` and applies to every ASR provider/stage.
