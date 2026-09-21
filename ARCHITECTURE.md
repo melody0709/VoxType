@@ -89,7 +89,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/app/recording_session_controller.h` / `src/app/recording_session_controller.cpp` | State machine orchestrating recording lifecycle, VAD trimming, and ASR dispatch |
 | `src/app/asr_attempt_manager.h` / `src/app/asr_attempt_manager.cpp` | Dispatches ASR attempts across primary and fallback backends |
 | `src/app/debug_logger.h` / `src/app/debug_logger.cpp` | Application debugging output and console attachment |
-| `src/core/llm_refine.h` | LLM correction module: provider presets/migration, versioned prompt presets whose literals must declare the transcript as data rather than an instruction, the `【用户词表】` system section, a partial assistant-reply output guard, request JSON, endpoint normalization, bounded WinHTTP calls, and OpenAI-compatible response parsing (header-only, `llm::` namespace) |
+| `src/core/llm_refine.h` | LLM correction module: provider presets/migration, versioned prompt presets whose literals must declare the transcript as data rather than an instruction and keep `【禁改】` subordinate to `【可改】`, the `【用户词表】` system section, a partial assistant-reply output guard preceded by an echoed data-frame prefix strip, request JSON, endpoint normalization, bounded WinHTTP calls, and OpenAI-compatible response parsing (header-only, `llm::` namespace) |
 | `src/asr/baidu_asr.h` | Baidu Cloud ASR module (header-only) |
 | `src/asr/volcengine_asr.h` | Volcengine (豆包) ASR module (header-only, WebSocket) |
 | `src/asr/qwen_asr.h` / `src/asr/qwen_asr.cpp` | Qwen ASR realtime WebSocket client |

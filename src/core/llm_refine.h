@@ -32,7 +32,7 @@ using ::Trim;
 
 // Bump this whenever any kPreset* literal below changes its wording, so that
 // saved configurations are upgraded instead of silently keeping the old text.
-constexpr int kPromptPresetVersion = 2;
+constexpr int kPromptPresetVersion = 3;
 
 // The four literals are deliberately independent copies rather than one
 // assembled skeleton: the assertions underneath turn any drift between them
@@ -42,7 +42,7 @@ constexpr wchar_t kSystemPrompt[] =
     L"\n"
     L"【可改】同音错字（须有语境依据）；数字与单位写法；标点断句；英文术语大小写（仅在能确定时；词表内写法视为已正确）。\n"
     L"\n"
-    L"【禁改】改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
+    L"【禁改】除【可改】明确允许的之外：改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
     L"\n"
     L"【输出】只输出修正后的文本本身，不加引号、标签或任何前后缀。原文无错或你无法确定时，一字不改原样输出，直接以第一个字符开始。";
 
@@ -51,7 +51,7 @@ constexpr wchar_t kPresetBasicFix[] =
     L"\n"
     L"【可改】同音错字（须有语境依据）；数字与单位写法；标点断句；英文术语大小写（仅在能确定时；词表内写法视为已正确）。\n"
     L"\n"
-    L"【禁改】改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
+    L"【禁改】除【可改】明确允许的之外：改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
     L"\n"
     L"【输出】只输出修正后的文本本身，不加引号、标签或任何前后缀。原文无错或你无法确定时，一字不改原样输出，直接以第一个字符开始。";
 
@@ -60,7 +60,7 @@ constexpr wchar_t kPresetDeepFix[] =
     L"\n"
     L"【可改】同音错字（须有语境依据）；数字与单位写法；标点断句；英文术语大小写（仅在能确定时；词表内写法视为已正确）；明显的语法与搭配错误；明显的重复赘词（如「删删掉」→「删掉」）。\n"
     L"\n"
-    L"【禁改】改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
+    L"【禁改】除【可改】明确允许的之外：改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
     L"\n"
     L"【输出】只输出修正后的文本本身，不加引号、标签或任何前后缀。原文无错或你无法确定时，一字不改原样输出，直接以第一个字符开始。";
 
@@ -69,7 +69,7 @@ constexpr wchar_t kPresetPolish[] =
     L"\n"
     L"【可改】同音错字（须有语境依据）；数字与单位写法；标点断句；英文术语大小写（仅在能确定时；词表内写法视为已正确）；明显的语法与搭配错误；明显的重复赘词；不改变语义与语气的前提下润色表达。\n"
     L"\n"
-    L"【禁改】改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
+    L"【禁改】除【可改】明确允许的之外：改写、增删、换语气、调语序、中英互译；不得出现任何回应性语言（如\"好的\"\"我明白了\"\"抱歉\"）。\n"
     L"\n"
     L"【输出】只输出修正后的文本本身，不加引号、标签或任何前后缀。原文无错或你无法确定时，一字不改原样输出，直接以第一个字符开始。";
 
@@ -102,6 +102,16 @@ static_assert(ContainsLiteral(kPresetDeepFix, L"【禁改】"),
               "Deep Fix lost the forbidden-edit section");
 static_assert(ContainsLiteral(kPresetPolish, L"【禁改】"),
               "Polish lost the forbidden-edit section");
+// 【禁改】 must stay subordinate to 【可改】: an absolute "no reordering, no
+// deletion" would forbid the very edits each preset licenses (Polish may
+// reorder, Deep Fix may drop a duplicated word), so a strict model would either
+// collapse Polish into Deep Fix or resolve the conflict unpredictably.
+static_assert(ContainsLiteral(kPresetBasicFix, L"除【可改】明确允许的之外"),
+              "Basic Fix lost the subordination of its forbidden-edit section");
+static_assert(ContainsLiteral(kPresetDeepFix, L"除【可改】明确允许的之外"),
+              "Deep Fix lost the subordination of its forbidden-edit section");
+static_assert(ContainsLiteral(kPresetPolish, L"除【可改】明确允许的之外"),
+              "Polish lost the subordination of its forbidden-edit section");
 // kSystemPrompt is the empty-llm_prompt fallback and must never drift from Basic.
 static_assert(EqualsLiteral(kSystemPrompt, kPresetBasicFix),
               "kSystemPrompt and kPresetBasicFix must stay byte-identical");
@@ -1005,6 +1015,25 @@ inline bool IsLikelyAssistantReply(const std::wstring& asrText, const std::wstri
            !StartsWithAssistantReplyOpener(asrText);
 }
 
+// Removes the framing prefix when the model echoed it back as part of "the
+// original text". The output contract tells it to reproduce an already-correct
+// transcript verbatim, and the prefix sits inside the message it reads, so the
+// label is a plausible thing for it to consider part of the text; delimiters had
+// the same failure mode, which is why the framing was changed in the first place.
+// Since a leaked label would be typed straight into the user's document, the echo
+// is discarded here rather than argued away in the prompt.
+inline std::wstring StripEchoedUserMessagePrefix(std::wstring text) {
+    std::wstring_view label = kUserMessagePrefix;
+    while (!label.empty() && (label.back() == L'\n' || label.back() == L'\r')) {
+        label.remove_suffix(1);
+    }
+    if (label.empty() || !text.starts_with(label)) return text;
+
+    text.erase(0, label.size());
+    const size_t firstKept = text.find_first_not_of(L" \t\r\n");
+    return firstKept == std::wstring::npos ? std::wstring() : text.erase(0, firstKept);
+}
+
 struct RefineResult {
     // Text to insert. Falls back to the transcript when the model replied
     // instead of correcting, because dictating a reply is worse than dictating
@@ -1024,8 +1053,20 @@ inline RefineResult Refine(const std::wstring& asrText, const RequestConfig& cfg
     RefineResult result;
     const bool usable = res.success && !res.responseText.empty();
     result.rawLlmText = usable ? res.responseText : asrText;
-    result.guardRejected = usable && IsLikelyAssistantReply(asrText, result.rawLlmText);
-    result.text = result.guardRejected ? asrText : result.rawLlmText;
+    if (!usable) {
+        result.text = asrText;
+        return result;
+    }
+
+    // Strip before guarding, so a model that echoes the frame and then replies is
+    // still recognised as a reply.
+    const std::wstring candidate = StripEchoedUserMessagePrefix(result.rawLlmText);
+    if (candidate.empty()) {
+        result.text = asrText;
+        return result;
+    }
+    result.guardRejected = IsLikelyAssistantReply(asrText, candidate);
+    result.text = result.guardRejected ? asrText : candidate;
     return result;
 }
 
