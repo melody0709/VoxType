@@ -190,13 +190,19 @@ flowchart TD
    - Row 2 (Y=168): Model folder + `[Browse...]`
    - Row 3 (Y=212): Threads (`auto (8)`, 1~8)
    - **终止 Y = 250px（余量 +382px）**
-#### 3.2.3 火山引擎（Volcano Engine / 豆包语音）面板完整几何排布表（100% 保留 Hotwords ID / Correct ID）
+#### 3.2.3 火山引擎（Volcano Engine / 豆包语音）与 Qwen 对齐的 Advanced 进阶弹窗架构
 
-##### 1. 现状痛点与重构原则
-原本在 `Cloud ASR` 中，火山引擎平铺了 9 行控件，充斥着生硬的变量名（如 `enable_music_fc`、`end_window_size`），且测试按钮钉在顶部。
-**重构原则**：**100% 完整保留原有所有配置字段**（包括用于绑定火山云端自建词表的 `Hotwords ID`、`Hotwords Name`、`Correct ID`、`Correct Name`），通过紧凑合理的逻辑编排，使界面优雅规整，同时**高度依然完全受控**。
+##### 1. 设计理念转变：主面板极简 + `[Advanced...]` 独立弹窗
+与 Qwen 保持完全一致的架构规范：
+- **主面板（极简高频）**：仅暴露日常使用必须的凭证、模型、模式、语种与通用词表复用，行数直接压缩至 **5 行**；
+- **进阶弹窗（`VolcAdvancedDialog`）**：将低频微调项统一收纳至独立的 680×620 模态对话框，包含：
+  1. **自建专属词表**：`Hotwords ID` / `Hotwords Name`；
+  2. **自建专属纠错表**：`Correct Table ID` / `Correct Table Name`；
+  3. **声学断句与上下文**：`end_window_size`、`force_to_speech_time`、`Dialog context 历史轮数`；
+  4. **协议级开关**：`DDC 语义顺滑`、`极速非流式加速`、`智能音乐过滤`、`智能 POI 过滤`；
+  5. **底层扩展 JSON**：整合原本单独弹出的 `ShowVolcExtraDialog` 文本编辑器，免去多层弹窗。
 
-##### 2. 完整版精炼几何排布表（144 DPI 基准，设计像素）
+##### 2. 主面板精炼几何排布表（144 DPI 基准，设计像素）
 
 | 行号 / 区域 | 控件名称 / 类型 | X 坐标 | Y 坐标 | 宽度 (W) | 高度 (H) | 文本 / 说明 / 优化点 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -205,23 +211,36 @@ flowchart TD
 | **Row 2: 模型** | Model Label / Combo / LogBtn | 42 / 188 / 630 | 168 | 130 / 430 / 120 | 30 / 150 / 34 | Resource ID（SeedASR 时长/并发，BigASR 时长/并发）+ "Open log" |
 | **Row 3: 模式与语种** | ASR Mode Label / Combo | 42 / 188 | 212 | 130 / 200 | 30 / 150 | 模式下拉（大模型非流式 / 大模型异步 / 大模型实时） |
 | | Language Label / Combo | 410 / 490 | 212 | 70 / 240 | 30 / 150 | "Language" 标签 + 语种下拉（默认空=自动，en-US, ja-JP 等） |
-| **Row 4: 词库与上下文** | Context Label | 42 | 256 | 130 | 30 | "Context" 聚合标签 |
-| | Reuse Vocabulary Checkbox | 188 | 256 | 280 | 26 | `[x] Reuse common vocabulary.json` |
-| | History Context Checkbox / Edit | 480 / 640 | 256 | 150 / 44 | 26 / 32 | `[x] Dialog context` + 轮数（默认 3） |
-| **Row 5: 专属热词表** | Hotwords Label / Edit | 42 / 188 | 296 | 130 / 250 | 30 / 32 | **100%保留**：`Hotwords ID` 文本框 |
-| | Hotwords Name Label / Edit | 450 / 510 | 296 | 50 / 240 | 30 / 32 | `Name` 标签 + 热词表名称编辑框 |
-| **Row 6: 专属纠错表** | Correct Label / Edit | 42 / 188 | 340 | 130 / 250 | 30 / 32 | **100%保留**：`Correct ID` 文本框 |
-| | Correct Name Label / Edit | 450 / 510 | 340 | 50 / 240 | 30 / 32 | `Name` 标签 + 自纠错表名称编辑框 |
-| **Row 7: 进阶协议开关** | Protocol Switches (紧凑单行) | 188 | 384 | 各项紧凑 | 26 | `[x] DDC 语义顺滑` (130) + `[x] 极速非流式加速` (140) + `[x] 智能实体过滤` (140) |
-| **Row 8: 操作与高级** | Actions Label | 42 | 424 | 130 | 30 | "Actions" / 留白对齐 |
-| | Edit Extra Params Button | 188 | 420 | 170 | 36 | `[Edit Extra Params...]`（底层微调参数 JSON 编辑） |
-| | **Test Connection Button** | **370** | **420** | **160** | **36** | `[Test Connection]`（就地测试火山引擎连通性） |
-| *Hint* | **单行精炼说明 (Static)** | **188** | **464** | **562** | **20** | `ByteDance Doubao SeedASR/BigASR engine. API keys are locally encrypted via DPAPI.` |
-| **底部终止** | **总高度：Y = 484px** | — | — | — | — | **距离 Footer (632px) 余量：+148px (空间极度宽裕安全)** |
+| **Row 4: 词库与上下文** | Context Label | 42 | 256 | 130 | 30 | "Context & Vocab" 聚合标签 |
+| | Reuse Vocabulary Checkbox | 188 | 256 | 280 | 26 | `[x] Reuse common vocabulary (vocabulary.json)` |
+| | Input Context Checkbox | 480 | 256 | 260 | 26 | `[x] Use focused input field text as context` |
+| **Row 5: 操作与高级** | Actions Label | 42 | 304 | 130 | 30 | "Advanced" / 留白对齐 |
+| | **Advanced Button** | **188** | **300** | **140** | **36** | `[Advanced...]`（打开火山专属进阶配置弹窗） |
+| | **Test Connection Button** | **340** | **300** | **160** | **36** | `[Test Connection]`（就地测试火山引擎连通性） |
+| *Hint* | **单行精炼说明 (Static)** | **188** | **344** | **562** | **20** | `Hotwords, correction tables, DDC, acoustic end-window and JSON overrides.` |
+| **底部终止** | **总高度：Y = 364px** | — | — | — | — | **距离 Footer (632px) 余量：+268px (视觉极度清爽通透)** |
 
-##### 3. 优化核算结论
-- **零功能损失**：`Hotwords ID/Name` 与 `Correct ID/Name` 完整保留在 Row 5 和 Row 6；
-- **高度安全受控**：即使完整保留这两个专属表单行，总高度仅为 **$484\text{px}$**，距离底部分割线（632px）依然拥有 **$148\text{px}$ 的巨大安全余量**，与 Qwen（434px）共同处于高度安全的舒适区间。
+##### 3. `VolcAdvancedDialog` 弹窗架构（对齐 `QwenAdvancedDialog`）
+- **尺寸**：宽 680px，高 620px；
+- **排布分区**：
+  1. **Group 1: 专有云端词表 (Custom Cloud Tables)**：
+     - `Hotwords ID` (240px) + `Name` (200px)
+     - `Correct Table ID` (240px) + `Name` (200px)
+  2. **Group 2: 声学与上下文微调 (Acoustics & Context)**：
+     - `[x] Enable history context` + 轮数编辑框 `[ 3 ]`
+     - `end_window_size`: `[ 800 ]` ms
+     - `force_to_speech_time`: `[ 0 ]` ms
+  3. **Group 3: 协议优化开关 (Switches)**：
+     - `[x] DDC 语义顺滑 (enable_ddc)`
+     - `[x] 极速非流式加速 (enable_nonstream)`
+     - `[x] 智能实体/音乐过滤 (enable_music_fc / enable_poi_fc)`
+  4. **Group 4: 扩展 JSON 参数 (Extra Params JSON)**：
+     - 原生大文本多行输入框，直接编辑自由 JSON 覆盖；
+  5. **底部操作栏**：`[ OK ]` + `[ Cancel ]`。
+
+##### 4. 优化总结
+- **Qwen 与 Volcano 达到极致对称**：主面板结构一模一样（Row 1 Key $\rightarrow$ Row 2 Model $\rightarrow$ Row 3 Mode/Lang $\rightarrow$ Row 4 Context $\rightarrow$ Row 5 Advanced + Test），没有任何违和感；
+- **彻底消灭主面板 9 行平铺的窒息感**，主面板高度直接从原本的 576px 降至 **364px**，空间呼吸感达到极致。
 
 #### 3.2.4 其余 Provider 面板在 Tab 2 中的排布与高度核算
 1. **Local (本地 sherpa-onnx)**：
