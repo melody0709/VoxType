@@ -52,7 +52,7 @@ void ProviderDoubao::CreateControls(HWND parent) {
     ApplyUiFont(doubaoStatus);
     m_controls.push_back(doubaoStatus);
 
-    HWND btnTest = CreateButton(parent, IDC_DOUBAO_IME_TEST, S(500), S(UiStyle::RowInputY(0)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_DOUBAO_IME_TEST, S(500), S(UiStyle::RowInputY(4)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
     m_controls.push_back(btnTest);
 
     HWND btnReset = CreateButton(parent, IDC_DOUBAO_IME_RESET, S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)), S(170), S(UiStyle::ActionBtnH), L"Reset Credentials");

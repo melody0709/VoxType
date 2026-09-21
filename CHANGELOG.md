@@ -2,6 +2,29 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.7 (2026-09-21)
+
+### Features & UI Architecture
+
+- **Settings Reorganization: Five Tabs, One Recognition Home**:
+  - Renamed and re-scoped the tabs to `General & Input`, `Speech Engine`, `Vocabulary`, `LLM`, and `Audio & Advanced`.
+  - `General & Input` now owns the hotkey, the `Partial result` live-preview switch (moved out of the old Recognition tab), and Windows startup registration; the recording diagnostics block moved out.
+  - `Speech Engine` is the single recognition home. The `ASR Backend` / `Fallback` selectors on Row 0 are created exactly once by the tab, and the panel of the selected backend is mounted in place below them. All eight panels keep their own `[Test Connection]` on their own action row instead of overlapping the Fallback combo.
+  - Removed the separate `Cloud ASR` tab and its redundant `Cloud Provider` selector; the `cloud_provider` config field stays registered for JSON compatibility but is no longer written by the UI.
+  - `Audio & Advanced` gathers VAD (enable switch, model, and the five acoustic parameters) plus the recording diagnostics block.
+- **Compact Qwen and Volcano Engine Panels**:
+  - Four 48px double-line hints collapsed into single 24px lines, the input-context checkbox moved to its own row with room for its full caption, and the truncated `Fallback language` label became `Language`.
+  - Volcano Engine now mirrors Qwen: a five-row main panel plus a new `[Advanced...]` dialog (810×800) hosting hotwords/correct-table ids, history context, `end_window_size`, `force_to_speech_time`, the `enable_ddc` / `enable_nonstream` / `enable_poi_fc` / `enable_music_fc` switches, and the Extra Params JSON editor (the previous standalone JSON dialog is gone).
+- **Text clipping fixes**: the Windows startup explanation is now a 760px two-line block, the recording-diagnostics mode selector is 260px wide, and the Volcano Engine panel puts the vocabulary and input-context switches on separate rows with a widened language combo; inside the Volcano Engine `[Advanced...]` dialog the GUID table ids, the `end_window_size` / `force_to_speech_time` labels and the four `enable_*` protocol switches all have their own columns again, so no caption is cut off by the neighbouring control.
+- **Silent punctuation data loss fixed**: the local `Punctuation` selector is now a true three-way mapping (`Auto punctuate` → `auto`, `ITN only` → `itn`, `Disabled` → `none`). The stored `itn` default used to be silently rewritten to `auto` on the first Save, and legacy `punct` / `llm` values are now preserved verbatim.
+
+### Quality & Layout Verification
+
+- `scripts/validate_settings_layout.ps1` pins the new geometry: every provider panel bottom ≤ 616 design px, Row 0 horizontal non-overlap, per-provider `[Test Connection]` row placement, the Volcano Engine advanced dialog, and the Tab 1 / Tab 5 page bottoms.
+- Added a control-ownership ratchet: every `IDC_*` may be created exactly once across `src/ui/tabs` and `src/ui/providers`, with key ids pinned to their owning file, so no provider can duplicate the ASR Backend selectors.
+- `ISettingsTab::HandleMessage` makes the message route explicit instead of relying on the removed `TabCloudAsr`.
+- Passed all 17 architecture invariants (`settings.cpp` 377/400 lines) and all 6 offline test suites.
+
 ## v0.10.6 (2026-09-21)
 
 ### Features & UI Architecture

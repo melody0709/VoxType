@@ -38,6 +38,21 @@ constexpr int IDC_QWEN_CONTINUE_CONTEXT = 2133;
 constexpr int IDC_QWEN_SPECIAL_REPLACE = 2134;
 constexpr int IDC_QWEN_SPECIAL_EMPTY = 2135;
 constexpr int IDC_QWEN_SYSTEM_FILTER = 2136;
+// Dialog-local static labels of the Volcano Engine advanced dialog. The edit and
+// checkbox controls reuse the global IDC_VOLC_* ids; only these labels need local
+// ids because they are not addressable by name from anywhere else.
+constexpr int IDC_VOLC_DLG_HOTWORDS_ID_LABEL = 3220;
+constexpr int IDC_VOLC_DLG_HOTWORDS_NAME_LABEL = 3221;
+constexpr int IDC_VOLC_DLG_CORRECT_ID_LABEL = 3222;
+constexpr int IDC_VOLC_DLG_CORRECT_NAME_LABEL = 3223;
+constexpr int IDC_VOLC_DLG_HISTORY_LABEL = 3224;
+constexpr int IDC_VOLC_DLG_HISTORY_UNIT = 3225;
+constexpr int IDC_VOLC_DLG_END_WINDOW_LABEL = 3226;
+constexpr int IDC_VOLC_DLG_END_WINDOW_UNIT = 3227;
+constexpr int IDC_VOLC_DLG_FORCE_SPEECH_LABEL = 3228;
+constexpr int IDC_VOLC_DLG_FORCE_SPEECH_UNIT = 3229;
+constexpr int IDC_VOLC_DLG_JSON_LABEL = 3230;
+
 struct QwenAdvancedControls {
     HWND vocabIdLabel = nullptr;
     HWND vocabId = nullptr;
@@ -460,22 +475,103 @@ void LayoutInputDlg(HWND hDlg) {
                               S(UiStyle::FooterBtnW), S(UiStyle::BtnH), TRUE);
 }
 
-void LayoutVolcExtraDlg(HWND hDlg) {
-    const int btnY = S(UiStyle::VolcExtraDlgBtnY);
-    const int btnH = S(UiStyle::BtnH);
-    const int rightEdge = S(18) + S(UiStyle::VolcExtraDlgEditW);
-    HWND edit = GetDlgItem(hDlg, IDC_VOLC_EXTRA_EDIT);
-    HWND filterBtn = GetDlgItem(hDlg, IDC_VOLC_EXTRA_HOTWORDS);
-    HWND resultBtn = GetDlgItem(hDlg, IDC_VOLC_EXTRA_CONTEXT);
-    HWND resetBtn = GetDlgItem(hDlg, IDC_VOLC_EXTRA_RESET);
-    HWND okBtn = GetDlgItem(hDlg, IDOK);
-    HWND cancelBtn = GetDlgItem(hDlg, IDCANCEL);
-    if (edit) MoveWindow(edit, S(18), S(18), S(UiStyle::VolcExtraDlgEditW), S(UiStyle::VolcExtraDlgEditH), TRUE);
-    if (filterBtn) MoveWindow(filterBtn, S(18), btnY, S(120), btnH, TRUE);
-    if (resultBtn) MoveWindow(resultBtn, S(18) + S(120) + S(12), btnY, S(120), btnH, TRUE);
-    if (resetBtn) MoveWindow(resetBtn, S(18) + S(120) + S(12) + S(120) + S(12), btnY, S(100), btnH, TRUE);
-    if (okBtn) MoveWindow(okBtn, rightEdge - S(100) - S(12) - S(100), btnY, S(100), btnH, TRUE);
-    if (cancelBtn) MoveWindow(cancelBtn, rightEdge - S(100), btnY, S(100), btnH, TRUE);
+struct VolcAdvancedDialogState {
+    VolcAdvancedDialogData* data = nullptr;
+    VolcAdvancedValidator validator = nullptr;
+    HWND group1 = nullptr;
+    HWND group2 = nullptr;
+    HWND group3 = nullptr;
+};
+
+void UpdateVolcAdvancedDialogState(HWND hDlg, const VolcAdvancedDialogData* data) {
+    const bool asyncMode = data && data->mode == L"bigmodel_async";
+    const bool nonstreamOn = Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_NONSTREAM)) == BST_CHECKED;
+    const bool fcEnabled =
+        (data && data->mode == L"bigmodel_nostream") || (asyncMode && nonstreamOn);
+    EnableWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_NONSTREAM), asyncMode ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_MUSIC_FC), fcEnabled ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_POI_FC), fcEnabled ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hDlg, IDC_VOLC_CONTEXT_HISTORY),
+                 Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_CONTEXT)) == BST_CHECKED ? TRUE : FALSE);
+}
+
+bool ReadVolcAdvancedDialog(HWND hDlg, VolcAdvancedDialogData& data, std::wstring& error,
+                            VolcAdvancedValidator validator) {
+    data.hotwordsId = QwenControlText(hDlg, IDC_VOLC_HOTWORDS_ID, 512);
+    data.hotwordsName = QwenControlText(hDlg, IDC_VOLC_HOTWORDS_NAME, 512);
+    data.correctTableId = QwenControlText(hDlg, IDC_VOLC_CORRECT_TABLE_ID, 512);
+    data.correctTableName = QwenControlText(hDlg, IDC_VOLC_CORRECT_TABLE_NAME, 512);
+    data.enableContext = Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_CONTEXT)) == BST_CHECKED;
+    data.contextHistory = QwenControlText(hDlg, IDC_VOLC_CONTEXT_HISTORY, 32);
+    data.endWindowSize = QwenControlText(hDlg, IDC_VOLC_END_WINDOW_SIZE, 32);
+    data.forceToSpeechTime = QwenControlText(hDlg, IDC_VOLC_FORCE_TO_SPEECH_TIME, 32);
+    data.enableDdc = Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_DDC)) == BST_CHECKED;
+    data.enableNonstream = Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_NONSTREAM)) == BST_CHECKED;
+    data.enableMusicFc = Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_MUSIC_FC)) == BST_CHECKED;
+    data.enablePoiFc = Button_GetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_POI_FC)) == BST_CHECKED;
+    data.extraParams = QwenControlText(hDlg, IDC_VOLC_EXTRA_PARAMS, 8192);
+    if (validator && !validator(data, error)) return false;
+    return true;
+}
+
+void LayoutVolcAdvancedDlg(HWND hDlg, const VolcAdvancedDialogState& state) {
+    const int marginX = S(UiStyle::VolcAdvancedDlgMarginX);
+    const int groupW = S(UiStyle::VolcAdvancedDlgGroupW);
+    const int labelX = S(UiStyle::VolcAdvancedDlgLabelX);
+    const int labelW = S(UiStyle::VolcAdvancedDlgLabelW);
+    const int inputX = S(UiStyle::VolcAdvancedDlgInputX);
+    const int fieldEditW = S(80);
+
+    if (state.group1) MoveWindow(state.group1, marginX, S(UiStyle::VolcAdvancedDlgGroup1Y), groupW, S(UiStyle::VolcAdvancedDlgGroup1H), TRUE);
+    if (state.group2) MoveWindow(state.group2, marginX, S(UiStyle::VolcAdvancedDlgGroup2Y), groupW, S(UiStyle::VolcAdvancedDlgGroup2H), TRUE);
+    if (state.group3) MoveWindow(state.group3, marginX, S(UiStyle::VolcAdvancedDlgGroup3Y), groupW, S(UiStyle::VolcAdvancedDlgGroup3H), TRUE);
+
+    const int rowA = S(UiStyle::VolcAdvancedDlgGroup1Y + 24);
+    const int rowB = S(UiStyle::VolcAdvancedDlgGroup1Y + 76);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_HOTWORDS_ID_LABEL), labelX, rowA + S(UiStyle::LabelYOffset), labelW, S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_HOTWORDS_ID), inputX, rowA, S(UiStyle::VolcAdvancedDlgIdEditW), S(UiStyle::EditH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_HOTWORDS_NAME_LABEL), S(UiStyle::VolcAdvancedDlgNameLabelX), rowA + S(UiStyle::LabelYOffset), S(UiStyle::VolcAdvancedDlgNameLabelW), S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_HOTWORDS_NAME), S(UiStyle::VolcAdvancedDlgNameEditX), rowA, S(UiStyle::VolcAdvancedDlgNameEditW), S(UiStyle::EditH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_CORRECT_ID_LABEL), labelX, rowB + S(UiStyle::LabelYOffset), labelW, S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_CORRECT_TABLE_ID), inputX, rowB, S(UiStyle::VolcAdvancedDlgIdEditW), S(UiStyle::EditH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_CORRECT_NAME_LABEL), S(UiStyle::VolcAdvancedDlgNameLabelX), rowB + S(UiStyle::LabelYOffset), S(UiStyle::VolcAdvancedDlgNameLabelW), S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_CORRECT_TABLE_NAME), S(UiStyle::VolcAdvancedDlgNameEditX), rowB, S(UiStyle::VolcAdvancedDlgNameEditW), S(UiStyle::EditH), TRUE);
+
+    // History context keeps its switch at the group's text edge so the row reads
+    // left to right instead of floating under the ID column.
+    const int rowC = S(UiStyle::VolcAdvancedDlgGroup2Y + 26);
+    const int rowD = S(UiStyle::VolcAdvancedDlgGroup2Y + 78);
+    const int rowE = S(UiStyle::VolcAdvancedDlgGroup2Y + 130);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_CONTEXT), labelX, rowC, S(230), S(UiStyle::CheckH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_HISTORY_LABEL), labelX + S(240), rowC + S(4), S(100), S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_CONTEXT_HISTORY), labelX + S(348), rowC, S(80), S(UiStyle::EditH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_HISTORY_UNIT), labelX + S(436), rowC + S(4), S(60), S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_END_WINDOW_LABEL), labelX, rowD + S(UiStyle::LabelYOffset), labelW, S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_END_WINDOW_SIZE), inputX, rowD, fieldEditW, S(UiStyle::EditH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_END_WINDOW_UNIT), inputX + S(90), rowD + S(UiStyle::LabelYOffset), S(60), S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_FORCE_SPEECH_LABEL), labelX, rowE + S(UiStyle::LabelYOffset), labelW, S(UiStyle::LabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_FORCE_TO_SPEECH_TIME), inputX, rowE, fieldEditW, S(UiStyle::EditH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_FORCE_SPEECH_UNIT), inputX + S(90), rowE + S(UiStyle::LabelYOffset), S(60), S(UiStyle::LabelH), TRUE);
+
+    // Two switch columns starting at the text edge; 340 design px each keeps the
+    // longest label ("Smart music filter (enable_music_fc)") clear of the ticks.
+    const int switchW = S(UiStyle::VolcAdvancedDlgSwitchW);
+    const int rowF = S(UiStyle::VolcAdvancedDlgGroup3Y + 30);
+    const int rowG = S(UiStyle::VolcAdvancedDlgGroup3Y + 70);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_DDC), S(UiStyle::VolcAdvancedDlgSwitchCol1X), rowF, switchW, S(UiStyle::CheckH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_NONSTREAM), S(UiStyle::VolcAdvancedDlgSwitchCol2X), rowF, switchW, S(UiStyle::CheckH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_POI_FC), S(UiStyle::VolcAdvancedDlgSwitchCol1X), rowG, switchW, S(UiStyle::CheckH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_ENABLE_MUSIC_FC), S(UiStyle::VolcAdvancedDlgSwitchCol2X), rowG, switchW, S(UiStyle::CheckH), TRUE);
+
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_DLG_JSON_LABEL), marginX, S(UiStyle::VolcAdvancedDlgGroup4Y + UiStyle::VolcAdvancedDlgJsonLabelOffsetY), S(UiStyle::VolcAdvancedDlgJsonLabelW), S(UiStyle::VolcAdvancedDlgJsonLabelH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_EXTRA_HOTWORDS), S(UiStyle::VolcAdvancedDlgSnippetBtnX), S(UiStyle::VolcAdvancedDlgGroup4Y), S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_EXTRA_CONTEXT), S(UiStyle::VolcAdvancedDlgSnippetBtnX + UiStyle::VolcAdvancedDlgSnippetBtnW + 12), S(UiStyle::VolcAdvancedDlgGroup4Y), S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_EXTRA_RESET), S(UiStyle::VolcAdvancedDlgResetBtnX), S(UiStyle::VolcAdvancedDlgGroup4Y), S(UiStyle::VolcAdvancedDlgResetBtnW), S(UiStyle::BtnH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDC_VOLC_EXTRA_PARAMS), marginX, S(UiStyle::VolcAdvancedDlgGroup4Y + UiStyle::VolcAdvancedDlgJsonEditOffsetY), groupW, S(UiStyle::VolcAdvancedDlgJsonEditH), TRUE);
+
+    const int btnY = S(UiStyle::VolcAdvancedDlgBtnY);
+    MoveWindow(GetDlgItem(hDlg, IDOK), marginX + groupW - S(212), btnY, S(100), S(UiStyle::ActionBtnH), TRUE);
+    MoveWindow(GetDlgItem(hDlg, IDCANCEL), marginX + groupW - S(100), btnY, S(100), S(UiStyle::ActionBtnH), TRUE);
 }
 
 LRESULT CALLBACK InputWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -558,54 +654,185 @@ LRESULT CALLBACK InputWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProcW(hDlg, msg, wParam, lParam);
 }
 
-LRESULT CALLBACK VolcExtraWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
+    auto* state = reinterpret_cast<VolcAdvancedDialogState*>(GetWindowLongPtrW(hDlg, GWLP_USERDATA));
+    static HBRUSH s_bgBrush = CreateSolidBrush(kBgColor);
+    static HBRUSH s_ctrlBrush = CreateSolidBrush(kControlBgColor);
+
     switch (msg) {
     case WM_CREATE: {
         UpdateUiScale(hDlg);
-        auto* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
-        auto* data = reinterpret_cast<VolcExtraDlgData*>(cs->lpCreateParams);
-        SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(data));
-        SetWindowTextW(hDlg, L"Volcengine ASR Extra Params");
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        state = reinterpret_cast<VolcAdvancedDialogState*>(cs->lpCreateParams);
+        SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
+        if (!state) return -1;
+        SetWindowTextW(hDlg, L"Volcano Engine Advanced Settings");
+
+        const VolcAdvancedDialogData* data = state->data;
         HINSTANCE hInst = GetParentInstance(hDlg);
+        const int groupW = S(UiStyle::VolcAdvancedDlgGroupW);
+        const int labelW = S(UiStyle::LabelWidth);
 
-        HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
-                                    WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | WS_TABSTOP,
-                                    S(18), S(18), S(UiStyle::VolcExtraDlgEditW), S(UiStyle::VolcExtraDlgEditH), hDlg,
-                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_EXTRA_EDIT)),
-                                    hInst, nullptr);
+        state->group1 = CreateWindowW(L"BUTTON", L"Custom cloud tables", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                      0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
+        ApplyUiFont(state->group1);
+        state->group2 = CreateWindowW(L"BUTTON", L"Acoustics & context", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                      0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
+        ApplyUiFont(state->group2);
+        state->group3 = CreateWindowW(L"BUTTON", L"Protocol switches", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                      0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
+        ApplyUiFont(state->group3);
+
+        HWND label = CreateLabel(hDlg, 0, 0, labelW, S(UiStyle::LabelH), L"Hotwords ID");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HOTWORDS_ID_LABEL);
+        HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                    0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_HOTWORDS_ID)), hInst, nullptr);
         ApplyUiFont(edit);
-        if (data && !data->text.empty()) SetWindowTextW(edit, data->text.c_str());
+        label = CreateLabel(hDlg, 0, 0, S(48), S(UiStyle::LabelH), L"Name");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HOTWORDS_NAME_LABEL);
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_HOTWORDS_NAME)), hInst, nullptr);
+        ApplyUiFont(edit);
 
-        const int btnY = S(UiStyle::VolcExtraDlgBtnY);
-        const int btnH = S(UiStyle::BtnH);
-        HWND filterBtn = CreateWindowW(L"BUTTON", L"Filter", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                      S(18), btnY, S(120), btnH, hDlg,
-                                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_EXTRA_HOTWORDS)),
-                                      hInst, nullptr);
-        HWND resultBtn = CreateWindowW(L"BUTTON", L"Result", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                      S(18) + S(120) + S(12), btnY, S(120), btnH, hDlg,
-                                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_EXTRA_CONTEXT)),
-                                      hInst, nullptr);
-        HWND resetBtn = CreateWindowW(L"BUTTON", L"Reset", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                     S(18) + S(120) + S(12) + S(120) + S(12), btnY, S(100), btnH, hDlg,
-                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_EXTRA_RESET)),
-                                     hInst, nullptr);
+        label = CreateLabel(hDlg, 0, 0, labelW, S(UiStyle::LabelH), L"Correct table ID");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_CORRECT_ID_LABEL);
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CORRECT_TABLE_ID)), hInst, nullptr);
+        ApplyUiFont(edit);
+        label = CreateLabel(hDlg, 0, 0, S(48), S(UiStyle::LabelH), L"Name");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_CORRECT_NAME_LABEL);
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CORRECT_TABLE_NAME)), hInst, nullptr);
+        ApplyUiFont(edit);
 
-        const int rightEdge = S(18) + S(UiStyle::VolcExtraDlgEditW);
-        HWND okBtn = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP,
-                                   rightEdge - S(100) - S(12) - S(100), btnY, S(100), btnH, hDlg,
-                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDOK)), hInst, nullptr);
-        HWND cancelBtn = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                       rightEdge - S(100), btnY, S(100), btnH, hDlg,
-                                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)), hInst, nullptr);
-        ApplyUiFont(filterBtn);
-        ApplyUiFont(resultBtn);
-        ApplyUiFont(resetBtn);
-        ApplyUiFont(okBtn);
-        ApplyUiFont(cancelBtn);
-        SetFocus(edit);
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_CONTEXT, 0, 0, 0, 0, L"Enable history context");
+        label = CreateLabel(hDlg, 0, 0, S(100), S(UiStyle::LabelH), L"History turns");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HISTORY_LABEL);
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CONTEXT_HISTORY)), hInst, nullptr);
+        ApplyUiFont(edit);
+        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), L"turns");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HISTORY_UNIT);
+
+        label = CreateLabel(hDlg, 0, 0, S(150), S(UiStyle::LabelH), L"end_window_size");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_END_WINDOW_LABEL);
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_END_WINDOW_SIZE)), hInst, nullptr);
+        ApplyUiFont(edit);
+        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), L"ms");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_END_WINDOW_UNIT);
+
+        label = CreateLabel(hDlg, 0, 0, S(150), S(UiStyle::LabelH), L"force_to_speech_time");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_FORCE_SPEECH_LABEL);
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_FORCE_TO_SPEECH_TIME)), hInst, nullptr);
+        ApplyUiFont(edit);
+        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), L"ms");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_FORCE_SPEECH_UNIT);
+
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_DDC, 0, 0, 0, 0, L"DDC smoothing (enable_ddc)");
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_NONSTREAM, 0, 0, 0, 0, L"Non-stream (enable_nonstream)");
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_POI_FC, 0, 0, 0, 0, L"Smart POI filter (enable_poi_fc)");
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_MUSIC_FC, 0, 0, 0, 0, L"Smart music filter (enable_music_fc)");
+
+        label = CreateLabel(hDlg, 0, 0, S(UiStyle::VolcAdvancedDlgJsonLabelW), S(UiStyle::VolcAdvancedDlgJsonLabelH), L"Extra Params (JSON)");
+        SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_JSON_LABEL);
+        CreateButton(hDlg, IDC_VOLC_EXTRA_HOTWORDS, 0, 0, S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), L"Filter");
+        CreateButton(hDlg, IDC_VOLC_EXTRA_CONTEXT, 0, 0, S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), L"Result");
+        CreateButton(hDlg, IDC_VOLC_EXTRA_RESET, 0, 0, S(UiStyle::VolcAdvancedDlgResetBtnW), S(UiStyle::BtnH), L"Reset");
+        edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+                               WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | WS_TABSTOP,
+                               0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_EXTRA_PARAMS)), hInst, nullptr);
+        ApplyUiFont(edit);
+
+        HWND okButton = CreateButton(hDlg, IDOK, 0, 0, S(100), S(UiStyle::ActionBtnH), L"OK");
+        SendMessageW(okButton, BM_SETSTYLE, BS_DEFPUSHBUTTON, TRUE);
+        CreateButton(hDlg, IDCANCEL, 0, 0, S(100), S(UiStyle::ActionBtnH), L"Cancel");
+
+        if (data) {
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_HOTWORDS_ID), data->hotwordsId.c_str());
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_HOTWORDS_NAME), data->hotwordsName.c_str());
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_CORRECT_TABLE_ID), data->correctTableId.c_str());
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_CORRECT_TABLE_NAME), data->correctTableName.c_str());
+            Button_SetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_CONTEXT), data->enableContext ? BST_CHECKED : BST_UNCHECKED);
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_CONTEXT_HISTORY), data->contextHistory.c_str());
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_END_WINDOW_SIZE), data->endWindowSize.c_str());
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_FORCE_TO_SPEECH_TIME), data->forceToSpeechTime.c_str());
+            Button_SetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_DDC), data->enableDdc ? BST_CHECKED : BST_UNCHECKED);
+            Button_SetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_NONSTREAM), data->enableNonstream ? BST_CHECKED : BST_UNCHECKED);
+            Button_SetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_POI_FC), data->enablePoiFc ? BST_CHECKED : BST_UNCHECKED);
+            Button_SetCheck(GetDlgItem(hDlg, IDC_VOLC_ENABLE_MUSIC_FC), data->enableMusicFc ? BST_CHECKED : BST_UNCHECKED);
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_EXTRA_PARAMS), data->extraParams.c_str());
+            UpdateVolcAdvancedDialogState(hDlg, data);
+        }
+
+        LayoutVolcAdvancedDlg(hDlg, *state);
+        SetFocus(GetDlgItem(hDlg, IDC_VOLC_HOTWORDS_ID));
         return 0;
     }
+    case WM_CTLCOLORDLG:
+        return reinterpret_cast<LRESULT>(s_bgBrush);
+    case WM_CTLCOLORSTATIC: {
+        HDC hdc = reinterpret_cast<HDC>(wParam);
+        HWND control = reinterpret_cast<HWND>(lParam);
+        SetTextColor(hdc, IsSettingsHint(control) ? kHintTextColor : kTextColor);
+        SetBkColor(hdc, kBgColor);
+        return reinterpret_cast<LRESULT>(s_bgBrush);
+    }
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORLISTBOX: {
+        HDC hdc = reinterpret_cast<HDC>(wParam);
+        SetTextColor(hdc, kInputTextColor);
+        SetBkColor(hdc, kControlBgColor);
+        return reinterpret_cast<LRESULT>(s_ctrlBrush);
+    }
+    case WM_CTLCOLORBTN: {
+        HDC hdc = reinterpret_cast<HDC>(wParam);
+        SetBkColor(hdc, kBgColor);
+        return reinterpret_cast<LRESULT>(s_bgBrush);
+    }
+    case WM_COMMAND:
+        switch (LOWORD(wParam)) {
+        case IDC_VOLC_ENABLE_CONTEXT:
+        case IDC_VOLC_ENABLE_NONSTREAM:
+            if (HIWORD(wParam) == BN_CLICKED && state) {
+                UpdateVolcAdvancedDialogState(hDlg, state->data);
+                return 0;
+            }
+            break;
+        case IDC_VOLC_EXTRA_HOTWORDS: {
+            HWND edit = GetDlgItem(hDlg, IDC_VOLC_EXTRA_PARAMS);
+            SetWindowTextW(edit, L"\"sensitive_words_filter\":\"system_reserved_filter\"");
+            SendMessageW(edit, EM_SETSEL, 0, -1);
+            SetFocus(edit);
+            return 0;
+        }
+        case IDC_VOLC_EXTRA_CONTEXT: {
+            HWND edit = GetDlgItem(hDlg, IDC_VOLC_EXTRA_PARAMS);
+            SetWindowTextW(edit, L"\"result_type\":\"single\",\"vad_segment_duration\":3000");
+            SendMessageW(edit, EM_SETSEL, 0, -1);
+            SetFocus(edit);
+            return 0;
+        }
+        case IDC_VOLC_EXTRA_RESET:
+            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_EXTRA_PARAMS), L"");
+            return 0;
+        case IDOK:
+            if (state && state->data) {
+                std::wstring error;
+                if (!ReadVolcAdvancedDialog(hDlg, *state->data, error, state->validator)) {
+                    MessageBoxW(hDlg, error.c_str(), L"Invalid Volcano Engine Advanced Settings", MB_OK | MB_ICONERROR);
+                    return 0;
+                }
+                state->data->ok = true;
+            }
+            DestroyWindow(hDlg);
+            return 0;
+        case IDCANCEL:
+            DestroyWindow(hDlg);
+            return 0;
+        }
+        break;
     case WM_DPICHANGED: {
         const UINT newDpi = HIWORD(wParam);
         UpdateUiScaleForDpi(newDpi);
@@ -621,51 +848,10 @@ LRESULT CALLBACK VolcExtraWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lPa
             SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(lp), TRUE);
             return TRUE;
         }, reinterpret_cast<LPARAM>(newFont));
-        LayoutVolcExtraDlg(hDlg);
+        if (state) LayoutVolcAdvancedDlg(hDlg, *state);
         InvalidateRect(hDlg, nullptr, TRUE);
         return 0;
     }
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK) {
-            auto* data = reinterpret_cast<VolcExtraDlgData*>(GetWindowLongPtrW(hDlg, GWLP_USERDATA));
-            if (data) {
-                HWND edit = GetDlgItem(hDlg, IDC_VOLC_EXTRA_EDIT);
-                int len = GetWindowTextLengthW(edit);
-                if (len > 0) {
-                    std::vector<wchar_t> buf(len + 1);
-                    GetWindowTextW(edit, buf.data(), len + 1);
-                    data->text = buf.data();
-                } else {
-                    data->text.clear();
-                }
-                data->ok = true;
-            }
-            DestroyWindow(hDlg);
-            return 0;
-        }
-        if (LOWORD(wParam) == IDCANCEL) {
-            DestroyWindow(hDlg);
-            return 0;
-        }
-        if (LOWORD(wParam) == IDC_VOLC_EXTRA_HOTWORDS) {
-            HWND edit = GetDlgItem(hDlg, IDC_VOLC_EXTRA_EDIT);
-            SetWindowTextW(edit, L"\"sensitive_words_filter\":\"system_reserved_filter\"");
-            SendMessageW(edit, EM_SETSEL, 0, -1);
-            SetFocus(edit);
-            return 0;
-        }
-        if (LOWORD(wParam) == IDC_VOLC_EXTRA_CONTEXT) {
-            HWND edit = GetDlgItem(hDlg, IDC_VOLC_EXTRA_EDIT);
-            SetWindowTextW(edit, L"\"result_type\":\"single\",\"vad_segment_duration\":3000");
-            SendMessageW(edit, EM_SETSEL, 0, -1);
-            SetFocus(edit);
-            return 0;
-        }
-        if (LOWORD(wParam) == IDC_VOLC_EXTRA_RESET) {
-            SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_EXTRA_EDIT), L"");
-            return 0;
-        }
-        break;
     case WM_CLOSE:
         DestroyWindow(hDlg);
         return 0;
@@ -957,35 +1143,39 @@ bool ShowInputDialog(HWND parent, const wchar_t* title, std::wstring& out) {
     return false;
 }
 
-bool ShowVolcExtraDialog(HWND parent, std::wstring& out) {
+bool ShowVolcAdvancedDialog(HWND parent, VolcAdvancedDialogData& data, VolcAdvancedValidator validator) {
     HINSTANCE hInst = GetParentInstance(parent);
     static bool registered = false;
+    static HBRUSH s_dialogBgBrush = CreateSolidBrush(kBgColor);
     if (!registered) {
         WNDCLASSEXW wc = {};
         wc.cbSize = sizeof(wc);
-        wc.lpfnWndProc = VolcExtraWndProc;
+        wc.lpfnWndProc = VolcAdvancedWndProc;
         wc.hInstance = hInst;
-        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-        wc.lpszClassName = L"VoxTypeVolcExtraDlg";
+        wc.hbrBackground = s_dialogBgBrush;
+        wc.lpszClassName = L"VoxTypeVolcAdvancedDlg";
         wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
         RegisterClassExW(&wc);
         registered = true;
     }
-    VolcExtraDlgData data;
-    data.text = out;
+
     UpdateUiScale(parent);
-    const int width = S(UiStyle::VolcExtraDlgW);
-    const int height = S(UiStyle::VolcExtraDlgH);
+    data.ok = false;
+    const int width = S(UiStyle::VolcAdvancedDialogW);
+    const int height = S(UiStyle::VolcAdvancedDialogH);
     POINT pos = CalculateCenteredDialogPos(parent, width, height);
 
+    VolcAdvancedDialogState state;
+    state.data = &data;
+    state.validator = validator;
+
     HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
-                               L"VoxTypeVolcExtraDlg", L"Volcengine ASR Extra Params",
+                               L"VoxTypeVolcAdvancedDlg", L"Volcano Engine Advanced Settings",
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                               pos.x, pos.y, width, height, parent, nullptr, hInst, &data);
+                               pos.x, pos.y, width, height, parent, nullptr, hInst, &state);
     if (!dlg) return false;
     RunModalDialogLoop(dlg, parent);
-    if (data.ok) { out = data.text; return true; }
-    return false;
+    return data.ok;
 }
 
 bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvancedValidator validator) {
@@ -1005,6 +1195,7 @@ bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvan
     }
 
     UpdateUiScale(parent);
+    data.ok = false;
     const int width = S(UiStyle::QwenAdvancedDialogW);
     const int height = S(UiStyle::QwenAdvancedDialogH);
     POINT pos = CalculateCenteredDialogPos(parent, width, height);

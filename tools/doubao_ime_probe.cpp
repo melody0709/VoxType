@@ -46,10 +46,15 @@ std::wstring ConfigPath() {
     std::wstring dir = modulePath;
     size_t slash = dir.find_last_of(L"\\/");
     if (slash != std::wstring::npos) dir.resize(slash);
-    if (dir.size() >= 12 && dir.substr(dir.size() - 12) == L"\\build\\tools") {
-        dir.resize(dir.size() - 12);
-    } else if (dir.size() >= 6 && dir.substr(dir.size() - 6) == L"\\build") {
-        dir.resize(dir.size() - 6);
+    // The probe lives under the generated build tree (build/artifacts/tools) while
+    // the app config sits in the repository root, so walk up until config.json is
+    // found instead of hard-coding one relative depth.
+    for (int level = 0; level < 4; ++level) {
+        const std::wstring candidate = dir + L"\\config.json";
+        if (GetFileAttributesW(candidate.c_str()) != INVALID_FILE_ATTRIBUTES) return candidate;
+        const size_t up = dir.find_last_of(L"\\/");
+        if (up == std::wstring::npos) break;
+        dir.resize(up);
     }
     return dir + L"\\config.json";
 }
@@ -66,9 +71,9 @@ bool LoadConfigCredentials(doubao_ime_asr::DoubaoImeConfig& cfg) {
     const std::string json = ReadFileUtf8(ConfigPath());
     if (json.empty()) return false;
 
-    cfg.deviceId = ExtractJsonStr(json, "doubao_ime_device_id");
-    cfg.cdid = ExtractJsonStr(json, "doubao_ime_cdid");
-    cfg.token = llm::DecryptString(ExtractJsonStr(json, "doubao_ime_token"));
+    cfg.deviceId = ExtractJsonStringDecoded(json, "doubao_ime_device_id");
+    cfg.cdid = ExtractJsonStringDecoded(json, "doubao_ime_cdid");
+    cfg.token = llm::DecryptString(ExtractJsonStringDecoded(json, "doubao_ime_token"));
     return !cfg.deviceId.empty() && !cfg.cdid.empty() && !cfg.token.empty();
 }
 

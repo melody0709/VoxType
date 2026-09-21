@@ -18,6 +18,7 @@ public:
     virtual void LoadControls(HWND parent, const Config& cfg) = 0;
     virtual void SaveControls(HWND parent, Config& cfg) = 0;
     virtual bool HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) { return false; }
+    virtual bool HandleMessage(HWND parent, UINT msg, WPARAM wParam, LPARAM lParam) { return false; }
 };
 
 } // namespace ui_tab

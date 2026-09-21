@@ -74,8 +74,7 @@ void UpdateQwenLanguageEffectiveHint(HWND hwnd, HWND hintControl) {
         : hints;
     SetWindowTextW(
         hintControl,
-        (L"Effective language: " + effective +
-         L". Non-empty hints override Fallback language; blank = Auto.").c_str());
+        (L"Effective language: " + effective).c_str());
 }
 
 bool ValidateQwenHints(const std::wstring& raw, std::wstring& error) {

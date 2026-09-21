@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.10.6</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.10.7</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -78,34 +78,29 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 <details open>
 <summary><strong>⚙️ Settings 说明</strong></summary>
 
-**General tab**
-- `Recording diagnostics` 是 Local 与全部云端 ASR 共用的采集诊断服务，也覆盖 provider 内部 retry 和配置的 fallback：
-  - `Off`（默认）不保存诊断录音。
-  - `Failures only` 仅保存有分析价值的 no-speech、采集、传输、超时或阶段结果矛盾样本。
-  - 如果所有采集后端都在首个 PCM 前失败，只保存含尝试后端、终止阶段/错误码及可用设备格式信息的 JSON manifest，不伪造空 WAV。
-  - `All recordings` 会显式保存每次语音，并显示隐私提示。
-  - `Open recordings folder` 会立即创建并打开目录；`Delete saved recordings...` 二次确认后只删除 VoxType 管理的文件组，未知文件保持不变。
-  - 安装版目录为 `%LOCALAPPDATA%\VoxType\diagnostics\audio`，Portable 版为 `<portable-root>\diagnostics\audio`；文件不自动上传，最多保留 20 组、100 MiB、7 天。
-
-**Recognition tab**
-- `ASR Backend` — 选择 `Local (sherpa-onnx)` / `Volcano Engine` / `Baidu Cloud` / `Qwen ASR` / `MiMo ASR` / `Doubao IME (Free)` / `Qwen IME (Free)`
-- `Fallback` — 可选备用 ASR 后端：`Local` / `Baidu Cloud` / `Qwen ASR` / `MiMo ASR` / `Doubao IME (Free)` / `Qwen IME (Free)`。默认 ASR 后端出现 timeout、网络错误、鉴权/配置错误或模型加载错误等运行类失败时，会用同一段原始 PCM 自动重试 fallback；`Too short` 和 `No speech detected` 不触发 fallback。
-- `ASR model` — 语音识别模型（仅 Local 后端）：
-  - `FireRedASR2 CTC` — 速度快，适合日常输入
-  - `FireRedASR2 AED` — 质量更好，长句更准
-  - `SenseVoiceSmall` — 轻量模型，适合低资源机器
-- `Model folder` — 模型文件存放目录
-- `Threads` — 推理线程数，`auto` 自动使用 CPU 核心数（上限 8）
-- `Enable VAD` — 开启人声检测，录音前先判断是否有语音，无人声时跳过 ASR 以节省时间
-- `VAD model` — 人声检测模型（需先开启 Enable VAD）：
-  - `Silero VAD` — 轻量快速，准确率 F1 95.95
-  - `FireRed VAD` — 高精度（F1 97.57，误报率 2.69%），模型仅 2.2MB
-- `Punctuation` — 识别后处理：
-  - `Disabled` — 不处理，输出 ASR 原文
-  - `Auto punctuate` — 本地 CT-Transformer 自动补标点（无需网络）
+**General & Input tab**（常规与输入）
 - `Hold hotkey` — 点击输入框后按快捷键录入
   - `Esc` 取消本次录入，`Backspace/Delete` 清空快捷键
   - 默认 CapsLock：短按切换大小写，长按 300ms 触发语音输入
+- `Partial result` — 说话期间的实时打字机预览，对全部流式后端（Local / 千问 / 火山 / 豆包 IME / 千问 IME 免 Key）统一生效
+- `Start VoxType when I sign in to Windows` — 写入当前用户的开机启动项，默认关闭；移动 Portable 目录后保存会自动修正记录的可执行文件路径
+
+**Speech Engine tab**（语音识别引擎：唯一识别配置入口）
+- `ASR Backend` — 选择 `Local (sherpa-onnx)` / `Volcano Engine` / `Baidu Cloud` / `Qwen ASR` / `MiMo ASR` / `Doubao IME (Free)` / `Qwen IME (Free)`
+- `Fallback` — 可选备用 ASR 后端：`Local` / `Baidu Cloud` / `Qwen ASR` / `MiMo ASR` / `Doubao IME (Free)` / `Qwen IME (Free)`。默认 ASR 后端出现 timeout、网络错误、鉴权/配置错误或模型加载错误等运行类失败时，会用同一段原始 PCM 自动重试 fallback；`Too short` 和 `No speech detected` 不触发 fallback。
+- 选中哪个引擎，就在这两个下拉框下方**就地展示**它的配置面板，各自的 `[Test Connection]` 就在同一面板内，无需跨标签页找密钥。
+- **Local (sherpa-onnx)** 配置：
+  - `ASR model` — 语音识别模型：
+    - `FireRedASR2 CTC` — 速度快，适合日常输入
+    - `FireRedASR2 AED` — 质量更好，长句更准
+    - `SenseVoiceSmall` — 轻量模型，适合低资源机器
+  - `Model folder` — 模型文件存放目录
+  - `Threads` — 推理线程数，`auto` 自动使用 CPU 核心数（上限 8）
+  - `Punctuation` — 本地离线标点模型：
+    - `Auto punctuate` — 本地 CT-Transformer 自动补标点（无需网络），存储为 `auto`
+    - `ITN only` — 仅逆文本规范化，存储为 `itn`
+    - `Disabled` — 输出 ASR 原文，不加载标点模型，存储为 `none`
+    - 历史值 `punct` / `llm` 会原样显示并原样保存，不再被静默改写。
 
 **LLM tab**
 - `Enable LLM Refinement` — 大模型纠错与润色总开关，未开启时下方配置置灰禁用
@@ -127,15 +122,15 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 - `Format JSON` — 格式化与美化 JSON 文本
 - `Open Folder` — 在资源管理器中打开 `vocabulary.json` 所在的文件夹
 
-**Cloud ASR tab**
-- `Provider` — 选择 `Volcano Engine (Doubao)` / `Baidu Cloud` / `Qwen ASR (DashScope)` / `MiMo ASR (Xiaomi)` / `Microsoft MAI Transcribe 2` / `Doubao IME (Free)` / `Qwen IME (Free)`，下方控件动态切换
+**Speech Engine tab — 云端后端**
+- 云端后端在 `Speech Engine` 标签页被选为 `ASR Backend` 后就地展示配置面板，`Test Connection` 与其测试的凭据同处一个面板
 - **Baidu Cloud**：`API Key` / `Secret Key`（DPAPI 加密）+ `Language Model`（普通话/英语/粤语/四川话）+ `Test Connection`
-- **Volcano Engine (Doubao)**：`API Key`（DPAPI 加密）+ `ASR Mode` + `Model Version` + `Language` + `Test Connection`
+- **Volcano Engine (Doubao)**：`API Key`（DPAPI 加密）+ `ASR Mode` + `Model Version` + `Language` + `[Advanced...]` + `Test Connection`
   - ASR Mode：`bigmodel_nostream`（推荐，准确率最高）/ `bigmodel_async`（最佳延迟）/ `bigmodel`（实时部分结果）
   - Model Version：`Seed-ASR 2.0 (duration)` / `Seed-ASR 2.0 (concurrent)` / `BigASR 1.0 (duration)` / `BigASR 1.0 (concurrent)`
-  - Hotwords ID/Name、Correct ID/Name — 引用自学习平台热词词表和替换词词表
-  - Use history as context — 将最近识别结果作为对话上下文发送，提升准确率
-  - Read input field context — 读取当前输入框文本作为 ASR 上下文（UIA/MSAA/WM_GETTEXT 分层 Fallback，输入框优先、历史兜底）
+  - `[Advanced...]`（810×800）集中收纳低频微调：自学习平台的热词 ID/Name 与替换词表 ID/Name、`Enable history context` 与历史轮数、`end_window_size`、`force_to_speech_time`、`enable_ddc` / `enable_nonstream` / `enable_poi_fc` / `enable_music_fc` 协议开关，以及扩展参数 JSON 编辑器
+  - Use focused input field text as context — 读取当前输入框文本作为 ASR 上下文（UIA/MSAA/WM_GETTEXT 分层 Fallback，输入框优先、历史兜底）
+  - Reuse common vocabulary (vocabulary.json) — 复用 `Vocabulary` 标签页的通用热词表
 - **Qwen ASR (DashScope)**：`API Key`（DPAPI 加密）+ `Base URL` + `Model` + `Language` + `Chunk ms` + `Test Connection`
   - 新安装默认模型：`qwen-audio-3.0-asr-flash-streaming`；已有配置保持原模型
   - Audio 3 默认使用已配置的北京 Workspace 域名，不提供地域选择项
@@ -156,6 +151,19 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
   - `Polish (auto)` 是 bundled `VoiceInputWrite` 后处理的唯一开关。`Punctuation included` 和 `Correction included` 是只读能力提示，因为原版端点在同一个响应中完成标点和纠错，并不是三个独立 HTTP 请求。实验性的 `Rewrite selection` 代码路径仍保留用于协议研究，但当前在 Settings 中禁用，并且会在配置加载/保存时强制关闭。其请求字段仍是基于逆向证据的兼容映射，需拿到原版同场景真实请求/响应对照后才可作为正式能力启用。
   - `Debug log` 只开启本地千问协议诊断日志，不改变识别结果。
 - 云端 ASR 由远端完成识别；启用 VAD 时，Qwen 和火山引擎使用本地 streaming VAD trim，批量云端后端使用 batch VAD trim 后再上传，千问 IME Free/Doubao IME 直接上传完整原始 PCM/Opus，不走本地 VAD，而是依赖服务端分段。本地标点模型在云端后端下仍不生效
+
+**Audio & Advanced tab**（音频与高级）
+- `Enable VAD` — 开启人声检测，录音前先判断是否有语音，无人声时跳过 ASR 以节省时间。5 个声学参数（`Threshold`、`Min silence`、`Min speech`、`Pad start`、`Smooth win`）一并收纳于此，识别页不再堆叠微调项。
+- `VAD model` — 人声检测模型（需先开启 Enable VAD）：
+  - `Silero VAD` — 轻量快速，准确率 F1 95.95
+  - `FireRed VAD` — 高精度（F1 97.57，误报率 2.69%），模型仅 2.2MB；`Pad start` 与 `Smooth win` 仅对该模型生效
+- `Recording diagnostics` 是 Local 与全部云端 ASR 共用的采集诊断服务，也覆盖 provider 内部 retry 和配置的 fallback：
+  - `Off`（默认）不保存诊断录音。
+  - `Failures only` 仅保存有分析价值的 no-speech、采集、传输、超时或阶段结果矛盾样本。
+  - 如果所有采集后端都在首个 PCM 前失败，只保存含尝试后端、终止阶段/错误码及可用设备格式信息的 JSON manifest，不伪造空 WAV。
+  - `All recordings` 会显式保存每次语音，并显示隐私提示。
+  - `Open recordings folder` 会立即创建并打开目录；`Delete saved recordings...` 二次确认后只删除 VoxType 管理的文件组，未知文件保持不变。
+  - 安装版目录为 `%LOCALAPPDATA%\VoxType\diagnostics\audio`，Portable 版为 `<portable-root>\diagnostics\audio`；文件不自动上传，最多保留 20 组、100 MiB、7 天。
 
 **诊断音频 replay**
 - `capture.wav` 与去重后的 `inputNN.wav` 均为规范 16 kHz、单声道、PCM16 文件。JSON manifest 保存设备/采集指标、哈希、VAD 元数据、stage kind、retry/fallback 原因和 provider 终态，但不保存 transcript、输入框上下文、API Key、token 或原始 provider JSON。

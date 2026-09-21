@@ -12,6 +12,8 @@ namespace ui_provider {
 class ICloudProviderPanel {
 public:
     virtual ~ICloudProviderPanel() = default;
+    // Backend id matching TabSpeechEngine's kBackendOptions[].id.
+    virtual const wchar_t* Id() const = 0;
     virtual void CreateControls(HWND parent) = 0;
     virtual void DestroyControls() = 0;
     virtual void Show(bool visible) = 0;

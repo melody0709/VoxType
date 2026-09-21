@@ -2,6 +2,29 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.7 (2026-09-21)
+
+### 新增功能与界面架构重构
+
+- **设置界面重组为 5 个标签页，识别配置归于一统**：
+  - 标签页重命名并重新定义职责：`General & Input`（常规与输入）、`Speech Engine`（语音识别引擎）、`Vocabulary`（热词词库）、`LLM`（AI 大模型）、`Audio & Advanced`（音频与高级）。
+  - `General & Input` 收纳快捷键、实时打字机预览开关 `Partial result`（自原 `Recognition` 迁入）与开机自启；录音排障诊断整块迁出。
+  - `Speech Engine` 成为唯一的识别配置入口：Row 0 的 `ASR Backend` / `Fallback` 由该标签页**只创建一次**，选中哪个引擎就在其下方**就地挂载**对应配置面板；8 个面板的 `[Test Connection]` 全部下移到各自操作行，不再与 `Fallback` 下拉框重叠。
+  - 废除独立的 `Cloud ASR` 标签页及其冗余的 `Cloud Provider` 选择器；`cloud_provider` 配置字段为 JSON 兼容性保留注册，但界面不再写入。
+  - `Audio & Advanced` 汇合 VAD（开关、模型与 5 大声学参数）与录音排障诊断。
+- **千问与火山引擎主面板紧凑化**：
+  - 4 段 48px 双行提示收敛为 24px 单行，上下文复选框单独占一行并给足文案宽度，被截断的 `Fallback language` 标签改为 `Language`。
+  - 火山引擎与千问结构对齐：主面板精简至 5 行，并新增 `[Advanced...]` 弹窗（810×800），收纳热词 ID / 纠错表 ID、历史上下文、`end_window_size`、`force_to_speech_time`、`enable_ddc` / `enable_nonstream` / `enable_poi_fc` / `enable_music_fc` 协议开关以及扩展 JSON 编辑器（原独立 JSON 弹窗已合并移除）。
+- **修复文字截断**：Windows 开机启动说明改为 760px 两行块，录音诊断模式下拉框加宽到 260px；火山引擎主面板把词库复用与输入框上下文两个开关拆成两行并加宽语种下拉；`[Advanced...]` 弹窗内 GUID 表格 ID、`end_window_size` / `force_to_speech_time` 标签与 4 个 `enable_*` 协议开关各自获得独立列宽，不再被相邻控件挤掉文字。
+- **修复标点配置静默丢失缺陷**：本地面板的 `Punctuation` 改为三项真实映射（`Auto punctuate` → `auto`、`ITN only` → `itn`、`Disabled` → `none`）。此前存储的默认值 `itn` 会在用户首次点击 `Save` 时被静默改写为 `auto`，历史值 `punct` / `llm` 亦会被吞；现在未知值原样显示、原样保存。
+
+### 质量与布局守卫
+
+- `scripts/validate_settings_layout.ps1` 新增并固化新几何：每个 provider 面板底部 ≤ 616 设计像素、Row 0 横向不重叠、7 个 `[Test Connection]` 的行位锁定、火山进阶弹窗尺寸，以及 Tab 1 / Tab 5 的页底断言。
+- 新增控件归属棘轮：`src/ui/tabs` 与 `src/ui/providers` 范围内每个 `IDC_*` 只允许创建一次，并把关键 ID 归属文件写死断言，杜绝 8 个面板各建一份 `IDC_ASR_BACKEND` 这类错误。
+- `ISettingsTab::HandleMessage` 让消息路由显式化，不再依赖已删除的 `TabCloudAsr`。
+- 17 项机械架构守卫（`settings.cpp` 377/400 行）与 6 组离线测试套件全部 PASS。
+
 ## v0.10.6 (2026-09-21)
 
 ### 新增功能与界面架构重构

@@ -12,10 +12,10 @@
 #include "asr_probe_service.h"
 
 #include "tab_general.h"
-#include "tab_recognition.h"
-#include "tab_cloud_asr.h"
+#include "tab_speech_engine.h"
 #include "tab_vocabulary.h"
 #include "tab_llm.h"
+#include "tab_advanced.h"
 #include "provider_qwen_free.h"
 
 #include <commctrl.h>
@@ -38,14 +38,14 @@ float UiStyle::Scale = 1.0f;
 namespace {
 
 ui_tab::TabGeneral s_tabGeneral;
-ui_tab::TabRecognition s_tabRecognition;
-ui_tab::TabCloudAsr s_tabCloudAsr;
+ui_tab::TabSpeechEngine s_tabSpeechEngine;
 ui_tab::TabVocabulary s_tabVocabulary;
 ui_tab::TabLlm s_tabLlm;
+ui_tab::TabAdvanced s_tabAdvanced;
 
 constexpr size_t kTabCount = 5;
 ui_tab::ISettingsTab* const s_tabs[kTabCount] = {
-    &s_tabGeneral, &s_tabRecognition, &s_tabCloudAsr, &s_tabVocabulary, &s_tabLlm
+    &s_tabGeneral, &s_tabSpeechEngine, &s_tabVocabulary, &s_tabLlm, &s_tabAdvanced
 };
 
 } // namespace
@@ -188,7 +188,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ApplyUiFont(tab);
         TCITEMW item = {};
         item.mask = TCIF_TEXT;
-        for (auto* name : {L"General", L"Recognition", L"Cloud ASR", L"Vocabulary", L"LLM"}) {
+        for (auto* name : {L"General & Input", L"Speech Engine", L"Vocabulary", L"LLM", L"Audio & Advanced"}) {
             item.pszText = const_cast<LPWSTR>(name);
             TabCtrl_InsertItem(tab, 100, &item);
         }
@@ -277,20 +277,6 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     case kDoubaoImeSettingsRefreshMessage:
         ui_provider::RefreshDoubaoImeStatus(hwnd);
         return 0;
-    case WM_APP + 20: {
-        EnableWindow(GetDlgItem(hwnd, IDC_DOWNLOAD_MODELS), TRUE);
-        if (lParam) {
-            std::unique_ptr<std::wstring> dir(reinterpret_cast<std::wstring*>(lParam));
-            std::wstring newDir = std::move(*dir);
-            SetWindowTextW(GetDlgItem(hwnd, IDC_MODEL_DIR), newDir.c_str());
-            g_config.modelDir = newDir;
-            SetStatus(hwnd, L"Download complete");
-            MessageBoxW(hwnd, L"Download complete!", L"Success", MB_OK | MB_ICONINFORMATION);
-        } else {
-            SetStatus(hwnd, L"Download failed or model directory not found");
-        }
-        return 0;
-    }
     case WM_DPICHANGED: {
         const int curPage = TabCtrl_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_TAB));
         const bool startupChecked = Button_GetCheck(GetDlgItem(hwnd, IDC_START_WITH_WINDOWS)) == BST_CHECKED;
@@ -353,8 +339,10 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         HideSettingsWindow(hwnd);
         return 0;
     default:
-        if (s_tabCloudAsr.HandleMessage(hwnd, msg, wParam, lParam)) {
-            return 0;
+        for (auto* t : s_tabs) {
+            if (t->HandleMessage(hwnd, msg, wParam, lParam)) {
+                return 0;
+            }
         }
         return DefWindowProcW(hwnd, msg, wParam, lParam);
     }

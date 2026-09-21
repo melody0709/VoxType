@@ -8,15 +8,12 @@
 #include "ui_types.h"
 #include "hotkey.h"
 #include "startup_registration.h"
-#include "asr_probe_service.h"
 
 #include <windowsx.h>
-#include <shellapi.h>
 
 namespace ui_tab {
 
 namespace {
-
 
 std::wstring DescribeWin32Error(DWORD error) {
     wchar_t* message = nullptr;
@@ -27,26 +24,6 @@ std::wstring DescribeWin32Error(DWORD error) {
     if (message) LocalFree(message);
     while (!result.empty() && (result.back() == L'\r' || result.back() == L'\n')) result.pop_back();
     return result;
-}
-
-std::wstring DiagnosticAudioModeFromControl(HWND hwnd) {
-    const int index = ComboBox_GetCurSel(
-        GetDlgItem(hwnd, IDC_DIAGNOSTIC_AUDIO_MODE));
-    if (index == 1) return L"failures";
-    if (index == 2) return L"all";
-    return L"off";
-}
-
-void UpdateDiagnosticAudioHint(HWND hwnd) {
-    HWND hint = GetDlgItem(hwnd, IDC_DIAGNOSTIC_AUDIO_HINT);
-    if (!hint) return;
-    const std::wstring mode = DiagnosticAudioModeFromControl(hwnd);
-    const wchar_t* text = mode == L"all"
-        ? L"Privacy: every utterance is saved as a playable WAV on this PC. Old files are removed automatically."
-        : (mode == L"failures"
-            ? L"Only diagnostic failures are saved on this PC. Old files are removed automatically."
-            : L"Audio recording diagnostics are off. No diagnostic WAV files are saved.");
-    SetWindowTextW(hint, text);
 }
 
 } // namespace
@@ -83,41 +60,6 @@ bool SaveStartupRegistrationControl(HWND hwnd) {
     return false;
 }
 
-void OpenDiagnosticAudioFolder(HWND hwnd) {
-    std::wstring error;
-    if (!asr_probe::EnsureDiagnosticAudioDir(&error)) {
-        MessageBoxW(hwnd, error.c_str(), L"Recording diagnostics",
-                    MB_OK | MB_ICONERROR);
-        return;
-    }
-    const std::wstring directory = asr_probe::GetDiagnosticAudioDir();
-    const HINSTANCE result = ShellExecuteW(
-        hwnd, L"open", directory.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-    if (reinterpret_cast<INT_PTR>(result) <= 32) {
-        MessageBoxW(hwnd, L"Unable to open the recordings folder.",
-                    L"Recording diagnostics", MB_OK | MB_ICONERROR);
-    }
-}
-
-void DeleteDiagnosticAudioFiles(HWND hwnd) {
-    const int choice = MessageBoxW(
-        hwnd,
-        L"Delete all recordings and JSON manifests managed by VoxType?\n\n"
-        L"Unknown files in the folder will be preserved.",
-        L"Delete saved recordings", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
-    if (choice != IDYES) return;
-
-    size_t deletedGroups = 0;
-    std::wstring error;
-    if (!asr_probe::DeleteDiagnosticManagedRecordings(&deletedGroups, &error)) {
-        MessageBoxW(hwnd, error.c_str(), L"Delete saved recordings",
-                    MB_OK | MB_ICONERROR);
-        return;
-    }
-    SetStatus(hwnd, L"Deleted " + std::to_wstring(deletedGroups) +
-                    L" managed recording group(s). Unknown files were preserved.");
-}
-
 void TabGeneral::CreateControls(HWND parent) {
     m_controls.clear();
     const int shortcutY = S(UiStyle::GeneralShortcutGroupY);
@@ -134,6 +76,17 @@ void TabGeneral::CreateControls(HWND parent) {
     control = CreateLabel(parent, S(UiStyle::ContentLeft), shortcutY + S(98), S(740), S(UiStyle::LabelH), L"Esc cancels recording a shortcut. Backspace/Delete clears it.");
     AddGeneralControl(control);
 
+    const int inputY = S(UiStyle::GeneralInputGroupY);
+    HWND inputGroup = CreateWindowW(L"BUTTON", L"Input preview", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                    S(UiStyle::GeneralGroupX), inputY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralInputGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
+    ApplyUiFont(inputGroup);
+    AddGeneralControl(inputGroup);
+    HWND partialCheckbox = CreateWindowW(L"BUTTON", L"Partial result", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                         S(UiStyle::ContentLeft), inputY + S(UiStyle::GeneralInputCheckOffsetY), S(UiStyle::GeneralInputCheckW), S(UiStyle::CheckH), parent,
+                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PARTIAL)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(partialCheckbox);
+    AddGeneralControl(partialCheckbox);
+
     const int startupY = S(UiStyle::GeneralStartupGroupY);
     HWND startupGroup = CreateWindowW(L"BUTTON", L"Startup", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       S(UiStyle::GeneralGroupX), startupY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralStartupGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
@@ -144,48 +97,8 @@ void TabGeneral::CreateControls(HWND parent) {
                                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_START_WITH_WINDOWS)), GetParentInstance(parent), nullptr);
     ApplyUiFont(startupCheckbox);
     AddGeneralControl(startupCheckbox);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), startupY + S(UiStyle::GeneralStartupHintOffsetY), S(UiStyle::GeneralStartupHintW), S(UiStyle::LabelH),
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), startupY + S(UiStyle::GeneralStartupHintOffsetY), S(UiStyle::GeneralStartupHintW), S(UiStyle::QwenHint2LineH),
                           L"Uses your Windows account startup list. Moving a Portable copy is corrected when you save.");
-    AddGeneralControl(control);
-
-    const int diagnosticsY = S(UiStyle::GeneralDiagnosticsGroupY);
-    HWND diagnosticsGroup = CreateWindowW(
-        L"BUTTON", L"Diagnostics", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-        S(UiStyle::GeneralGroupX), diagnosticsY,
-        S(UiStyle::GeneralGroupW), S(UiStyle::GeneralDiagnosticsGroupH),
-        parent, nullptr, GetParentInstance(parent), nullptr);
-    ApplyUiFont(diagnosticsGroup);
-    AddGeneralControl(diagnosticsGroup);
-
-    control = CreateLabel(
-        parent, S(UiStyle::ContentLeft),
-        diagnosticsY + S(UiStyle::GeneralDiagnosticsModeOffsetY + UiStyle::LabelYOffset),
-        S(UiStyle::GeneralDiagnosticsModeLabelW), S(UiStyle::LabelH),
-        L"Recording diagnostics");
-    AddGeneralControl(control);
-    AddGeneralControl(CreateCombo(
-        parent, IDC_DIAGNOSTIC_AUDIO_MODE, S(UiStyle::InputLeft),
-        diagnosticsY + S(UiStyle::GeneralDiagnosticsModeOffsetY),
-        S(UiStyle::GeneralDiagnosticsModeW), S(UiStyle::ComboH)));
-
-    const int diagnosticActionsY =
-        diagnosticsY + S(UiStyle::GeneralDiagnosticsActionsOffsetY);
-    AddGeneralControl(CreateButton(
-        parent, IDC_DIAGNOSTIC_AUDIO_OPEN_FOLDER, S(UiStyle::ContentLeft),
-        diagnosticActionsY, S(UiStyle::GeneralDiagnosticsOpenButtonW),
-        S(UiStyle::ActionBtnH), L"Open recordings folder"));
-    AddGeneralControl(CreateButton(
-        parent, IDC_DIAGNOSTIC_AUDIO_DELETE,
-        S(UiStyle::ContentLeft + UiStyle::GeneralDiagnosticsOpenButtonW +
-          UiStyle::GeneralDiagnosticsButtonGap),
-        diagnosticActionsY, S(UiStyle::GeneralDiagnosticsDeleteButtonW),
-        S(UiStyle::ActionBtnH), L"Delete saved recordings..."));
-
-    control = CreateHint(
-        parent, S(UiStyle::ContentLeft),
-        diagnosticsY + S(UiStyle::GeneralDiagnosticsHintOffsetY),
-        S(UiStyle::GeneralDiagnosticsHintW), S(UiStyle::LabelH), L"");
-    SetWindowLongPtrW(control, GWLP_ID, IDC_DIAGNOSTIC_AUDIO_HINT);
     AddGeneralControl(control);
 }
 
@@ -212,20 +125,7 @@ void TabGeneral::LoadControls(HWND parent, const Config& cfg) {
     }
 
     RefreshStartupRegistrationControl(g_settingsWindow ? g_settingsWindow : parent, true);
-
-    HWND audioDiagCombo = GetDlgItem(parent, IDC_DIAGNOSTIC_AUDIO_MODE);
-    if (audioDiagCombo) {
-        ComboBox_ResetContent(audioDiagCombo);
-        ComboBox_AddString(audioDiagCombo, L"Off (default)");
-        ComboBox_AddString(audioDiagCombo, L"Save failed requests only");
-        ComboBox_AddString(audioDiagCombo, L"Save all utterances (debug)");
-        const std::wstring mode = asr_probe::NormalizeDiagnosticAudioMode(cfg.diagnosticAudioMode);
-        int sel = 0;
-        if (mode == L"failures") sel = 1;
-        else if (mode == L"all") sel = 2;
-        ComboBox_SetCurSel(audioDiagCombo, sel);
-        UpdateDiagnosticAudioHint(parent);
-    }
+    Button_SetCheck(GetDlgItem(parent, IDC_PARTIAL), cfg.enablePartial ? BST_CHECKED : BST_UNCHECKED);
 }
 
 void TabGeneral::SaveControls(HWND parent, Config& cfg) {
@@ -233,31 +133,12 @@ void TabGeneral::SaveControls(HWND parent, Config& cfg) {
     HotkeyConfig hotkey = GetHotkeyFromEdit(parent, IDC_HOTKEY);
     cfg.hotkey = HotkeyToString(hotkey);
 
-    cfg.diagnosticAudioMode = DiagnosticAudioModeFromControl(hwnd);
+    cfg.enablePartial = Button_GetCheck(GetDlgItem(hwnd, IDC_PARTIAL)) == BST_CHECKED;
 }
 
 bool TabGeneral::SaveStartupRegistration(HWND parent) {
     HWND hwnd = parent;
     return SaveStartupRegistrationControl(hwnd);
-}
-
-bool TabGeneral::HandleCommand(HWND hwnd, WORD notifyCode, WORD controlId, HWND control) {
-    switch (controlId) {
-    case IDC_DIAGNOSTIC_AUDIO_MODE:
-        if (notifyCode == CBN_SELCHANGE) {
-            UpdateDiagnosticAudioHint(hwnd);
-            return true;
-        }
-        return false;
-    case IDC_DIAGNOSTIC_AUDIO_OPEN_FOLDER:
-        OpenDiagnosticAudioFolder(hwnd);
-        return true;
-    case IDC_DIAGNOSTIC_AUDIO_DELETE:
-        DeleteDiagnosticAudioFiles(hwnd);
-        return true;
-    default:
-        return false;
-    }
 }
 
 } // namespace ui_tab

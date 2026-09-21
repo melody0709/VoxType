@@ -10,6 +10,7 @@ namespace ui_provider {
 
 class ProviderMai : public ICloudProviderPanel {
 public:
+    const wchar_t* Id() const override { return L"mai"; }
     void CreateControls(HWND parent) override;
     void DestroyControls() override;
     void Show(bool visible) override;

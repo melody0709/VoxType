@@ -165,7 +165,7 @@ void ProviderMai::CreateControls(HWND hwnd) {
     SetWindowLongPtrW(maiHint, GWLP_ID, IDC_MAI_HINT);
 
     AddMaiControl(CreateButton(
-        parent, IDC_MAI_TEST, S(500), S(UiStyle::RowInputY(0)),
+        parent, IDC_MAI_TEST, S(500), S(UiStyle::RowInputY(4)),
         S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection"));
 }
 

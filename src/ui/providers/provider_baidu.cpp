@@ -27,7 +27,7 @@ void ProviderBaidu::CreateControls(HWND parent) {
     };
     m_binder.AddComboRow(parent, cursor, IDC_BAIDU_DEV_PID, L"Language Model", &Config::baiduDevPid, pidOpts, UiStyle::ComboW);
 
-    HWND btnTest = CreateButton(parent, IDC_BAIDU_TEST, S(500), S(UiStyle::RowInputY(0)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_BAIDU_TEST, S(500), S(UiStyle::RowInputY(4)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
     m_extraControls.push_back(btnTest);
 }
 

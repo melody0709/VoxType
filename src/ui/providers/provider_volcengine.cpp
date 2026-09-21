@@ -7,6 +7,7 @@
 #include "settings_dialogs.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_utils.h"
 #include "asr_probe_service.h"
 
 #include <windowsx.h>
@@ -29,132 +30,71 @@ constexpr const wchar_t* kVolcLanguages[] = {
     L"de-DE", L"es-MX", L"pt-BR", L"id-ID",
 };
 
+bool ValidateVolcAdvancedData(VolcAdvancedDialogData& data, std::wstring& error) {
+    if (_wtoi(data.endWindowSize.c_str()) <= 0) {
+        error = L"end_window_size must be a positive number of milliseconds.";
+        return false;
+    }
+    if (_wtoi(data.forceToSpeechTime.c_str()) < 0) {
+        error = L"force_to_speech_time must be zero or a positive number of milliseconds.";
+        return false;
+    }
+    if (data.enableContext) {
+        const int history = _wtoi(data.contextHistory.c_str());
+        if (history < 1 || history > 20) {
+            error = L"History turns must be between 1 and 20.";
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 void ProviderVolcengine::CreateControls(HWND parent) {
     m_controls.clear();
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Key (X-Api-Key)");
-    m_controls.push_back(control);
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcKeyY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Key (X-Api-Key)");
+    AddVolcControl(control);
     HWND volcApiKey = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_PASSWORD,
-                                      S(UiStyle::InputLeft), S(UiStyle::RowInputY(1)), S(330), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_API_KEY)), GetParentInstance(parent), nullptr);
+                                      S(UiStyle::InputLeft), S(UiStyle::VolcKeyY), S(UiStyle::VolcKeyEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_API_KEY)), GetParentInstance(parent), nullptr);
     ApplyUiFont(volcApiKey);
-    m_controls.push_back(volcApiKey);
-    HWND btnShow = CreateButton(parent, IDC_VOLC_SHOW_KEY, S(UiStyle::SmallBtnX), S(UiStyle::RowInputY(1)) - S(1), S(UiStyle::SmallBtnW), S(UiStyle::BtnH), L"Show");
-    m_controls.push_back(btnShow);
+    AddVolcControl(volcApiKey);
+    AddVolcControl(CreateButton(parent, IDC_VOLC_SHOW_KEY, S(UiStyle::QwenShowBtnX), S(UiStyle::VolcKeyY), S(UiStyle::QwenShowBtnW), S(UiStyle::EditH), L"Show"));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(130), S(UiStyle::LabelH), L"Model");
-    m_controls.push_back(control);
-    HWND comboRes = CreateCombo(parent, IDC_VOLC_RESOURCE, S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)), S(480), S(UiStyle::ComboH));
-    m_controls.push_back(comboRes);
-    HWND btnLog = CreateButton(parent, IDC_VOLC_OPEN_LOG, S(680), S(UiStyle::RowInputY(2)), S(100), S(UiStyle::ActionBtnH), L"Open log");
-    m_controls.push_back(btnLog);
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcModelY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Model");
+    AddVolcControl(control);
+    AddVolcControl(CreateCombo(parent, IDC_VOLC_RESOURCE, S(UiStyle::InputLeft), S(UiStyle::VolcModelY), S(UiStyle::VolcModelComboW), S(UiStyle::ComboH)));
+    AddVolcControl(CreateButton(parent, IDC_VOLC_OPEN_LOG, S(UiStyle::VolcLogBtnX), S(UiStyle::VolcModelY), S(UiStyle::VolcLogBtnW), S(UiStyle::ActionBtnH), L"Open log"));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(130), S(UiStyle::LabelH), L"ASR Mode");
-    m_controls.push_back(control);
-    HWND comboMode = CreateCombo(parent, IDC_VOLC_MODE, S(UiStyle::InputLeft), S(UiStyle::RowInputY(3)), S(220), S(UiStyle::ComboH));
-    m_controls.push_back(comboMode);
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcModeY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"ASR Mode");
+    AddVolcControl(control);
+    AddVolcControl(CreateCombo(parent, IDC_VOLC_MODE, S(UiStyle::InputLeft), S(UiStyle::VolcModeY), S(UiStyle::VolcModeComboW), S(UiStyle::ComboH)));
 
-    control = CreateLabel(parent, S(420), S(UiStyle::RowLabelY(3)), S(80), S(UiStyle::LabelH), L"Language");
-    m_controls.push_back(control);
-    HWND comboLang = CreateCombo(parent, IDC_VOLC_LANGUAGE, S(505), S(UiStyle::RowInputY(3)), S(240), S(UiStyle::ComboH));
-    m_controls.push_back(comboLang);
+    control = CreateLabel(parent, S(UiStyle::VolcLanguageLabelX), S(UiStyle::VolcModeY) + S(UiStyle::LabelYOffset), S(UiStyle::VolcLanguageLabelW), S(UiStyle::LabelH), L"Language");
+    AddVolcControl(control);
+    AddVolcControl(CreateCombo(parent, IDC_VOLC_LANGUAGE, S(UiStyle::VolcLanguageComboX), S(UiStyle::VolcModeY), S(UiStyle::VolcLanguageComboW), S(UiStyle::ComboH)));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(4)) + S(2), S(UiStyle::LabelWidth) + S(10), S(UiStyle::LabelH), L"end_window_size");
-    m_controls.push_back(control);
-    HWND volcEndWindow = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
-                                         S(UiStyle::InputLeft) + S(10), S(UiStyle::RowInputY(4)), S(80), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_END_WINDOW_SIZE)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcEndWindow);
-    m_controls.push_back(volcEndWindow);
-    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(96), S(UiStyle::RowInputY(4)) + S(2), S(30), S(UiStyle::LabelH), L"ms");
-    m_controls.push_back(control);
-
-    control = CreateLabel(parent, S(360), S(UiStyle::RowInputY(4)) + S(2), S(180), S(UiStyle::LabelH), L"force_to_speech_time");
-    m_controls.push_back(control);
-    HWND volcForceSpeech = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
-                                           S(550), S(UiStyle::RowInputY(4)), S(60), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_FORCE_TO_SPEECH_TIME)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcForceSpeech);
-    m_controls.push_back(volcForceSpeech);
-    control = CreateLabel(parent, S(618), S(UiStyle::RowInputY(4)) + S(2), S(30), S(UiStyle::LabelH), L"ms");
-    m_controls.push_back(control);
-
-    HWND volcDdc = CreateWindowW(L"BUTTON", L"enable_ddc", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                 S(UiStyle::ContentLeft), S(UiStyle::RowInputY(5)) + S(6), S(120), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_DDC)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcDdc);
-    m_controls.push_back(volcDdc);
-
-    HWND volcNonstream = CreateWindowW(L"BUTTON", L"enable_nonstream", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                       S(195), S(UiStyle::RowInputY(5)) + S(6), S(170), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_NONSTREAM)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcNonstream);
-    m_controls.push_back(volcNonstream);
-
-    HWND volcMusicFc = CreateWindowW(L"BUTTON", L"enable_music_fc", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                     S(395), S(UiStyle::RowInputY(5)) + S(6), S(150), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_MUSIC_FC)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcMusicFc);
-    m_controls.push_back(volcMusicFc);
-
-    HWND volcPoiFc = CreateWindowW(L"BUTTON", L"enable_poi_fc", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                   S(575), S(UiStyle::RowInputY(5)) + S(6), S(130), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_POI_FC)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcPoiFc);
-    m_controls.push_back(volcPoiFc);
-
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(6)) + S(2), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Extra Params");
-    m_controls.push_back(control);
-    HWND btnExtra = CreateButton(parent, IDC_VOLC_EXTRA_PARAMS, S(UiStyle::InputLeft), S(UiStyle::RowInputY(6)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Edit Params");
-    m_controls.push_back(btnExtra);
-
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Context & Vocab");
+    AddVolcControl(control);
     HWND volcReuseVocab = CreateWindowW(L"BUTTON", L"Reuse common vocabulary (vocabulary.json)", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                        S(360), S(UiStyle::RowInputY(6)) + S(6), S(400), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_REUSE_VOCABULARY)), GetParentInstance(parent), nullptr);
+                                        S(UiStyle::InputLeft), S(UiStyle::VolcContextY), S(UiStyle::VolcReuseVocabW), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_REUSE_VOCABULARY)), GetParentInstance(parent), nullptr);
     ApplyUiFont(volcReuseVocab);
-    m_controls.push_back(volcReuseVocab);
-
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(7)) + S(2), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Hotwords ID");
-    m_controls.push_back(control);
-    HWND volcHotwordsId = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                          S(UiStyle::InputLeft), S(UiStyle::RowInputY(7)), S(260), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_HOTWORDS_ID)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcHotwordsId);
-    m_controls.push_back(volcHotwordsId);
-    control = CreateLabel(parent, S(462), S(UiStyle::RowInputY(7)) + S(2), S(48), S(UiStyle::LabelH), L"Name");
-    m_controls.push_back(control);
-    HWND volcHotwordsName = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                            S(542), S(UiStyle::RowInputY(7)), S(230), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_HOTWORDS_NAME)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcHotwordsName);
-    m_controls.push_back(volcHotwordsName);
-
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(8)) + S(2), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Correct ID");
-    m_controls.push_back(control);
-    HWND volcCorrectTableId = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                               S(UiStyle::InputLeft), S(UiStyle::RowInputY(8)), S(260), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CORRECT_TABLE_ID)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcCorrectTableId);
-    m_controls.push_back(volcCorrectTableId);
-    control = CreateLabel(parent, S(462), S(UiStyle::RowInputY(8)) + S(2), S(48), S(UiStyle::LabelH), L"Name");
-    m_controls.push_back(control);
-    HWND volcCorrectTableName = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                                 S(542), S(UiStyle::RowInputY(8)), S(230), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CORRECT_TABLE_NAME)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcCorrectTableName);
-    m_controls.push_back(volcCorrectTableName);
-
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(9)) + S(2), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Context");
-    m_controls.push_back(control);
-
-    HWND volcEnableContext = CreateWindowW(L"BUTTON", L"Use history as context", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                           S(UiStyle::InputLeft), S(UiStyle::RowInputY(9)) + S(6), S(210), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_CONTEXT)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcEnableContext);
-    m_controls.push_back(volcEnableContext);
-
-    HWND volcContextHistory = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
-                                              S(UiStyle::InputLeft) + S(220), S(UiStyle::RowInputY(9)), S(44), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CONTEXT_HISTORY)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(volcContextHistory);
-    m_controls.push_back(volcContextHistory);
-    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(270), S(UiStyle::RowInputY(9)) + S(2), S(80), S(UiStyle::LabelH), L"history");
-    m_controls.push_back(control);
-
-    HWND volcEnableInputContext = CreateWindowW(L"BUTTON", L"Read input field context", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                                 S(542), S(UiStyle::RowInputY(9)) + S(6), S(280), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_INPUT_CONTEXT)), GetParentInstance(parent), nullptr);
+    AddVolcControl(volcReuseVocab);
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcInputContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Input context");
+    AddVolcControl(control);
+    HWND volcEnableInputContext = CreateWindowW(L"BUTTON", L"Use focused input field text as context", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                S(UiStyle::VolcInputContextX), S(UiStyle::VolcInputContextY), S(UiStyle::VolcInputContextW), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_INPUT_CONTEXT)), GetParentInstance(parent), nullptr);
     ApplyUiFont(volcEnableInputContext);
-    m_controls.push_back(volcEnableInputContext);
+    AddVolcControl(volcEnableInputContext);
 
-    HWND btnTest = CreateButton(parent, IDC_VOLC_TEST, S(500), S(UiStyle::RowInputY(0)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
-    m_controls.push_back(btnTest);
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcActionY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Advanced");
+    AddVolcControl(control);
+    AddVolcControl(CreateButton(parent, IDC_VOLC_ADVANCED, S(UiStyle::InputLeft), S(UiStyle::VolcActionY), S(UiStyle::VolcAdvancedBtnW), S(UiStyle::ActionBtnH), L"Advanced..."));
+    AddVolcControl(CreateButton(parent, IDC_VOLC_TEST, S(UiStyle::VolcTestBtnX), S(UiStyle::VolcActionY), S(UiStyle::VolcTestBtnW), S(UiStyle::ActionBtnH), L"Test Connection"));
+
+    control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::VolcHintY), S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
+                         L"Hotwords, correction tables, DDC, end-window, JSON.");
+    AddVolcControl(control);
 }
 
 void ProviderVolcengine::DestroyControls() {
@@ -181,6 +121,41 @@ void ProviderVolcengine::Show(bool visible) {
             }
         }
     }
+}
+
+std::wstring ProviderVolcengine::CurrentMode(HWND parent) const {
+    const int modeIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_MODE));
+    if (modeIdx == 1) return L"bigmodel_async";
+    if (modeIdx == 2) return L"bigmodel";
+    return L"bigmodel_nostream";
+}
+
+std::wstring ProviderVolcengine::CurrentResourceId(HWND parent) const {
+    const int resIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_RESOURCE));
+    if (resIdx >= 0 && resIdx < 4) return kVolcResources[resIdx].resourceId;
+    return kVolcResources[0].resourceId;
+}
+
+std::wstring ProviderVolcengine::CurrentLanguage(HWND parent) const {
+    const int langIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_LANGUAGE));
+    if (langIdx >= 0 && langIdx < 9) return kVolcLanguages[langIdx];
+    return L"";
+}
+
+void ProviderVolcengine::SyncAdvancedFromConfig(const Config& cfg) {
+    m_advanced.hotwordsId = cfg.volcHotwordsId;
+    m_advanced.hotwordsName = cfg.volcHotwordsName;
+    m_advanced.correctTableId = cfg.volcCorrectTableId;
+    m_advanced.correctTableName = cfg.volcCorrectTableName;
+    m_advanced.enableContext = cfg.volcEnableContext;
+    m_advanced.contextHistory = std::to_wstring(cfg.volcContextHistory);
+    m_advanced.endWindowSize = std::to_wstring(cfg.volcEndWindowSize);
+    m_advanced.forceToSpeechTime = std::to_wstring(cfg.volcForceToSpeechTime);
+    m_advanced.enableDdc = cfg.volcEnableDdc;
+    m_advanced.enableNonstream = cfg.volcEnableNonstream;
+    m_advanced.enableMusicFc = cfg.volcEnableMusicFc;
+    m_advanced.enablePoiFc = cfg.volcEnablePoiFc;
+    m_advanced.extraParams = cfg.volcExtraParams;
 }
 
 void ProviderVolcengine::LoadControls(HWND parent, const Config& cfg) {
@@ -244,130 +219,50 @@ void ProviderVolcengine::LoadControls(HWND parent, const Config& cfg) {
         EnableWindow(volcLangCombo, modeIdx == 0);
     }
 
-    Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM), cfg.volcEnableNonstream ? BST_CHECKED : BST_UNCHECKED);
-    EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM), cfg.volcMode == L"bigmodel_async");
-    {
-        bool fcEnabled = (cfg.volcMode == L"bigmodel_nostream") ||
-            (cfg.volcMode == L"bigmodel_async" && cfg.volcEnableNonstream);
-        EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_MUSIC_FC), fcEnabled);
-        EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_POI_FC), fcEnabled);
-    }
-    Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_DDC), cfg.volcEnableDdc ? BST_CHECKED : BST_UNCHECKED);
-    Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_MUSIC_FC), cfg.volcEnableMusicFc ? BST_CHECKED : BST_UNCHECKED);
-    Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_POI_FC), cfg.volcEnablePoiFc ? BST_CHECKED : BST_UNCHECKED);
-    {
-        wchar_t ew[32] = {};
-        _itow_s(cfg.volcEndWindowSize, ew, 10);
-        SetWindowTextW(GetDlgItem(parent, IDC_VOLC_END_WINDOW_SIZE), ew);
-    }
-    {
-        wchar_t ft[32] = {};
-        _itow_s(cfg.volcForceToSpeechTime, ft, 10);
-        SetWindowTextW(GetDlgItem(parent, IDC_VOLC_FORCE_TO_SPEECH_TIME), ft);
-    }
-
-    SetWindowTextW(GetDlgItem(parent, IDC_VOLC_HOTWORDS_ID), cfg.volcHotwordsId.c_str());
-    SetWindowTextW(GetDlgItem(parent, IDC_VOLC_HOTWORDS_NAME), cfg.volcHotwordsName.c_str());
-    SetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_ID), cfg.volcCorrectTableId.c_str());
-    SetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_NAME), cfg.volcCorrectTableName.c_str());
-
-    Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_CONTEXT), cfg.volcEnableContext ? BST_CHECKED : BST_UNCHECKED);
-    {
-        wchar_t ch[32] = {};
-        _itow_s(cfg.volcContextHistory, ch, 10);
-        SetWindowTextW(GetDlgItem(parent, IDC_VOLC_CONTEXT_HISTORY), ch);
-    }
     Button_SetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_INPUT_CONTEXT), cfg.volcEnableInputContext ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(GetDlgItem(parent, IDC_VOLC_REUSE_VOCABULARY), cfg.volcEnableReuseVocabulary ? BST_CHECKED : BST_UNCHECKED);
+
+    SyncAdvancedFromConfig(cfg);
+    m_advanced.mode = cfg.volcMode;
 }
 
 void ProviderVolcengine::SaveControls(HWND parent, Config& cfg) {
-    wchar_t volcApiKey[256] = {};
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_API_KEY), volcApiKey, 256);
-    cfg.volcApiKey = volcApiKey;
-
-    int modeIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_MODE));
-    if (modeIdx == 1) cfg.volcMode = L"bigmodel_async";
-    else if (modeIdx == 2) cfg.volcMode = L"bigmodel";
-    else cfg.volcMode = L"bigmodel_nostream";
-
-    int resIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_RESOURCE));
-    if (resIdx >= 0 && resIdx < 4) cfg.volcResourceId = kVolcResources[resIdx].resourceId;
-
-    int langIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_LANGUAGE));
-    if (langIdx >= 0 && langIdx < 9) cfg.volcLanguage = kVolcLanguages[langIdx];
-
-    cfg.volcEnableNonstream = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM)) == BST_CHECKED;
-    cfg.volcEnableDdc = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_DDC)) == BST_CHECKED;
-    cfg.volcEnableMusicFc = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_MUSIC_FC)) == BST_CHECKED;
-    cfg.volcEnablePoiFc = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_POI_FC)) == BST_CHECKED;
-
-    wchar_t ew[32] = {};
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_END_WINDOW_SIZE), ew, 32);
-    int parsed = _wtoi(ew);
-    cfg.volcEndWindowSize = parsed > 0 ? parsed : 800;
-
-    wchar_t ft[32] = {};
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_FORCE_TO_SPEECH_TIME), ft, 32);
-    parsed = _wtoi(ft);
-    cfg.volcForceToSpeechTime = parsed >= 1 ? parsed : 0;
-
-    wchar_t hw[512] = {};
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_HOTWORDS_ID), hw, 512);
-    cfg.volcHotwordsId = hw;
-
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_HOTWORDS_NAME), hw, 512);
-    cfg.volcHotwordsName = hw;
-
-    wchar_t ct[512] = {};
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_ID), ct, 512);
-    cfg.volcCorrectTableId = ct;
-
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_NAME), ct, 512);
-    cfg.volcCorrectTableName = ct;
-
-    cfg.volcEnableContext = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_CONTEXT)) == BST_CHECKED;
-    wchar_t ch[32] = {};
-    GetWindowTextW(GetDlgItem(parent, IDC_VOLC_CONTEXT_HISTORY), ch, 32);
-    parsed = _wtoi(ch);
-    cfg.volcContextHistory = (parsed >= 1 && parsed <= 20) ? parsed : 3;
-
+    cfg.volcApiKey = GetControlText(parent, IDC_VOLC_API_KEY, 256);
+    cfg.volcMode = CurrentMode(parent);
+    cfg.volcResourceId = CurrentResourceId(parent);
+    cfg.volcLanguage = CurrentLanguage(parent);
     cfg.volcEnableInputContext = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_INPUT_CONTEXT)) == BST_CHECKED;
     cfg.volcEnableReuseVocabulary = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_REUSE_VOCABULARY)) == BST_CHECKED;
+
+    m_advanced.mode = cfg.volcMode;
+    cfg.volcHotwordsId = m_advanced.hotwordsId;
+    cfg.volcHotwordsName = m_advanced.hotwordsName;
+    cfg.volcCorrectTableId = m_advanced.correctTableId;
+    cfg.volcCorrectTableName = m_advanced.correctTableName;
+    cfg.volcEnableContext = m_advanced.enableContext;
+    int parsed = _wtoi(m_advanced.contextHistory.c_str());
+    cfg.volcContextHistory = (parsed >= 1 && parsed <= 20) ? parsed : 3;
+    parsed = _wtoi(m_advanced.endWindowSize.c_str());
+    cfg.volcEndWindowSize = parsed > 0 ? parsed : 800;
+    parsed = _wtoi(m_advanced.forceToSpeechTime.c_str());
+    cfg.volcForceToSpeechTime = parsed >= 1 ? parsed : 0;
+    cfg.volcEnableDdc = m_advanced.enableDdc;
+    cfg.volcEnableNonstream = m_advanced.enableNonstream;
+    cfg.volcEnableMusicFc = m_advanced.enableMusicFc;
+    cfg.volcEnablePoiFc = m_advanced.enablePoiFc;
+    cfg.volcExtraParams = m_advanced.extraParams;
 }
 
 bool ProviderVolcengine::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
     switch (controlId) {
     case IDC_VOLC_MODE:
         if (notifyCode == CBN_SELCHANGE) {
-            int modeIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_MODE));
+            const int modeIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_MODE));
             HWND langCombo = GetDlgItem(parent, IDC_VOLC_LANGUAGE);
             if (langCombo) EnableWindow(langCombo, modeIdx == 0);
-            EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM), modeIdx == 1);
-            {
-                bool fcEnabled = (modeIdx == 0) ||
-                    (modeIdx == 1 && Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM)) == BST_CHECKED);
-                EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_MUSIC_FC), fcEnabled);
-                EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_POI_FC), fcEnabled);
-            }
             return true;
         }
         return false;
-    case IDC_VOLC_ENABLE_NONSTREAM: {
-        int modeIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_MODE));
-        bool fcEnabled = (modeIdx == 0) ||
-            (modeIdx == 1 && Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM)) == BST_CHECKED);
-        EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_MUSIC_FC), fcEnabled);
-        EnableWindow(GetDlgItem(parent, IDC_VOLC_ENABLE_POI_FC), fcEnabled);
-        return true;
-    }
-    case IDC_VOLC_EXTRA_PARAMS: {
-        std::wstring params = g_config.volcExtraParams;
-        if (ShowVolcExtraDialog(parent, params)) {
-            g_config.volcExtraParams = params;
-        }
-        return true;
-    }
     case IDC_VOLC_SHOW_KEY: {
         m_keyVisible = !m_keyVisible;
         HWND keyEdit = GetDlgItem(parent, IDC_VOLC_API_KEY);
@@ -382,57 +277,46 @@ bool ProviderVolcengine::HandleCommand(HWND parent, WORD notifyCode, WORD contro
     case IDC_VOLC_OPEN_LOG:
         OpenAsrDebugLog(parent, L"volc_asr_debug.log");
         return true;
+    case IDC_VOLC_ADVANCED: {
+        m_advanced.mode = CurrentMode(parent);
+        VolcAdvancedDialogData edited = m_advanced;
+        if (ShowVolcAdvancedDialog(parent, edited, ValidateVolcAdvancedData)) {
+            m_advanced = edited;
+            SetStatus(parent, L"Volcano Engine advanced settings updated. Click Save to apply.");
+        }
+        return true;
+    }
     case IDC_VOLC_TEST: {
         Config snap = g_config;
-        wchar_t tmp[256] = {};
-        GetWindowTextW(GetDlgItem(parent, IDC_VOLC_API_KEY), tmp, 256);
-        snap.volcApiKey = tmp;
-        int modeIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_MODE));
-        if (modeIdx == 1) snap.volcMode = L"bigmodel_async";
-        else if (modeIdx == 2) snap.volcMode = L"bigmodel";
-        else snap.volcMode = L"bigmodel_nostream";
-        int resIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_RESOURCE));
-        if (resIdx >= 0 && resIdx < 4) snap.volcResourceId = kVolcResources[resIdx].resourceId;
-        int langIdx = ComboBox_GetCurSel(GetDlgItem(parent, IDC_VOLC_LANGUAGE));
-        if (langIdx >= 0 && langIdx < 9) snap.volcLanguage = kVolcLanguages[langIdx];
-        snap.volcEnableNonstream = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_NONSTREAM)) == BST_CHECKED;
-        snap.volcEnableDdc = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_DDC)) == BST_CHECKED;
-        snap.volcEnableMusicFc = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_MUSIC_FC)) == BST_CHECKED;
-        snap.volcEnablePoiFc = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_POI_FC)) == BST_CHECKED;
-        {
-            wchar_t value[32] = {};
-            GetWindowTextW(GetDlgItem(parent, IDC_VOLC_END_WINDOW_SIZE), value, 32);
-            const int parsedVal = _wtoi(value);
-            snap.volcEndWindowSize = parsedVal > 0 ? parsedVal : 800;
-        }
-        {
-            wchar_t value[32] = {};
-            GetWindowTextW(GetDlgItem(parent, IDC_VOLC_FORCE_TO_SPEECH_TIME), value, 32);
-            const int parsedVal = _wtoi(value);
-            snap.volcForceToSpeechTime = parsedVal >= 1 ? parsedVal : 0;
-        }
-        snap.volcExtraParams = g_config.volcExtraParams;
-        {
-            wchar_t hw[512] = {};
-            GetWindowTextW(GetDlgItem(parent, IDC_VOLC_HOTWORDS_ID), hw, 512);
-            snap.volcHotwordsId = hw;
-        }
-        {
-            wchar_t hw[512] = {};
-            GetWindowTextW(GetDlgItem(parent, IDC_VOLC_HOTWORDS_NAME), hw, 512);
-            snap.volcHotwordsName = hw;
-        }
-        {
-            wchar_t ct[512] = {};
-            GetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_ID), ct, 512);
-            snap.volcCorrectTableId = ct;
-        }
-        {
-            wchar_t ct[512] = {};
-            GetWindowTextW(GetDlgItem(parent, IDC_VOLC_CORRECT_TABLE_NAME), ct, 512);
-            snap.volcCorrectTableName = ct;
-        }
+        snap.volcApiKey = GetControlText(parent, IDC_VOLC_API_KEY, 256);
+        snap.volcMode = CurrentMode(parent);
+        snap.volcResourceId = CurrentResourceId(parent);
+        snap.volcLanguage = CurrentLanguage(parent);
+        snap.volcEnableInputContext = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_ENABLE_INPUT_CONTEXT)) == BST_CHECKED;
         snap.volcEnableReuseVocabulary = Button_GetCheck(GetDlgItem(parent, IDC_VOLC_REUSE_VOCABULARY)) == BST_CHECKED;
+        snap.volcHotwordsId = m_advanced.hotwordsId;
+        snap.volcHotwordsName = m_advanced.hotwordsName;
+        snap.volcCorrectTableId = m_advanced.correctTableId;
+        snap.volcCorrectTableName = m_advanced.correctTableName;
+        snap.volcEnableContext = m_advanced.enableContext;
+        {
+            const int parsed = _wtoi(m_advanced.contextHistory.c_str());
+            snap.volcContextHistory = (parsed >= 1 && parsed <= 20) ? parsed : 3;
+        }
+        {
+            const int parsed = _wtoi(m_advanced.endWindowSize.c_str());
+            snap.volcEndWindowSize = parsed > 0 ? parsed : 800;
+        }
+        {
+            const int parsed = _wtoi(m_advanced.forceToSpeechTime.c_str());
+            snap.volcForceToSpeechTime = parsed >= 1 ? parsed : 0;
+        }
+        snap.volcEnableDdc = m_advanced.enableDdc;
+        snap.volcEnableNonstream = m_advanced.enableNonstream;
+        snap.volcEnableMusicFc = m_advanced.enableMusicFc;
+        snap.volcEnablePoiFc = m_advanced.enablePoiFc;
+        snap.volcExtraParams = m_advanced.extraParams;
+
         SetStatus(parent, L"Testing Volcano Engine ASR connection...");
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"volcengine", snap };

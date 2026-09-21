@@ -35,7 +35,7 @@ void ProviderMimo::CreateControls(HWND parent) {
     };
     m_binder.AddComboRow(parent, cursor, IDC_MIMO_LANGUAGE, L"Language", &Config::mimoLanguage, langOpts);
 
-    HWND btnTest = CreateButton(parent, IDC_MIMO_TEST, S(500), S(UiStyle::RowInputY(0)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_MIMO_TEST, S(500), S(UiStyle::RowInputY(5)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
     m_extraControls.push_back(btnTest);
 }
 

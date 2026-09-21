@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.10.6</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.10.7</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -96,45 +96,32 @@ the packager re-extracts and hashes each result before publishing it.
 <details open>
 <summary><strong>Settings Guide</strong></summary>
 
-**General tab**
+**General & Input tab**
+- `Hold hotkey` — Click the input box then press the hotkey to record
+  - `Esc` cancels this recording, `Backspace/Delete` clears the hotkey
+  - Default CapsLock: Short press toggles Caps Lock, long press 300ms triggers voice input
+- `Partial result` — Live typewriter preview while speaking; applies to every streaming backend (Local, Qwen, Volcano Engine, Doubao IME, Qwen IME Free)
 - `Start VoxType when I sign in to Windows` registers the current user's
   Windows Run entry. It is off by default and can be safely enabled for either
   the MSI or Portable build; saving after moving a Portable folder corrects its
   stored executable path.
-- `Recording diagnostics` is a shared capture service for every Local and cloud
-  ASR backend, including provider retry and configured fallback stages:
-  - `Off` (default) never saves diagnostic audio.
-  - `Failures only` saves substantive no-speech, capture, transport, timeout,
-    and contradictory-stage failures.
-  - If every capture backend fails before the first PCM sample, VoxType saves a
-    JSON-only manifest with the attempted backends, terminal phase/error code,
-    and available device/format metadata; it does not create a fake empty WAV.
-  - `All recordings` explicitly saves every utterance and shows a privacy warning.
-  - `Open recordings folder` creates and opens the managed directory immediately;
-    `Delete saved recordings...` asks for confirmation and preserves unknown files.
-  - Installed builds use `%LOCALAPPDATA%\VoxType\diagnostics\audio`; Portable
-    builds use `<portable-root>\diagnostics\audio`. Files stay on this PC and
-    are limited to 20 groups, 100 MiB, and 7 days.
 
-**Recognition tab**
+**Speech Engine tab**
 - `ASR Backend` — Select between `Local (sherpa-onnx)`, `Volcano Engine`, `Baidu Cloud`, `Qwen ASR`, `MiMo ASR`, `Doubao IME (Free)`, and `Qwen IME (Free)`
 - `Fallback` — Optional backup ASR backend: `Local`, `Baidu Cloud`, `Qwen ASR`, `MiMo ASR`, `Doubao IME (Free)`, or `Qwen IME (Free)`. If the primary backend ends in an operational failure such as timeout, network error, auth/config error, or model load error, VoxType retries the same raw PCM with the fallback backend before showing the final result. `Too short` and `No speech detected` do not trigger fallback.
-- `ASR model` — Speech recognition model (only for Local backend):
-  - `FireRedASR2 CTC` — Fast, suitable for daily input
-  - `FireRedASR2 AED` — Better quality, more accurate for long sentences
-  - `SenseVoiceSmall` — Lightweight model, suitable for low-resource machines
-- `Model folder` — Model file storage directory
-- `Threads` — Inference thread count, `auto` uses CPU core count (max 8)
-- `Enable VAD` — Enable voice activity detection, checks for speech before recording, skips ASR when no voice detected to save time
-- `VAD model` — Voice activity detection model (requires Enable VAD):
-  - `Silero VAD` — Lightweight and fast, accuracy F1 95.95
-  - `FireRed VAD` — High precision (F1 97.57, false alarm rate 2.69%), model only 2.2MB
-- `Punctuation` — Post-recognition processing:
-  - `Disabled` — No processing, outputs ASR raw text
-  - `Auto punctuate` — Local CT-Transformer auto-punctuation (no network required)
-- `Hold hotkey` — Click the input box then press the hotkey to record
-  - `Esc` cancels this recording, `Backspace/Delete` clears the hotkey
-  - Default CapsLock: Short press toggles Caps Lock, long press 300ms triggers voice input
+- The configuration of the selected backend appears **in place** directly below these two selectors, and each provider panel keeps its own `[Test Connection]` button; credentials are never split into a separate tab.
+- **Local (sherpa-onnx)** configuration:
+  - `ASR model` — Speech recognition model:
+    - `FireRedASR2 CTC` — Fast, suitable for daily input
+    - `FireRedASR2 AED` — Better quality, more accurate for long sentences
+    - `SenseVoiceSmall` — Lightweight model, suitable for low-resource machines
+  - `Model folder` — Model file storage directory
+  - `Threads` — Inference thread count, `auto` uses CPU core count (max 8)
+  - `Punctuation` — Local offline punctuation model:
+    - `Auto punctuate` — Local CT-Transformer auto-punctuation (no network required), stored as `auto`
+    - `ITN only` — Inverse text normalization only, stored as `itn`
+    - `Disabled` — Raw ASR text, no punctuation model loaded, stored as `none`
+    - Legacy `punct` / `llm` values are shown verbatim and saved back unchanged instead of being silently rewritten.
 
 **LLM tab**
 - `Enable LLM Refinement` — Master toggle for LLM refinement and error correction. When disabled, configuration fields below are grayed out
@@ -157,15 +144,15 @@ the packager re-extracts and hashes each result before publishing it.
 - `Format JSON` — Formats and indents the JSON text
 - `Open Folder` — Opens the directory containing `vocabulary.json` in Windows Explorer
 
-**Cloud ASR tab**
-- `Provider` — Select between `Volcano Engine (Doubao)`, `Baidu Cloud`, `Qwen ASR (DashScope)`, `MiMo ASR (Xiaomi)`, `Microsoft MAI Transcribe 2`, `Doubao IME (Free)`, and `Qwen IME (Free)`, controls below update dynamically
+**Speech Engine tab — cloud backends**
+- Each cloud backend is configured in place on the Speech Engine tab as soon as it is selected as `ASR Backend`; `Test Connection` sits in the same panel as the credentials it tests.
 - **Baidu Cloud**: `API Key` / `Secret Key` (DPAPI encrypted) + `Language Model` (Mandarin/English/Cantonese/Sichuanese) + `Test Connection`
-- **Volcano Engine (Doubao)**: `API Key` (DPAPI encrypted) + `ASR Mode` + `Model Version` + `Language` + `Test Connection`
+- **Volcano Engine (Doubao)**: `API Key` (DPAPI encrypted) + `ASR Mode` + `Model Version` + `Language` + `[Advanced...]` + `Test Connection`
   - ASR Mode: `bigmodel_nostream` (recommended, highest accuracy) / `bigmodel_async` (best latency) / `bigmodel` (real-time partial)
   - Model Version: `Seed-ASR 2.0 (duration)` / `Seed-ASR 2.0 (concurrent)` / `BigASR 1.0 (duration)` / `BigASR 1.0 (concurrent)`
-  - Hotwords ID/Name, Correct ID/Name — Reference hotword and correction tables from the self-learning platform
-  - Use history as context — Sends recent recognition results as dialog context for improved accuracy
-  - Read input field context — Reads current input field text as ASR context (UIA/MSAA/WM_GETTEXT layered fallback, input field priority, history fallback)
+  - `[Advanced...]` (810×800) groups the low-frequency tuning: Hotwords ID/Name and Correct-table ID/Name from the self-learning platform, `Enable history context` + history turns, `end_window_size`, `force_to_speech_time`, the `enable_ddc` / `enable_nonstream` / `enable_poi_fc` / `enable_music_fc` protocol switches, and the free-form Extra Params JSON editor.
+  - `Use focused input field text as context` — Reads current input field text as ASR context (UIA/MSAA/WM_GETTEXT layered fallback, input field priority, history fallback)
+  - `Reuse common vocabulary (vocabulary.json)` — Sends the shared Vocabulary tab word list with the request
 - **Qwen ASR (DashScope)**: `API Key` (DPAPI encrypted) + model profile dropdown + profile-specific Endpoint + `Language` + `Chunk ms` + Audio 3 vocabulary/punctuation/VAD options + `Test Connection`
   - New installs default to `qwen-audio-3.0-asr-flash-streaming`; existing configurations preserve their selected model.
   - Audio 3 defaults use the configured Beijing Workspace domain; no region selector is exposed.
@@ -187,6 +174,26 @@ the packager re-extracts and hashes each result before publishing it.
   - `Polish (auto)` is the single switch for the bundled `VoiceInputWrite` post-processing path. `Punctuation included` and `Correction included` are read-only indicators because the original endpoint returns them in the same response, not as independent HTTP requests. The experimental `Rewrite selection` code path is retained for protocol research, but is currently disabled in Settings and forcibly turned off during config load/save. Its request-field mapping remains compatibility-derived and requires matching original-client request/response evidence before it can be enabled as a supported feature.
   - `Debug log` enables local Qwen protocol diagnostics; it does not change the recognition result.
 - Cloud ASR backends handle recognition remotely; when VAD is enabled, Qwen and Volcano Engine use local streaming VAD trim, batch cloud backends use batch VAD trim before upload, and Qwen IME Free/Doubao IME upload full raw PCM/Opus without local VAD because their services perform segmentation. Local punctuation models are still bypassed for cloud backends
+
+**Audio & Advanced tab**
+- `Enable VAD` — Enable voice activity detection, checks for speech before recording, skips ASR when no voice detected to save time. VAD parameters (`Threshold`, `Min silence`, `Min speech`, `Pad start`, `Smooth win`) live here as well, so the Recognition tab stays free of acoustic tuning.
+- `VAD model` — Voice activity detection model (requires Enable VAD):
+  - `Silero VAD` — Lightweight and fast, accuracy F1 95.95
+  - `FireRed VAD` — High precision (F1 97.57, false alarm rate 2.69%), model only 2.2MB. `Pad start` and `Smooth win` only apply to this model.
+- `Recording diagnostics` is a shared capture service for every Local and cloud
+  ASR backend, including provider retry and configured fallback stages:
+  - `Off` (default) never saves diagnostic audio.
+  - `Failures only` saves substantive no-speech, capture, transport, timeout,
+    and contradictory-stage failures.
+  - If every capture backend fails before the first PCM sample, VoxType saves a
+    JSON-only manifest with the attempted backends, terminal phase/error code,
+    and available device/format metadata; it does not create a fake empty WAV.
+  - `All recordings` explicitly saves every utterance and shows a privacy warning.
+  - `Open recordings folder` creates and opens the managed directory immediately;
+    `Delete saved recordings...` asks for confirmation and preserves unknown files.
+  - Installed builds use `%LOCALAPPDATA%\VoxType\diagnostics\audio`; Portable
+    builds use `<portable-root>\diagnostics\audio`. Files stay on this PC and
+    are limited to 20 groups, 100 MiB, and 7 days.
 
 **Diagnostic audio replay**
 - `capture.wav` and deduplicated `inputNN.wav` artifacts are canonical 16 kHz,

@@ -89,12 +89,13 @@ add_executable(VoxType WIN32
     src/ui/settings_dialogs.cpp
     src/ui/ui_theme.cpp
     src/ui/tabs/tab_general.cpp
-    src/ui/tabs/tab_recognition.cpp
-    src/ui/tabs/tab_cloud_asr.cpp
+    src/ui/tabs/tab_speech_engine.cpp
+    src/ui/tabs/tab_advanced.cpp
     src/ui/tabs/tab_llm.cpp
     src/ui/tabs/tab_vocabulary.cpp
     src/ui/providers/provider_baidu.cpp
     src/ui/providers/provider_volcengine.cpp
+    src/ui/providers/provider_local.cpp
     src/ui/providers/provider_qwen.cpp
     src/ui/providers/qwen_settings_helper.cpp
     src/ui/providers/provider_mimo.cpp

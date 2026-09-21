@@ -16,17 +16,32 @@ struct InputDlgData {
 
 bool ShowInputDialog(HWND parent, const wchar_t* title, std::wstring& out);
 
-constexpr int IDC_VOLC_EXTRA_EDIT = 3002;
+// Snippet helpers of the Volcano Engine Advanced dialog's Extra Params editor.
 constexpr int IDC_VOLC_EXTRA_HOTWORDS = 3003;
 constexpr int IDC_VOLC_EXTRA_CONTEXT = 3004;
 constexpr int IDC_VOLC_EXTRA_RESET = 3005;
 
-struct VolcExtraDlgData {
-    std::wstring text;
+struct VolcAdvancedDialogData {
+    std::wstring mode;
+    std::wstring hotwordsId;
+    std::wstring hotwordsName;
+    std::wstring correctTableId;
+    std::wstring correctTableName;
+    bool enableContext = false;
+    std::wstring contextHistory;
+    std::wstring endWindowSize;
+    std::wstring forceToSpeechTime;
+    bool enableDdc = false;
+    bool enableNonstream = false;
+    bool enableMusicFc = false;
+    bool enablePoiFc = false;
+    std::wstring extraParams;
     bool ok = false;
 };
 
-bool ShowVolcExtraDialog(HWND parent, std::wstring& out);
+using VolcAdvancedValidator = bool (*)(VolcAdvancedDialogData& data, std::wstring& error);
+
+bool ShowVolcAdvancedDialog(HWND parent, VolcAdvancedDialogData& data, VolcAdvancedValidator validator);
 
 constexpr int IDC_PROMPT_DLG_PRESET = 3010;
 constexpr int IDC_PROMPT_DLG_DESC = 3011;

@@ -8,7 +8,7 @@
 
 namespace ui_tab {
 
-class TabRecognition : public ISettingsTab {
+class TabAdvanced : public ISettingsTab {
 public:
     void CreateControls(HWND parent) override;
     void DestroyControls() override;
@@ -21,13 +21,14 @@ public:
     void ShowVadSubGroup(int vadModelIdx);
 
 private:
-    void AddRecognitionControl(HWND hwnd) { if (hwnd) m_controls.push_back(hwnd); }
+    void AddAdvancedControl(HWND hwnd) { if (hwnd) m_controls.push_back(hwnd); }
     void AddVadFireredControl(HWND hwnd) { if (hwnd) m_vadFireredControls.push_back(hwnd); }
-    void AddVadSileroControl(HWND hwnd) { if (hwnd) m_vadSileroControls.push_back(hwnd); }
 
     std::vector<HWND> m_controls;
     std::vector<HWND> m_vadFireredControls;
-    std::vector<HWND> m_vadSileroControls;
 };
+
+void OpenDiagnosticAudioFolder(HWND hwnd);
+void DeleteDiagnosticAudioFiles(HWND hwnd);
 
 } // namespace ui_tab

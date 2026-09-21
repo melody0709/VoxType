@@ -64,9 +64,9 @@ void ProviderQwenFree::RefreshStatus(HWND parent) {
 
 void ProviderQwenFree::CreateControls(HWND parent) {
     m_controls.clear();
-    // Row 0: Test Connection
+    // Row 4 right side: Test Connection
     m_controls.push_back(CreateButton(
-        parent, IDC_QWEN_FREE_TEST, S(500), S(UiStyle::RowInputY(0)),
+        parent, IDC_QWEN_FREE_TEST, S(500), S(UiStyle::RowInputY(4)),
         S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection"));
 
     // Row 1: Shell path label + edit + browse
@@ -144,9 +144,9 @@ void ProviderQwenFree::CreateControls(HWND parent) {
     m_controls.push_back(qwenDebug);
 
     // Row 5: Hint label
-    control = CreateLabel(
-        parent, S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)), S(560), S(UiStyle::LabelH),
-        L"VoiceInputWrite bundles punctuation and correction; only Polish is configurable. Selection rewrite is temporarily disabled.");
+    control = CreateHint(
+        parent, S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)), S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
+        L"Experimental shell: only Polish is configurable.");
     m_controls.push_back(control);
 }
 

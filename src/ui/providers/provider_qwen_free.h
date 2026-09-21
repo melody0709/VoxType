@@ -13,6 +13,7 @@ constexpr UINT kQwenFreeStatusResultMessage = WM_APP + 6;
 
 class ProviderQwenFree : public ICloudProviderPanel {
 public:
+    const wchar_t* Id() const override { return L"qwen_free"; }
     void CreateControls(HWND parent) override;
     void DestroyControls() override;
     void Show(bool visible) override;
