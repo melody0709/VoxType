@@ -190,15 +190,13 @@ flowchart TD
    - Row 2 (Y=168): Model folder + `[Browse...]`
    - Row 3 (Y=212): Threads (`auto (8)`, 1~8)
    - **终止 Y = 250px（余量 +382px）**
-#### 3.2.3 火山引擎（Volcano Engine / 豆包语音）面板精炼版几何排布表与优化规范
+#### 3.2.3 火山引擎（Volcano Engine / 豆包语音）面板完整几何排布表（100% 保留 Hotwords ID / Correct ID）
 
-##### 1. 现状痛点诊断
-原本在 `Cloud ASR` 中，火山引擎一口气平铺了 **9 行之多**（Row 1 ~ Row 9）：
-- **底层变量名生硬暴露**：界面直接使用了代码内部的蛇形变量名：`end_window_size`、`force_to_speech_time`、`enable_ddc`、`enable_nonstream`、`enable_music_fc`、`enable_poi_fc`，让普通用户如同在阅读底层驱动调试界面；
-- **Hotwords ID / Correct ID 与通用词库割裂**：占用了整整两行，但在 v0.10.4 引入通用 `vocabulary.json` 后，绝大多数用户只需勾选“复用通用词库”；
-- **测试按钮位置尴尬**：原先测试按钮被钉在 Row 0，合并进 Tab 2 后必须重新安置。
+##### 1. 现状痛点与重构原则
+原本在 `Cloud ASR` 中，火山引擎平铺了 9 行控件，充斥着生硬的变量名（如 `enable_music_fc`、`end_window_size`），且测试按钮钉在顶部。
+**重构原则**：**100% 完整保留原有所有配置字段**（包括用于绑定火山云端自建词表的 `Hotwords ID`、`Hotwords Name`、`Correct ID`、`Correct Name`），通过紧凑合理的逻辑编排，使界面优雅规整，同时**高度依然完全受控**。
 
-##### 2. 精炼版几何排布表（144 DPI 基准，设计像素）
+##### 2. 完整版精炼几何排布表（144 DPI 基准，设计像素）
 
 | 行号 / 区域 | 控件名称 / 类型 | X 坐标 | Y 坐标 | 宽度 (W) | 高度 (H) | 文本 / 说明 / 优化点 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -207,20 +205,23 @@ flowchart TD
 | **Row 2: 模型** | Model Label / Combo / LogBtn | 42 / 188 / 630 | 168 | 130 / 430 / 120 | 30 / 150 / 34 | Resource ID（SeedASR 时长/并发，BigASR 时长/并发）+ "Open log" |
 | **Row 3: 模式与语种** | ASR Mode Label / Combo | 42 / 188 | 212 | 130 / 200 | 30 / 150 | 模式下拉（大模型非流式 / 大模型异步 / 大模型实时） |
 | | Language Label / Combo | 410 / 490 | 212 | 70 / 240 | 30 / 150 | "Language" 标签 + 语种下拉（默认空=自动，en-US, ja-JP 等） |
-| **Row 4: 词库与上下文** | Context Label | 42 | 256 | 130 | 30 | "Context & Vocab" 聚合标签 |
-| | Reuse Vocabulary Checkbox | 188 | 256 | 280 | 26 | `[x] Reuse common vocabulary (vocabulary.json)` |
-| | History Context Checkbox / Edit | 480 / 640 | 256 | 150 / 44 | 26 / 32 | `[x] Dialog context` + 轮数编辑框（默认 3） |
-| **Row 5: 进阶协议开关** | Protocol Switches (紧凑单行) | 188 | 298 | 各项紧凑 | 26 | `[x] DDC 语义顺滑` (130) + `[x] 极速非流式加速` (140) + `[x] 智能实体过滤` (140) |
-| **Row 6: 操作与高级** | Actions Label | 42 | 344 | 130 | 30 | "Actions" / 留白对齐 |
-| | Edit Extra Params Button | 188 | 340 | 170 | 36 | `[Edit Extra Params...]`（弹窗编辑扩展 JSON 参数，含专有 Hotwords/自修正表ID） |
-| | **Test Connection Button** | **370** | **340** | **160** | **36** | `[Test Connection]`（就地测试火山引擎连通性） |
-| *Hint* | **单行精炼说明 (Static)** | **188** | **384** | **562** | **20** | `ByteDance Doubao SeedASR/BigASR engine. API keys are locally encrypted via DPAPI.` |
-| **底部终止** | **总高度：Y = 404px** | — | — | — | — | **距离 Footer (632px) 余量：+228px (空间极度宽裕舒适)** |
+| **Row 4: 词库与上下文** | Context Label | 42 | 256 | 130 | 30 | "Context" 聚合标签 |
+| | Reuse Vocabulary Checkbox | 188 | 256 | 280 | 26 | `[x] Reuse common vocabulary.json` |
+| | History Context Checkbox / Edit | 480 / 640 | 256 | 150 / 44 | 26 / 32 | `[x] Dialog context` + 轮数（默认 3） |
+| **Row 5: 专属热词表** | Hotwords Label / Edit | 42 / 188 | 296 | 130 / 250 | 30 / 32 | **100%保留**：`Hotwords ID` 文本框 |
+| | Hotwords Name Label / Edit | 450 / 510 | 296 | 50 / 240 | 30 / 32 | `Name` 标签 + 热词表名称编辑框 |
+| **Row 6: 专属纠错表** | Correct Label / Edit | 42 / 188 | 340 | 130 / 250 | 30 / 32 | **100%保留**：`Correct ID` 文本框 |
+| | Correct Name Label / Edit | 450 / 510 | 340 | 50 / 240 | 30 / 32 | `Name` 标签 + 自纠错表名称编辑框 |
+| **Row 7: 进阶协议开关** | Protocol Switches (紧凑单行) | 188 | 384 | 各项紧凑 | 26 | `[x] DDC 语义顺滑` (130) + `[x] 极速非流式加速` (140) + `[x] 智能实体过滤` (140) |
+| **Row 8: 操作与高级** | Actions Label | 42 | 424 | 130 | 30 | "Actions" / 留白对齐 |
+| | Edit Extra Params Button | 188 | 420 | 170 | 36 | `[Edit Extra Params...]`（底层微调参数 JSON 编辑） |
+| | **Test Connection Button** | **370** | **420** | **160** | **36** | `[Test Connection]`（就地测试火山引擎连通性） |
+| *Hint* | **单行精炼说明 (Static)** | **188** | **464** | **562** | **20** | `ByteDance Doubao SeedASR/BigASR engine. API keys are locally encrypted via DPAPI.` |
+| **底部终止** | **总高度：Y = 484px** | — | — | — | — | **距离 Footer (632px) 余量：+148px (空间极度宽裕安全)** |
 
-##### 3. 优化效果与体验提升
-1. **视觉减负 50%**：行数从 9 行剧烈压缩到 6 行，消除原始英文下划线代码变量名（如 `enable_music_fc` 明确命名为“智能实体过滤”）；
-2. **就地闭环**：与 Qwen 保持完全一致的自上而下交互流线（填 Key $\rightarrow$ 选模型/模式 $\rightarrow$ 设词库上下文 $\rightarrow$ 底部点击测试）；
-3. **保留深度可扩展性**：冷门的 `force_to_speech_time`、`end_window_size` 以及服务商专属的 Hotwords ID/Name 统一由 `[Edit Extra Params...]`（已有的独立对话框）全量承接，主面板彻底告别杂乱。
+##### 3. 优化核算结论
+- **零功能损失**：`Hotwords ID/Name` 与 `Correct ID/Name` 完整保留在 Row 5 和 Row 6；
+- **高度安全受控**：即使完整保留这两个专属表单行，总高度仅为 **$484\text{px}$**，距离底部分割线（632px）依然拥有 **$148\text{px}$ 的巨大安全余量**，与 Qwen（434px）共同处于高度安全的舒适区间。
 
 #### 3.2.4 其余 Provider 面板在 Tab 2 中的排布与高度核算
 1. **Local (本地 sherpa-onnx)**：
