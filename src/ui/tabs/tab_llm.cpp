@@ -295,6 +295,8 @@ void TabLlm::SaveControls(HWND parent, Config& cfg) {
     StoreVisibleProvider(parent, cfg);
     cfg.enableLlmDebug = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_DEBUG)) == BST_CHECKED);
     cfg.llmPrompt = m_currentPrompt;
+    cfg.llmPromptPreset = llm::PromptPresetIdForText(m_currentPrompt);
+    cfg.llmPromptPresetVersion = llm::kPromptPresetVersion;
 }
 
 bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {

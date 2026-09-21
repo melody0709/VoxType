@@ -54,6 +54,8 @@ struct Config {
     std::wstring llmApiKey;
     std::wstring llmModel = L"deepseek-v4-flash";
     std::wstring llmPrompt;
+    std::wstring llmPromptPreset;
+    int llmPromptPresetVersion = 0;
     std::wstring llmExtraParams;
     bool enableLlmDebug = false;
     std::wstring llmProvidersJson;

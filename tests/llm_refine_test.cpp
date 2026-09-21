@@ -240,6 +240,86 @@ int main() {
                llm::kRefineTimeouts.connectMs == 5000,
            "LLM receive timeout is tolerant but still bounded");
 
+    // Prompt preset identity and version upgrade path
+    {
+        Expect(std::wstring(llm::kPromptPresets[0].id) == L"basic_fix" &&
+                   std::wstring(llm::kPromptPresets[1].id) == L"deep_fix" &&
+                   std::wstring(llm::kPromptPresets[2].id) == L"polish",
+               "prompt presets expose stable string ids");
+        Expect(llm::PromptPresetIndexById(L"deep_fix") == 1 &&
+                   llm::PromptPresetIndexById(L"custom") == -1,
+               "preset lookup resolves known ids and rejects unknown ones");
+        Expect(llm::PromptPresetIdForText(llm::kPromptPresets[2].prompt) == L"polish" &&
+                   llm::PromptPresetIdForText(L"hand written prompt") == L"custom",
+               "prompt text maps back to its preset id");
+
+        Expect(std::wstring(llm::kLegacyPresetTexts[1]) ==
+                   L"语音识别纠错助手。修正ASR错误，不改写润色。\n"
+                   L"可修正：同音错字（根据语境）、英文术语大小写、数字规范化、标点、语法错误。\n"
+                   L"禁止：改写、增删、改变语气。无错误则原样输出。\n"
+                   L"只输出修正后文本。",
+               "v1 Deep Fix recognition text still matches the shipped configuration");
+        Expect(std::wstring(llm::kLegacyPresetTexts[1]) !=
+                   std::wstring(llm::kPresetDeepFix),
+               "v2 Deep Fix is a different text than the recognised v1 text");
+    }
+
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(std::wstring(llm::kLegacyPresetTexts[1]), L"", 0);
+        Expect(migrated.changed && migrated.presetId == L"deep_fix" &&
+                   migrated.presetVersion == llm::kPromptPresetVersion &&
+                   migrated.prompt == llm::kPresetDeepFix,
+               "a legacy Deep Fix configuration upgrades to the v2 prompt");
+    }
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(std::wstring(llm::kLegacyPresetTexts[0]), L"", 0);
+        Expect(migrated.changed && migrated.presetId == L"basic_fix" &&
+                   migrated.prompt == llm::kPresetBasicFix,
+               "a legacy Basic Fix configuration upgrades to the v2 prompt");
+    }
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(std::wstring(llm::kLegacyPresetTexts[2]), L"", 0);
+        Expect(migrated.changed && migrated.presetId == L"polish" &&
+                   migrated.prompt == llm::kPresetPolish,
+               "a legacy Polish configuration upgrades to the v2 prompt");
+    }
+    {
+        const llm::PromptConfigMigration migrated = llm::MigratePromptConfig(L"", L"", 0);
+        Expect(migrated.changed && migrated.presetId == L"basic_fix" &&
+                   migrated.prompt == llm::kPresetBasicFix,
+               "an empty prompt falls back to the default preset");
+    }
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(L"我的自定义提示词", L"", 0);
+        Expect(migrated.changed && migrated.presetId == L"custom" &&
+                   migrated.prompt == L"我的自定义提示词",
+               "a hand-edited prompt is pinned to custom and left untouched");
+    }
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(L"我的自定义提示词", L"custom", 0);
+        Expect(!migrated.changed && migrated.prompt == L"我的自定义提示词",
+               "an explicit custom preset is never overwritten on load");
+    }
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(L"stale v1 text", L"deep_fix", 1);
+        Expect(migrated.changed && migrated.presetVersion == llm::kPromptPresetVersion &&
+                   migrated.prompt == llm::kPresetDeepFix && migrated.presetId == L"deep_fix",
+               "an older preset version is replaced by the current preset text");
+    }
+    {
+        const llm::PromptConfigMigration migrated =
+            llm::MigratePromptConfig(std::wstring(llm::kPresetPolish), L"polish",
+                                     llm::kPromptPresetVersion);
+        Expect(!migrated.changed && migrated.prompt == llm::kPresetPolish,
+               "a current preset version is left alone");
+    }
+
     if (g_failures == 0) {
         std::cout << "LLM refine regression tests passed\n";
     }

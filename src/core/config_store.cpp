@@ -137,6 +137,7 @@ void LoadConfig(Config& config) {
     const std::string json = buffer.str();
     bool migratePlaintextQwenUtdid = false;
     bool migrateLlmProvider = false;
+    bool migrateLlmPrompt = false;
     bool migrateEnableLlm = false;
 
     EnsureRegistryInitialized();
@@ -272,9 +273,21 @@ void LoadConfig(Config& config) {
         }
     }
 
+    {
+        const llm::PromptConfigMigration promptMigration = llm::MigratePromptConfig(
+            config.llmPrompt, config.llmPromptPreset, config.llmPromptPresetVersion);
+        if (promptMigration.changed) {
+            config.llmPrompt = promptMigration.prompt;
+            config.llmPromptPreset = promptMigration.presetId;
+            config.llmPromptPresetVersion = promptMigration.presetVersion;
+            migrateLlmPrompt = true;
+        }
+    }
+
     if (config.configVersion < kCurrentConfigVersion ||
         migrateLlmProvider ||
         migratePlaintextQwenUtdid ||
+        migrateLlmPrompt ||
         migrateEnableLlm) {
         config.configVersion = kCurrentConfigVersion;
         SaveConfig(config);
