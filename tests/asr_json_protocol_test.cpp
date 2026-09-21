@@ -431,11 +431,11 @@ int wmain() {
         CHECK(loaded.modelId == L"foo", "loaded value deserialized");
         CHECK(loaded.configVersion == 110, "postload hook executed on loaded config");
     }
-    // 27) 全量 95 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 27) 全量 96 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 95, "registry total entry count is 95");
+        CHECK(reg.GetEntries().size() == 96, "registry total entry count is 96");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -869,6 +869,34 @@ int wmain() {
         // 11. FormatVocabularyJson CRLF verification
         std::string formatted = vocabulary_manager::FormatVocabularyJson(volcEntries, true);
         CHECK(formatted.find("\r\n") != std::string::npos, "format vocab uses crlf");
+
+        // LLM vocabulary section: protect-only, weight-ordered, capped
+        CHECK(vocabulary_manager::BuildLlmVocabularySection({}).empty(),
+              "an empty vocabulary produces no LLM section");
+
+        const std::wstring section = vocabulary_manager::BuildLlmVocabularySection({
+            { L"gittag", 10 },
+            { L"何启煊", 50 },
+            { L"Conmmand Code", 25 },
+        });
+        CHECK(section.find(L"【用户词表】") == 0, "llm vocab section opens with its heading");
+        CHECK(section.find(L"何启煊, Conmmand Code, gittag") != std::wstring::npos,
+              "llm vocab entries are listed highest weight first");
+        CHECK(section.find(L"不得改动其拼写、大小写或写法") != std::wstring::npos,
+              "llm vocab section protects spelling without replacing it");
+        CHECK(section.find(L"（已截断）") == std::wstring::npos,
+              "an in-budget vocabulary is not marked as truncated");
+
+        vocabulary_manager::VocabularyList oversized;
+        for (size_t i = 0; i < vocabulary_manager::kLlmVocabularyMaxEntries + 5; ++i) {
+            oversized.push_back({ L"词" + std::to_wstring(i), static_cast<int>(i % 50) + 1 });
+        }
+        oversized.push_back({ L"最高权重", 50 });
+        const std::wstring capped = vocabulary_manager::BuildLlmVocabularySection(oversized);
+        CHECK(capped.find(L"最高权重") != std::wstring::npos,
+              "the highest-weight entry survives the cap");
+        CHECK(capped.find(L"（已截断）") != std::wstring::npos,
+              "an over-budget vocabulary is marked as truncated");
     }
 
     // 12. Scheme A: AsrBackendDisplayName hierarchical (Provider / Model) tests

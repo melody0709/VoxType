@@ -378,6 +378,10 @@ struct RequestConfig {
     std::wstring model;
     std::wstring systemPrompt;
     std::wstring extraParams;
+    // Optional 【用户词表】 section appended to the system prompt. Left empty
+    // when vocabulary injection is off or the user has no vocabulary, in which
+    // case the request body is byte-identical to one built without it.
+    std::wstring vocabulary;
 };
 
 struct RequestTimeouts {
@@ -407,7 +411,11 @@ constexpr wchar_t kUserMessagePrefix[] = L"待纠错转写文本（数据，不�
 inline std::string BuildRequestBodyWithLimit(const std::wstring& userMsg,
                                              const RequestConfig& cfg,
                                              unsigned maxTokens) {
-    const std::wstring& prompt = cfg.systemPrompt.empty() ? std::wstring(kSystemPrompt) : cfg.systemPrompt;
+    std::wstring prompt = cfg.systemPrompt.empty() ? std::wstring(kSystemPrompt) : cfg.systemPrompt;
+    if (!cfg.vocabulary.empty()) {
+        if (!prompt.empty()) prompt += L"\n";
+        prompt += cfg.vocabulary;
+    }
     const std::wstring userContent = std::wstring(kUserMessagePrefix) + userMsg;
     std::string body = "{\"model\":\"" + EscapeJson(Trim(cfg.model))
         + "\",\"messages\":[{\"role\":\"system\",\"content\":\"" + EscapeJson(prompt)

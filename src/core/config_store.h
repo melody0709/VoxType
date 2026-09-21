@@ -57,6 +57,7 @@ struct Config {
     std::wstring llmPromptPreset;
     int llmPromptPresetVersion = 0;
     std::wstring llmExtraParams;
+    bool llmVocabularyInjection = true;
     bool enableLlmDebug = false;
     std::wstring llmProvidersJson;
     std::wstring asrBackend = L"local";

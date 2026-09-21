@@ -255,6 +255,22 @@ int main() {
                    anchored.find(">>>") == std::string::npos,
                "the user message does not rely on delimiters that can leak into output");
 
+        // Vocabulary injection: off or empty must leave the body untouched.
+        llm::RequestConfig withoutVocab;
+        withoutVocab.model = L"test-model";
+        llm::RequestConfig withEmptyVocab = withoutVocab;
+        withEmptyVocab.vocabulary = L"";
+        Expect(llm::BuildRequestBody(L"原文", withoutVocab) ==
+                   llm::BuildRequestBody(L"原文", withEmptyVocab),
+               "an empty vocabulary leaves the request body byte-identical");
+
+        llm::RequestConfig withVocab = withoutVocab;
+        withVocab.systemPrompt = L"系统提示";
+        withVocab.vocabulary = L"【用户词表】gittag";
+        const std::string vocabBody = llm::BuildRequestBody(L"原文", withVocab);
+        Expect(vocabBody.find(llm::EscapeJson(L"系统提示\n【用户词表】gittag")) != std::string::npos,
+               "the vocabulary section is appended to the end of the system prompt");
+
         Expect(std::wstring(llm::kPromptPresets[0].id) == L"basic_fix" &&
                    std::wstring(llm::kPromptPresets[1].id) == L"deep_fix" &&
                    std::wstring(llm::kPromptPresets[2].id) == L"polish",

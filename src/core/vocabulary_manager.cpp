@@ -709,6 +709,27 @@ std::expected<void, std::wstring> WriteVocabularyFile(const std::wstring& conten
     return {};
 }
 
+std::wstring BuildLlmVocabularySection(const VocabularyList& entries) {
+    if (entries.empty()) return L"";
+
+    std::vector<size_t> order(entries.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&entries](size_t left, size_t right) {
+        return entries[left].weight > entries[right].weight;
+    });
+    const size_t kept = std::min(order.size(), kLlmVocabularyMaxEntries);
+
+    std::wstring section = L"【用户词表】以下是用户确认过的正确写法，其优先级高于你的常识：{";
+    for (size_t i = 0; i < kept; ++i) {
+        if (i != 0) section += L", ";
+        section += entries[order[i]].word;
+    }
+    section += L"}\n";
+    section += L"这些写法若出现在输入中，一律视为已经正确，不得改动其拼写、大小写或写法。";
+    if (kept < order.size()) section += L"（已截断）";
+    return section;
+}
+
 VocabularyList GetEffectiveVocabularyEntries(const std::wstring& fallbackConfigVocab) {
     auto fileRes = ReadVocabularyFile();
     if (fileRes) {

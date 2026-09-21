@@ -176,6 +176,12 @@ $promptDlgEditW = Get-UiInt 'PromptDlgEditW'
 $promptDlgEditH = Get-UiInt 'PromptDlgEditH'
 $promptDlgBtnY = Get-UiInt 'PromptDlgBtnY'
 
+# LLM page: Row 0 also carries the vocabulary-injection switch to the right of
+# the master switch, so both must fit on the row without colliding.
+$llmMasterSwitchW = 320
+$llmVocabularyInjectOffsetX = Get-UiInt 'LlmVocabularyInjectOffsetX'
+$llmVocabularyInjectW = Get-UiInt 'LlmVocabularyInjectW'
+
 # Inner right edge of the tab work area, shared by every provider panel.
 $workAreaRight = $settingsWindowWidth - $margin
 # Hard bottom limit for tab content: the tab control ends at footerMinTop - 4 and
@@ -385,6 +391,15 @@ $llmActionBottom = $firstRowY + (7 * $rowHeight) + 6 + $actionButtonH
 if ($llmActionBottom -gt $tabContentBottom) {
     throw 'LLM settings action row reaches the tab work-area bottom'
 }
+if (($contentLeft + $llmVocabularyInjectOffsetX) -lt ($contentLeft + $llmMasterSwitchW)) {
+    throw 'LLM vocabulary checkbox overlaps the master switch on Row 0'
+}
+if (($contentLeft + $llmVocabularyInjectOffsetX + $llmVocabularyInjectW) -gt $workAreaRight) {
+    throw 'LLM vocabulary checkbox exceeds the Settings design width'
+}
+if ($llmVocabularyInjectW -lt 260) {
+    throw 'LLM vocabulary checkbox does not leave room for its English label'
+}
 
 # The scaling loop below multiplies both sides of each inequality by the same
 # factor, so it can never fail once the unscaled checks pass. It is kept for
@@ -482,6 +497,18 @@ foreach ($required in @(
         'mai_transcribe::TestConnection')) {
     if (!$cleanGlobals.Contains($required) -and !$cleanSettingsWithHeaders.Contains($required)) {
         throw "Startup Settings wiring is missing: $required"
+    }
+}
+
+# --- LLM page: vocabulary injection wiring and Row 0 placement ---------------
+foreach ($required in @(
+        'L"Feed vocabulary to LLM"',
+        'S(UiStyle::ContentLeft + UiStyle::LlmVocabularyInjectOffsetX), S(UiStyle::RowInputY(0)),',
+        'S(UiStyle::LlmVocabularyInjectW), S(UiStyle::CheckH),',
+        'EnableWindow(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT), masterEnabled);',
+        'cfg.llmVocabularyInjection')) {
+    if (!$cleanSettingsWithHeaders.Contains($required)) {
+        throw "LLM vocabulary injection wiring is missing: $required"
     }
 }
 

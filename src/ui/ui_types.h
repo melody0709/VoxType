@@ -232,6 +232,10 @@ constexpr int PromptDlgEditW = 700;
 constexpr int PromptDlgEditH = 380;
 constexpr int PromptDlgBtnY = 468;
 constexpr int PromptDlgResetBtnW = 160;
+// LLM tab: the vocabulary-injection switch shares Row 0 with the master switch,
+// the only row that has free space to its right.
+constexpr int LlmVocabularyInjectOffsetX = 340;
+constexpr int LlmVocabularyInjectW = 300;
 constexpr int QwenFreeShellPathW = 400;
 constexpr int QwenFreeShellBrowseGap = 12;
 constexpr int QwenFreeOptionCheckW = 200;
@@ -273,6 +277,7 @@ constexpr int IDC_START_WITH_WINDOWS = 2014;
 constexpr int IDC_LLM_ENABLE = 2015;
 constexpr int IDC_LLM_MANAGE_PROMPT = 2016;
 constexpr int IDC_LLM_OPEN_LOG = 2017;
+constexpr int IDC_LLM_VOCAB_INJECT = 2018;
 constexpr int IDC_LLM_ENDPOINT = 2020;
 constexpr int IDC_LLM_KEY = 2021;
 constexpr int IDC_LLM_MODEL = 2022;

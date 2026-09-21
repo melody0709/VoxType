@@ -17,6 +17,7 @@
 #include "qwen_audio_profile.h"
 #include "qwen_context.h"
 #include "llm_refine.h"
+#include "vocabulary_manager.h"
 #include "volcengine_streaming_session.h"
 #include "volcengine_asr.h"
 #include "hud.h"
@@ -97,6 +98,10 @@ void RefineWithLlmAsync(const AsrFinalMessage& finalMessage) {
     cfg.model = config.llmModel;
     cfg.systemPrompt = config.llmPrompt;
     cfg.extraParams = config.llmExtraParams;
+    if (config.llmVocabularyInjection) {
+        cfg.vocabulary = vocabulary_manager::BuildLlmVocabularySection(
+            vocabulary_manager::GetEffectiveVocabularyEntries(config.qwenVocabulary));
+    }
     bool debug = config.enableLlmDebug;
     std::thread([asrText, cfg, debug, finalMessage]() {
         HiResTimer tLlm;

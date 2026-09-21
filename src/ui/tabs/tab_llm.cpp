@@ -138,6 +138,7 @@ void TabLlm::UpdateControlEnableState(HWND parent) {
     EnableWindow(GetDlgItem(parent, IDC_LLM_MANAGE_PROMPT), masterEnabled);
     EnableWindow(GetDlgItem(parent, IDC_LLM_TEST), masterEnabled);
     EnableWindow(GetDlgItem(parent, IDC_LLM_DEBUG), masterEnabled);
+    EnableWindow(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT), masterEnabled);
     EnableWindow(GetDlgItem(parent, IDC_LLM_OPEN_LOG), masterEnabled);
 }
 
@@ -153,6 +154,16 @@ void TabLlm::CreateControls(HWND parent) {
         GetParentInstance(parent), nullptr);
     ApplyUiFont(enableCheck);
     AddLlmControl(enableCheck);
+
+    HWND vocabInject = CreateWindowW(
+        L"BUTTON", L"Feed vocabulary to LLM",
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+        S(UiStyle::ContentLeft + UiStyle::LlmVocabularyInjectOffsetX), S(UiStyle::RowInputY(0)),
+        S(UiStyle::LlmVocabularyInjectW), S(UiStyle::CheckH),
+        parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_VOCAB_INJECT)),
+        GetParentInstance(parent), nullptr);
+    ApplyUiFont(vocabInject);
+    AddLlmControl(vocabInject);
 
     HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Provider");
     AddLlmControl(control);
@@ -282,6 +293,7 @@ void TabLlm::LoadControls(HWND parent, const Config& cfg) {
     }
 
     Button_SetCheck(GetDlgItem(parent, IDC_LLM_DEBUG), cfg.enableLlmDebug ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT), cfg.llmVocabularyInjection ? BST_CHECKED : BST_UNCHECKED);
 
     UpdateControlEnableState(parent);
 }
@@ -290,6 +302,7 @@ void TabLlm::SaveControls(HWND parent, Config& cfg) {
     cfg.enableLlm = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_ENABLE)) == BST_CHECKED);
     StoreVisibleProvider(parent, cfg);
     cfg.enableLlmDebug = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_DEBUG)) == BST_CHECKED);
+    cfg.llmVocabularyInjection = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT)) == BST_CHECKED);
     cfg.llmPrompt = m_currentPrompt;
     cfg.llmPromptPreset = m_currentPromptPresetId.empty()
         ? llm::PromptPresetIdForText(m_currentPrompt)

@@ -267,6 +267,7 @@ void InitializeRegistry() {
     reg.Register({"llm_prompt", &Config::llmPrompt});
     reg.Register({"llm_prompt_preset", &Config::llmPromptPreset});
     reg.Register({"llm_prompt_preset_version", &Config::llmPromptPresetVersion});
+    reg.Register({"llm_vocabulary_injection", &Config::llmVocabularyInjection, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"enable_llm_debug", &Config::enableLlmDebug, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"enable_debug_mode", &Config::enableDebugMode, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"force_unicode_input", &Config::forceUnicodeInput, CryptoPolicy::None, BoolJsonFormat::Literal});
