@@ -2,6 +2,36 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.10.9 (2026-09-23)
+
+### 新增功能与模型升级
+
+- **接入小米 MiMo 大语言模型纠错 (`mimo-v2.6-flash`)**：
+  - 在 `kProviderPresets` 中新增 `Xiaomi MiMo` 内置预设，默认调用高性价比低时延旗舰模型 `mimo-v2.6-flash`。
+  - **强制关闭深度思考（Thinking）以实现极速纠错**：MiMo 2.6 系列官方默认开启 Thinking（`"thinking":{"type":"enabled"}`），不仅导致 3~10 秒思考延迟，且官方强制锁定 `temperature = 1.0`。VoxType 预设显式固化 `"thinking":{"type":"disabled"}`，将首字延迟压缩至 280ms~650ms，并恢复 `0.1` 极低温度的高精准防幻觉纠错。
+  - **历史配置平滑迁移**：在 `MigrateLegacyProviderConfig` 中增加了针对 MiMo 的自动升级规则，历史配置中保存的 `mimo-v2.5` / `mimo-v2.5-pro` 在启动反序列化时自动就地升至 `mimo-v2.6-flash`，并在扩展参数为空时自动补充关闭思考配置。
+- **小米 MiMo ASR 节点预设与界面加宽**：
+  - 在语音引擎 MiMo 面板中新增 Base URL 预设下拉选择框（`Default API`、`Token Plan (CN)`、`Token Plan (AMS)`、`Custom`），既可一键切换官方按量付费或国内/海外资源包端点，又支持随时自由修改。
+  - 将 Base URL 地址输入框宽度自 312 DIP 扩宽至 420 DIP（增幅 `+34.6%`），与设置面板右边界标准线（768 DIP）完美贴合平齐，彻底消除了末尾 `/v1` 截断问题。
+  - 实现了下拉框与输入框的双向联动及状态防震荡保护，选择自定义（Custom）时保留当前输入内容。
+
+### 架构整理与技术文档体系升级
+
+- **技术文档专区系统化归档 (`doc/`)**：
+  - 新建 `doc/INDEX.md` 作为全局技术文档导航中心与模型演进索引。
+  - 设立厂商专属文档专区，全面归档协议、踩坑约束与版本追踪清单：
+    - `doc/mimo/`：架构总览、MiMo 2.5 ASR 协议指南、MiMo 2.6 Flash LLM 深度思考关闭规范。
+    - `doc/qwen/`：通义千问总览、Audio 3.0 流式/批量 ASR 协议、热词调优及千问输入法逆向运行时指南。
+    - `doc/volcengine/`：火山引擎总览、SeedASR/BigASR 二进制帧协议与完整设置指南。
+    - `doc/baidu/`：DevPID 语种模型矩阵、Token 自动刷新与瞬态错误同一 PCM 重发规范。
+  - 彻底清理了 `doc/` 根目录的历史冗余重复文档，同步更新了 `cmake/VoxTypeRuntime.cmake` 打包安装清单及全仓相对链接。
+
+### 质量与守卫
+
+- 通过 `validate_settings_layout.ps1` 在 96/144/192/288 四档 DPI 下的几何重叠与边界校验。
+- 17 项机械架构守卫全部 PASS（无债务上调、无跨层越权）。
+- `tests/llm_refine_test.cpp` 扩充 MiMo 预设、端点解析与配置迁移的离线回归测试断言，全量测试套件 ALL PASS。
+
 ## v0.10.8 (2026-09-21)
 
 ### 缺陷修复

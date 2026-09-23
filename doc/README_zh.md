@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.10.8</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.10.9</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -35,11 +35,20 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 
 ## Quick Start
 
+### 技术文档与模型更新演进中心
+
+各厂商云端 ASR、LLM 纠错、私有协议逆向与模型持续更新技术指南，请参阅：
+- [VoxType 技术文档导航中心 (Documentation Hub)](INDEX.md)
+  - [小米 MiMo 技术专区 (ASR 2.5 / LLM 2.6 Flash 思考参数控制)](mimo/README.md)
+  - [阿里通义千问专区 (Audio 3.0 流式/批量 ASR / 独立运行时)](qwen/README.md)
+  - [火山引擎豆包大模型专区 (SeedASR / BigASR / 二进制分帧)](volcengine/README.md)
+  - [百度智能云专区 (DevPID 语种矩阵 / 容错重试)](baidu/README.md)
+
 ### Qwen IME (Free) 独立运行时指南
 
 需要先安装千问输入法初始化本机 UTDID，再迁移私有运行时并卸载千问时，请参阅：
 
-[Qwen IME (Free) 独立运行时指南](qwen_free_standalone_runtime_guide_zh.md)
+[Qwen IME (Free) 独立运行时指南](qwen/qwen_free_standalone_runtime_guide_zh.md)
 
 ### 1. 下载模型
 

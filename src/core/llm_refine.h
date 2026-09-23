@@ -247,6 +247,7 @@ struct ProviderPreset {
 
 constexpr ProviderPreset kProviderPresets[] = {
     {L"DeepSeek",    L"https://api.deepseek.com",      L"deepseek-v4-flash",           L"\"thinking\":{\"type\":\"disabled\"}"},
+    {L"Xiaomi MiMo", L"https://api.xiaomimimo.com/v1", L"mimo-v2.6-flash",            L"\"thinking\":{\"type\":\"disabled\"}"},
     {L"OpenRouter",  L"https://openrouter.ai/api/v1",  L"qwen/qwen3.5-9b",            L"\"reasoning\":{\"effort\":\"none\"}"},
     {L"SiliconFlow", L"https://api.siliconflow.cn/v1", L"Qwen/Qwen3.6-35B-A3B",       L"\"enable_thinking\":false"},
 };
@@ -284,6 +285,15 @@ inline bool IsOfficialPresetEndpoint(const std::wstring& provider,
                  normalized == L"https://api.siliconflow.com/v1/chat/completions")) {
                 return true;
             }
+            if (provider == L"Xiaomi MiMo" &&
+                (normalized == L"https://api.xiaomimimo.com" ||
+                 normalized == L"https://api.xiaomimimo.com/chat/completions" ||
+                 normalized == L"https://token-plan-cn.xiaomimimo.com/v1" ||
+                 normalized == L"https://token-plan-cn.xiaomimimo.com/v1/chat/completions" ||
+                 normalized == L"https://token-plan-ams.xiaomimimo.com/v1" ||
+                 normalized == L"https://token-plan-ams.xiaomimimo.com/v1/chat/completions")) {
+                return true;
+            }
             return false;
         }
     }
@@ -318,6 +328,15 @@ inline bool MigrateLegacyProviderConfig(const std::wstring& provider,
     } else if (provider == L"SiliconFlow" && model == L"Qwen/Qwen3.6-35B-A3B") {
         if (extraParams == L"\"chat_template_kwargs\":{\"enable_thinking\":false}") {
             extraParams = L"\"enable_thinking\":false";
+            changed = true;
+        }
+    } else if (provider == L"Xiaomi MiMo") {
+        if (model == L"mimo-v2.5" || model == L"mimo-v2.5-pro") {
+            model = L"mimo-v2.6-flash";
+            changed = true;
+        }
+        if (extraParams.empty()) {
+            extraParams = L"\"thinking\":{\"type\":\"disabled\"}";
             changed = true;
         }
     }

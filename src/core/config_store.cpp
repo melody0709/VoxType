@@ -217,7 +217,7 @@ void LoadConfig(Config& config) {
         hasPersistedQwenModel,
         hasPersistedQwenTransport);
     config.qwenChunkMs = std::clamp(config.qwenChunkMs, 20, 1000);
-    if (config.mimoBaseUrl.empty()) config.mimoBaseUrl = L"https://token-plan-ams.xiaomimimo.com/v1";
+    if (config.mimoBaseUrl.empty()) config.mimoBaseUrl = L"https://api.xiaomimimo.com/v1";
     if (config.mimoModel.empty()) config.mimoModel = L"mimo-v2.5-asr";
     if (config.mimoLanguage != L"zh" && config.mimoLanguage != L"en") config.mimoLanguage = L"auto";
     config.qwenFreeRewriteEnabled = false;

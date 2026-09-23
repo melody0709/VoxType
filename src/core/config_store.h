@@ -116,7 +116,7 @@ struct Config {
     bool qwenInputContextSnapshotCaptured = false;
     uint64_t asrAttemptId = 0;
     std::wstring mimoApiKey;
-    std::wstring mimoBaseUrl = L"https://token-plan-ams.xiaomimimo.com/v1";
+    std::wstring mimoBaseUrl = L"https://api.xiaomimimo.com/v1";
     std::wstring mimoModel = L"mimo-v2.5-asr";
     std::wstring mimoLanguage = L"auto";
     std::wstring doubaoImeDeviceId;

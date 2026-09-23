@@ -152,6 +152,10 @@ constexpr int VolcAdvancedBtnW = 140;
 constexpr int VolcTestBtnX = 340;
 constexpr int VolcTestBtnW = 160;
 constexpr int VolcHintY = 388;
+// Tab 2 MiMo panel controls
+constexpr int MimoPresetComboW = 150;
+constexpr int MimoUrlEditGap = 10;
+constexpr int MimoUrlEditW = 420;
 constexpr int QwenAdvancedDialogW = 720;
 constexpr int QwenAdvancedDialogH = 752;
 // QwenAdvancedDialogH is the outer window height. Reserve room for the
@@ -363,6 +367,7 @@ constexpr int IDC_MIMO_BASE_URL = 2092;
 constexpr int IDC_MIMO_MODEL = 2093;
 constexpr int IDC_MIMO_LANGUAGE = 2094;
 constexpr int IDC_MIMO_TEST = 2095;
+constexpr int IDC_MIMO_BASE_URL_PRESET = 2096;
 constexpr int IDC_DOUBAO_IME_STATUS = 2100;
 constexpr int IDC_DOUBAO_IME_TEST = 2101;
 constexpr int IDC_DOUBAO_IME_RESET = 2102;

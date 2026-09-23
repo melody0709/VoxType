@@ -34,11 +34,15 @@ void ExpectEndpoint(const std::wstring& endpoint,
 int main() {
     Expect(std::wstring(llm::kProviderPresets[0].defaultModel) == L"deepseek-v4-flash",
            "DeepSeek preset uses the current V4 Flash model");
-    Expect(std::wstring(llm::kProviderPresets[1].defaultModel) == L"qwen/qwen3.5-9b",
+    Expect(std::wstring(llm::kProviderPresets[1].defaultModel) == L"mimo-v2.6-flash",
+           "Xiaomi MiMo preset uses the current V2.6 Flash model");
+    Expect(std::wstring(llm::kProviderPresets[1].extraParams) == L"\"thinking\":{\"type\":\"disabled\"}",
+           "Xiaomi MiMo preset disables thinking for low-latency refinement");
+    Expect(std::wstring(llm::kProviderPresets[2].defaultModel) == L"qwen/qwen3.5-9b",
            "OpenRouter preset no longer uses the retired Qwen3 4B model");
-    Expect(std::wstring(llm::kProviderPresets[2].defaultModel) == L"Qwen/Qwen3.6-35B-A3B",
+    Expect(std::wstring(llm::kProviderPresets[3].defaultModel) == L"Qwen/Qwen3.6-35B-A3B",
            "SiliconFlow preset keeps the current documented Qwen3.6 model");
-    Expect(std::wstring(llm::kProviderPresets[2].extraParams) == L"\"enable_thinking\":false",
+    Expect(std::wstring(llm::kProviderPresets[3].extraParams) == L"\"enable_thinking\":false",
            "SiliconFlow preset uses the documented top-level thinking switch");
 
     llm::RequestConfig request;
@@ -92,6 +96,9 @@ int main() {
     ExpectEndpoint(L"localhost:8080/v1", L"localhost", L"/v1/chat/completions",
                    true, 8080,
                    "scheme-less custom endpoint defaults to HTTPS and preserves its port");
+    ExpectEndpoint(L"https://api.xiaomimimo.com/v1", L"api.xiaomimimo.com", L"/v1/chat/completions",
+                   true, INTERNET_DEFAULT_HTTPS_PORT,
+                   "Xiaomi MiMo base URL preserves /v1 and appends /chat/completions");
 
     {
         std::wstring host;
@@ -200,6 +207,24 @@ int main() {
                    L"DeepSeek", L"https://proxy.example/v1", model, extra) &&
                    model == L"deepseek-chat",
                "legacy model migration does not rewrite a custom endpoint");
+    }
+    {
+        std::wstring model = L"mimo-v2.5";
+        std::wstring extra;
+        Expect(llm::MigrateLegacyProviderConfig(
+                   L"Xiaomi MiMo", L"https://api.xiaomimimo.com/v1", model, extra) &&
+                   model == L"mimo-v2.6-flash" &&
+                   extra == L"\"thinking\":{\"type\":\"disabled\"}",
+               "Xiaomi MiMo deprecated v2.5 model migrates to v2.6-flash and sets thinking disabled");
+        Expect(llm::IsOfficialPresetEndpoint(
+                   L"Xiaomi MiMo", L"https://api.xiaomimimo.com/v1"),
+               "Xiaomi MiMo official Pay-as-you-go endpoint is recognized");
+        Expect(llm::IsOfficialPresetEndpoint(
+                   L"Xiaomi MiMo", L"https://token-plan-cn.xiaomimimo.com/v1"),
+               "Xiaomi MiMo Token Plan domestic endpoint is recognized");
+        Expect(llm::IsOfficialPresetEndpoint(
+                   L"Xiaomi MiMo", L"https://token-plan-ams.xiaomimimo.com/v1"),
+               "Xiaomi MiMo Token Plan overseas endpoint is recognized");
     }
 
     {

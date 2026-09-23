@@ -14,7 +14,7 @@
 
 namespace mimo_asr {
 
-constexpr wchar_t kDefaultBaseUrl[] = L"https://token-plan-ams.xiaomimimo.com/v1";
+constexpr wchar_t kDefaultBaseUrl[] = L"https://api.xiaomimimo.com/v1";
 constexpr wchar_t kDefaultModel[] = L"mimo-v2.5-asr";
 constexpr wchar_t kDefaultLanguage[] = L"auto";
 

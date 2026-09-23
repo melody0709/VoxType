@@ -2,6 +2,36 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.10.9 (2026-09-23)
+
+### Features & Model Upgrades
+
+- **Xiaomi MiMo LLM Refinement (`mimo-v2.6-flash`)**:
+  - Added `Xiaomi MiMo` as a built-in LLM Provider in `kProviderPresets`, defaulting to `mimo-v2.6-flash`.
+  - **Zero-Latency Thinking Suppression**: MiMo models enable thinking (`"thinking":{"type":"enabled"}`) by default, which introduces 3~10s reasoning latency and forces `temperature=1.0`. The preset injects `"thinking":{"type":"disabled"}` to deliver sub-second speech refinement while preserving strict low-temperature (`0.1`) deterministic correction.
+  - **Automatic Legacy Migration**: Added `MigrateLegacyProviderConfig` rules to automatically migrate deprecated `mimo-v2.5` / `mimo-v2.5-pro` configurations to `mimo-v2.6-flash` and inject the thinking suppression parameter on startup.
+- **Xiaomi MiMo ASR Base URL Presets & Alignment**:
+  - Added a selectable preset combo box (`Default API`, `Token Plan (CN)`, `Token Plan (AMS)`, `Custom`) for the Base URL field in the MiMo Speech Engine panel.
+  - Widened the address input box from 312 to 420 DIP (`+108 DIP` / `+34.6%`), perfectly aligning with the form's right boundary (768 DIP) and completely eliminating URL text truncation.
+  - Implemented bidirectional event synchronization between the preset dropdown and edit box without recursive message cascades.
+
+### Architecture & Documentation Restructuring
+
+- **Categorized Technical Documentation Hub (`doc/`)**:
+  - Established `doc/INDEX.md` as the unified documentation hub and model evolution index.
+  - Created provider-specific documentation directories:
+    - `doc/mimo/`: Overview, ASR 2.5 protocol guide, and LLM 2.6 Flash refinement guide.
+    - `doc/qwen/`: Overview, Audio 3.0 streaming/batch ASR guides, accuracy tuning, and QianwenIME standalone reverse-engineered runtime guide.
+    - `doc/volcengine/`: Overview, SeedASR/BigASR binary frame protocol, and setup guide.
+    - `doc/baidu/`: DevPID language matrix, token caching, and transient PCM retry invariants.
+  - Cleaned up duplicated markdown files from `doc/` root into their respective directories while updating `cmake/VoxTypeRuntime.cmake` install rules and cross-document links.
+
+### Quality & Verification
+
+- Validated Settings layout geometry at 96, 144, 192, and 288 DPI design scales.
+- Passed all 17 architecture invariants in `tools/check_architecture.ps1`.
+- Added unit and regression test coverage in `tests/llm_refine_test.cpp` for MiMo presets, endpoint resolution, and legacy migration.
+
 ## v0.10.8 (2026-09-21)
 
 ### Bug Fixes

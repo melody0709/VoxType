@@ -18,7 +18,7 @@ function(voxtype_install_runtime target)
         "${_src}/download_models.ps1"
         "${_src}/README.md"
         "${_src}/doc/README_zh.md"
-        "${_src}/doc/volcengine_asr_guide_zh.md"
+        "${_src}/doc/volcengine/volcengine_asr_guide_zh.md"
     )
     foreach(_required IN LISTS _runtime_files)
         if(NOT EXISTS "${_required}")
@@ -69,7 +69,7 @@ function(voxtype_install_runtime target)
         "${_src}/models/fireredvad_stream_vad_with_cache.onnx"
         DESTINATION "models"
         COMPONENT Runtime)
-    install(FILES "${_src}/doc/volcengine_asr_guide_zh.md"
+    install(FILES "${_src}/doc/volcengine/volcengine_asr_guide_zh.md"
         DESTINATION "docs"
         COMPONENT Runtime)
     install(FILES "${_src}/doc/README_zh.md"

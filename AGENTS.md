@@ -10,8 +10,12 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - /reverse-skill 涉及到取证，请采用相关的技能。
 - 获取到相关证据，必须更新 /reverse 目录下的相关文档以及证据，以便后面研究。
 
-## ASR技术文档
-- \doc\
+## ASR 与 LLM 技术文档
+- `doc/INDEX.md`：全局模型文档导航中心与持续演进索引
+- `doc/mimo/`：小米 MiMo 专区（ASR `mimo-v2.5-asr` + LLM `mimo-v2.6-flash` 思考模式控制）
+- `doc/qwen/`：阿里通义千问专区（Audio 3.0 流式/批量 + 千问输入法逆向运行时）
+- `doc/volcengine/`：火山引擎豆包专区（SeedASR / BigASR 二进制分帧 + 豆包输入法逆向）
+- `doc/baidu/`：百度智能云专区（DevPID 语种模型矩阵 + 容错重试）
   
 ## Command execution
 

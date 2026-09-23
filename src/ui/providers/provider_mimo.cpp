@@ -7,14 +7,39 @@
 #include "settings.h"
 #include "ui_types.h"
 #include "asr_probe_service.h"
+#include "utils.h"
 
 #include <windowsx.h>
 
 namespace ui_provider {
 
 namespace {
-constexpr wchar_t kMimoDefaultBaseUrl[] = L"https://token-plan-ams.xiaomimimo.com/v1";
+constexpr wchar_t kMimoDefaultBaseUrl[] = L"https://api.xiaomimimo.com/v1";
 constexpr wchar_t kMimoDefaultModel[] = L"mimo-v2.5-asr";
+
+struct MimoUrlPreset {
+    const wchar_t* label;
+    const wchar_t* url;
+};
+
+constexpr MimoUrlPreset kMimoUrlPresets[] = {
+    {L"Default API", L"https://api.xiaomimimo.com/v1"},
+    {L"Token Plan (CN)", L"https://token-plan-cn.xiaomimimo.com/v1"},
+    {L"Token Plan (AMS)", L"https://token-plan-ams.xiaomimimo.com/v1"},
+    {L"Custom", L""},
+};
+constexpr int kMimoUrlPresetCount = static_cast<int>(sizeof(kMimoUrlPresets) / sizeof(kMimoUrlPresets[0]));
+constexpr int kCustomPresetIndex = kMimoUrlPresetCount - 1;
+
+int MatchUrlPresetIndex(const std::wstring& url) {
+    for (int i = 0; i < kCustomPresetIndex; ++i) {
+        if (url == kMimoUrlPresets[i].url) {
+            return i;
+        }
+    }
+    return kCustomPresetIndex;
+}
+
 } // namespace
 
 void ProviderMimo::CreateControls(HWND parent) {
@@ -22,7 +47,25 @@ void ProviderMimo::CreateControls(HWND parent) {
     ui_form::LayoutCursor cursor(UiStyle::RowInputY(1), UiStyle::RowHeight);
 
     m_binder.AddPasswordRow(parent, cursor, IDC_MIMO_API_KEY, IDC_MIMO_SHOW_KEY, L"API Key", &Config::mimoApiKey, 330);
-    m_binder.AddEditRow(parent, cursor, IDC_MIMO_BASE_URL, L"Base URL", &Config::mimoBaseUrl, 480);
+
+    const int y = cursor.NextRowY();
+    HWND lblUrl = CreateLabel(parent, S(UiStyle::ContentLeft), S(y + UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Base URL");
+    m_extraControls.push_back(lblUrl);
+
+    HWND comboPreset = CreateCombo(parent, IDC_MIMO_BASE_URL_PRESET, S(UiStyle::InputLeft), S(y), S(UiStyle::MimoPresetComboW), S(UiStyle::ComboH));
+    for (int i = 0; i < kMimoUrlPresetCount; ++i) {
+        ComboBox_AddString(comboPreset, kMimoUrlPresets[i].label);
+    }
+    m_extraControls.push_back(comboPreset);
+
+    HWND editUrl = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                   S(UiStyle::InputLeft + UiStyle::MimoPresetComboW + UiStyle::MimoUrlEditGap), S(y), S(UiStyle::MimoUrlEditW), S(UiStyle::EditH),
+                                   parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_MIMO_BASE_URL)),
+                                   GetParentInstance(parent), nullptr);
+    ApplyUiFont(editUrl);
+    m_extraControls.push_back(editUrl);
+
     m_binder.AddEditRow(parent, cursor, IDC_MIMO_MODEL, L"Model", &Config::mimoModel, 330);
 
     const std::pair<std::wstring, std::wstring> langOpts[] = {
@@ -56,18 +99,45 @@ void ProviderMimo::Show(bool visible) {
 
 void ProviderMimo::LoadControls(HWND parent, const Config& cfg) {
     m_binder.LoadFromConfig(parent, cfg);
-    if (cfg.mimoBaseUrl.empty()) SetWindowTextW(GetDlgItem(parent, IDC_MIMO_BASE_URL), kMimoDefaultBaseUrl);
+    std::wstring url = cfg.mimoBaseUrl.empty() ? kMimoDefaultBaseUrl : cfg.mimoBaseUrl;
+    SetWindowTextW(GetDlgItem(parent, IDC_MIMO_BASE_URL), url.c_str());
+    int presetIdx = MatchUrlPresetIndex(url);
+    ComboBox_SetCurSel(GetDlgItem(parent, IDC_MIMO_BASE_URL_PRESET), presetIdx);
     if (cfg.mimoModel.empty()) SetWindowTextW(GetDlgItem(parent, IDC_MIMO_MODEL), kMimoDefaultModel);
 }
 
 void ProviderMimo::SaveControls(HWND parent, Config& cfg) {
     m_binder.SaveToConfig(parent, cfg);
-    if (cfg.mimoBaseUrl.empty()) cfg.mimoBaseUrl = kMimoDefaultBaseUrl;
+    wchar_t buf[512] = {};
+    GetWindowTextW(GetDlgItem(parent, IDC_MIMO_BASE_URL), buf, 512);
+    std::wstring url = Trim(std::wstring(buf));
+    if (url.empty()) url = kMimoDefaultBaseUrl;
+    cfg.mimoBaseUrl = url;
     if (cfg.mimoModel.empty()) cfg.mimoModel = kMimoDefaultModel;
 }
 
 bool ProviderMimo::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
     if (m_binder.HandlePasswordToggle(parent, controlId)) return true;
+
+    if (controlId == IDC_MIMO_BASE_URL_PRESET && notifyCode == CBN_SELCHANGE) {
+        int sel = ComboBox_GetCurSel(control);
+        if (sel >= 0 && sel < kCustomPresetIndex) {
+            SetWindowTextW(GetDlgItem(parent, IDC_MIMO_BASE_URL), kMimoUrlPresets[sel].url);
+        }
+        return true;
+    }
+
+    if (controlId == IDC_MIMO_BASE_URL && notifyCode == EN_CHANGE) {
+        wchar_t buf[512] = {};
+        GetWindowTextW(control, buf, 512);
+        std::wstring text = Trim(std::wstring(buf));
+        int presetIdx = MatchUrlPresetIndex(text);
+        HWND combo = GetDlgItem(parent, IDC_MIMO_BASE_URL_PRESET);
+        if (combo && ComboBox_GetCurSel(combo) != presetIdx) {
+            ComboBox_SetCurSel(combo, presetIdx);
+        }
+        return true;
+    }
 
     if (controlId == IDC_MIMO_TEST) {
         Config snap = g_config;

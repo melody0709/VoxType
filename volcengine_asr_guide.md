@@ -1,6 +1,6 @@
 # Volcengine (Doubao) ASR Setup Guide
 
-> 🇨🇳 [中文版](doc/volcengine_asr_guide_zh.md)
+> 🇨🇳 [中文版](doc/volcengine/volcengine_asr_guide_zh.md)
 
 This document provides detailed instructions for configuring the Volcengine (Doubao) large model speech recognition in VoxType, including parameter descriptions, API credential setup, and implementation details.
 

@@ -1,6 +1,6 @@
 # 火山引擎（豆包）语音识别设置指南
 
-> 🇬🇧 [English](../volcengine_asr_guide.md)
+> 🇬🇧 [English](../../volcengine_asr_guide.md)
 
 本文档详细说明 VoxType 中火山引擎（豆包）大模型语音识别的配置方法、各参数含义、API 获取方式及实现细节。
 
