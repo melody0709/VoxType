@@ -272,6 +272,46 @@ set_target_properties(asr_json_protocol_test PROPERTIES
 )
 add_test(NAME asr_json_protocol_test COMMAND asr_json_protocol_test)
 
+# Offline regression for the ASR final-text classification contract that gates the
+# serial fallback. It links the production classifier (asr_result.cpp) so the
+# watchdog timeout text and the allow-list cannot drift apart again.
+add_executable(asr_result_classification_test
+    tests/asr_result_classification_test.cpp
+    src/asr/asr_result.cpp
+    src/core/path_service.cpp
+)
+target_compile_definitions(asr_result_classification_test PRIVATE UNICODE _UNICODE)
+target_include_directories(asr_result_classification_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/asr"
+    "${CMAKE_SOURCE_DIR}/src/core"
+)
+if(MSVC)
+    target_compile_options(asr_result_classification_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+target_link_libraries(asr_result_classification_test PRIVATE shell32 ole32)
+set_target_properties(asr_result_classification_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME asr_result_classification_test COMMAND asr_result_classification_test)
+
+# Offline regression for the shared post-stop watchdog budget arithmetic that every
+# streaming backend now goes through.
+add_executable(cloud_asr_timeout_test
+    tests/cloud_asr_timeout_test.cpp
+    src/asr/cloud_asr_common.cpp
+)
+target_compile_definitions(cloud_asr_timeout_test PRIVATE UNICODE _UNICODE)
+target_include_directories(cloud_asr_timeout_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/asr"
+)
+if(MSVC)
+    target_compile_options(cloud_asr_timeout_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(cloud_asr_timeout_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME cloud_asr_timeout_test COMMAND cloud_asr_timeout_test)
+
 add_executable(hud_pagination_test
     tests/hud_pagination_test.cpp
     src/ui/hud_pagination.cpp

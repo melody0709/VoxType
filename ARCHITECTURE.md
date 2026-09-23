@@ -69,10 +69,10 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/audio/audio_diagnostics.h` / `src/audio/audio_diagnostics.cpp` | Provider-neutral capture/stage diagnostics, PCM metrics, WAV/SHA-256/JSON persistence, retention, and managed-folder operations |
 | `src/audio/streaming_vad_trimmer.h` / `src/audio/streaming_vad_trimmer.cpp` | Provider-independent streaming PCM VAD trim for cloud ASR sessions |
 | `src/asr/asr_session.h` / `src/asr/asr_session.cpp` | Batch ASR session abstraction for Local, Baidu, MiMo, MAI, Qwen, and recorded Doubao IME paths |
-| `src/asr/asr_result.h` / `src/asr/asr_result.cpp` | ASR text normalization, result/failure classification, and stable backend/result log names |
+| `src/asr/asr_result.h` / `src/asr/asr_result.cpp` | ASR text normalization, result/failure classification, stable backend/result log names, and `MakeAsrWatchdogTimeoutText()` — the single constructor for watchdog timeout text, whose prefix is guaranteed to be on the operational-error allow-list |
 | `src/asr/asr_dispatcher.h` / `src/asr/asr_dispatcher.cpp` | Final ASR result dispatch, LLM gate, raw ASR tracking |
 | `src/asr/asr_runtime_log.h` / `src/asr/asr_runtime_log.cpp` | Debug-only, privacy-safe ASR lifecycle logging with timestamp/PID and bounded rotation |
-| `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | Cloud replay buffer, adaptive finalize timeout, empty-final retry helpers |
+| `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | Cloud replay buffer, adaptive finalize timeout, empty-final retry helpers, `ComputeCloudAsrPostStopWatchdogMs()` (shared post-stop watchdog budget: primary final wait + retry reserve, capped) and the replay-fit arithmetic `EstimateCloudAsrReplaySendMs()` / `CloudAsrReplayFitsInBudget()` |
 | `src/asr/asr_diagnostics.h` / `src/asr/asr_diagnostics.cpp` | Maps shared `Config` stage routing and provider outcomes into `audio_diagnostics` without provider-specific file I/O |
 | `src/ui/hud.h` / `src/ui/hud.cpp` | HUD window, Direct2D/DirectWrite rendering, tray icon, UI resource creation/deletion |
 | `src/ui/hud_pagination.h` / `src/ui/hud_pagination.cpp` | HUD text line wrapping, paging calculations, and display clipping |
@@ -319,7 +319,11 @@ Fallback is serial: the primary backend completes its own retry/replay policy fi
 
 `main.cpp` owns a monotonically increasing recognition-attempt context containing the primary config, recording/final state, raw PCM, and fallback claim. Streaming callbacks only post a main-window message. If a streaming provider exhausts retries and posts a final failure before the hotkey is released, that final is retained in the attempt context; release stores the complete PCM, applies too-short/VAD no-speech gates, and then resumes the same completion path. This prevents early provider failure from either running fallback on partial audio or bypassing fallback because PCM was not yet available. Watchdog and provider callbacks race through one final-claim guard, and fallback workers recheck the attempt id before side effects and dispatch.
 
-With fallback enabled, the post-release primary streaming final budget remains adaptive at 6–12 seconds; provider-internal batch/recorded request budgets remain separate and longer. v0.9.7 does not change those retry or timeout formulas.
+With fallback enabled, the post-release primary streaming final budget remains adaptive at 6–12 seconds, and the session's own "wait for final" must consume that allowance only; the main-window post-stop watchdog is the total cap and adds a fixed 9000 ms reserve for one connection/replay retry (cap 45000 ms). Both the allowance and the reserve come from `ComputeCloudAsrPostStopWatchdogMs()`; `qwen_free` (ASR plus bundled post-processing phases) and `volcengine` (opening guard) keep their own multi-phase budgets. Provider-internal batch/recorded request budgets remain separate and longer.
+
+That reserve does not make long-recording replays viable, and the code no longer pretends otherwise. A replay keeps the primary's real-time cadence (a burst upload triggers provider-side backpressure), so re-sending a 30 s recording costs about 30 s against a 9000 ms reserve. `ShouldStartFailureReplay()` on `StreamingAsrSessionBase` (backed by `CloudAsrReplayFitsInBudget()`) therefore checks the remaining post-stop budget before a failure-path replay and skips it when it cannot finish, so the completed primary error reaches the fallback handler immediately instead of parking the attempt until the outer watchdog aborts it. The reachable window with a 9000 ms reserve is roughly 1.5 s of audio. Empty-final replays are deliberately not gated, because skipping them would turn a suspicious empty final into `No speech detected` without a fallback opportunity.
+
+The structured runtime log and the provider-verbose logs have different enablement. `voxtype_asr_runtime.log` is written whenever Debug Mode is on **or** diagnostic audio is enabled (any non-`off` `diagnostic_audio_mode`) **or** the Qwen IME Free debug switch is on: recording diagnostics deliberately turn on the bounded structured log without exposing provider payloads. The provider-verbose files (`volc_asr_debug.log`, `mai_asr_debug.log`, `qwen_asr_debug.log`) remain an explicit Debug Mode opt-in.
 
 Debug Mode writes bounded files under `%TEMP%`, including:
 
@@ -327,7 +331,7 @@ Debug Mode writes bounded files under `%TEMP%`, including:
 - `volc_asr_debug.log`: privacy-redacted Volcengine transport/retry diagnostics. Request JSON, response payloads, transcripts, raw provider errors, and proxy-address strings are not persisted.
 - `mai_asr_debug.log`: MAI channel/model/host/status/timing/byte-count diagnostics. API keys, audio/Base64/multipart bodies, response bodies, and transcripts are not persisted.
 
-Both logs include full local date/time with milliseconds and PID, rotate at 5 MiB, and retain `.1` and `.2` archives. No file is written while Debug Mode is disabled. Rotation does not proactively delete an older pre-v0.9.7 log; new writes are sanitized and normal size rotation eventually archives/replaces it.
+Both logs include full local date/time with milliseconds and PID, rotate at 5 MiB, and retain `.1` and `.2` archives. The provider-verbose files are not written while Debug Mode is disabled (the structured runtime log has its own broader enablement, described above). Rotation does not proactively delete an older pre-v0.9.7 log; new writes are sanitized and normal size rotation eventually archives/replaces it.
 
 ### Model Adaptation
 

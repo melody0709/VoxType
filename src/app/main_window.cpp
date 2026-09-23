@@ -9,6 +9,7 @@
 #include "audio_capture.h"
 #include "audio_diagnostics.h"
 #include "asr_diagnostics.h"
+#include "asr_result.h"
 #include "asr_runtime_log.h"
 #include "cloud_asr_common.h"
 #include "asr_dispatcher.h"
@@ -211,6 +212,10 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         SetHotkeyTargetWindow(hwnd);
         AddTrayIcon(hwnd);
         InstallKeyboardHook();
+        // 启动时把日志开关同步一次。放在这里而不是 main.cpp：主窗口在
+        // LoadConfig() 之后创建，语义等价，同时避免 main.cpp 的行数棘轮被顶上基线。
+        // Settings 保存与托盘 Debug 开关各自另有同步点。
+        asr_runtime_log::ApplyRuntimeLogConfig(g_config);
         return 0;
     case kTrayMessage:
         if (LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU) {
@@ -221,6 +226,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         return 0;
     case kReloadMessage:
         g_enableDebugMode = g_config.enableDebugMode;
+        asr_runtime_log::ApplyRuntimeLogConfig(g_config);
         g_asrEngine.Reload();
         if (!g_recording && !IsCapturePendingOnly()) {
             CloseAudioCapture();
@@ -555,8 +561,17 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 std::wstring providerName = session->ProviderName();
                 CancelActiveAsrAttempt(attemptId, false);
                 session->Abort();
-                std::wstring timeoutText = std::wstring(providerName) + L" error: timeout";
+                // 这条文案同时承担两个角色：给用户看的提示，以及 fallback 判据
+                // （ShouldRunFallback 要求 ClassifyAsrResult 判为 OperationalError）。
+                // 因此必须由 MakeAsrWatchdogTimeoutText() 构造，前缀固定落在
+                // LooksLikeOperationalPrefix() 白名单内；不要再拿 ProviderName()
+                // 现拼 "<ProviderName> error: timeout" —— Qwen Audio 3 的
+                // ProviderName() 是 "Qwen Audio 3 ASR"，与白名单条目的
+                // "Qwen Audio ASR error:" 差一个字符，曾导致超时回退静默失效。
+                std::wstring timeoutText = MakeAsrWatchdogTimeoutText(providerName);
                 if (providerName == L"Volcano Engine") {
+                    // 火山是既有文案例外：.plan/complete/cloud-asr-architecture-refactor.md
+                    // 要求 token 名保持 ASR failed: VolcEngine timeout 不变。
                     timeoutText = L"ASR failed: VolcEngine timeout";
                 }
                 auto* msg = new AsrAttemptFinalMessage;
@@ -587,6 +602,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         case ID_TRAY_DEBUG_MODE:
             g_config.enableDebugMode = !g_config.enableDebugMode;
             g_enableDebugMode = g_config.enableDebugMode;
+            asr_runtime_log::ApplyRuntimeLogConfig(g_config);
             if (g_config.enableDebugMode) DebugModeOpenConsole();
             else DebugModeCloseConsole();
             SaveConfig(g_config);

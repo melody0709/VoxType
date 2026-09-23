@@ -64,10 +64,10 @@ flowchart LR
 | `src/audio/audio_diagnostics.h` / `src/audio/audio_diagnostics.cpp` | provider 无关的采集/stage 诊断、PCM 指标、WAV/SHA-256/JSON 持久化、留存与受管目录操作 |
 | `src/audio/streaming_vad_trimmer.h` / `src/audio/streaming_vad_trimmer.cpp` | 云端流式 ASR session 可复用的 provider-independent PCM VAD trim |
 | `src/asr/asr_session.h` / `src/asr/asr_session.cpp` | Local、百度、MiMo、Qwen 和 Doubao IME recorded 路径的批量 ASR session 抽象 |
-| `src/asr/asr_result.h` / `src/asr/asr_result.cpp` | ASR 文本归一化、结果/失败分类，以及稳定的后端/结果日志名 |
+| `src/asr/asr_result.h` / `src/asr/asr_result.cpp` | ASR 文本归一化、结果/失败分类、稳定的后端/结果日志名，以及 `MakeAsrWatchdogTimeoutText()` —— 看门狗超时文案的唯一构造入口，前缀保证落在运维错误白名单内 |
 | `src/asr/asr_dispatcher.h` / `src/asr/asr_dispatcher.cpp` | ASR final 结果分发、LLM 门控、raw ASR 记录 |
 | `src/asr/asr_runtime_log.h` / `src/asr/asr_runtime_log.cpp` | 仅 Debug Mode 使用的隐私安全 ASR 生命周期日志，带时间/PID 和有界轮转 |
-| `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | 云端 replay buffer、自适应 finalize timeout、空 final retry 辅助 |
+| `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | 云端 replay buffer、自适应 finalize timeout、空 final retry 辅助、`ComputeCloudAsrPostStopWatchdogMs()`（共享的停录后看门狗预算：primary final 等待 + retry 预留，带上限），以及 replay 可行性算术 `EstimateCloudAsrReplaySendMs()` / `CloudAsrReplayFitsInBudget()` |
 | `src/asr/asr_diagnostics.h` / `src/asr/asr_diagnostics.cpp` | 把公共 `Config` stage 路由和 provider 终态映射到 `audio_diagnostics`，provider 不直接写文件 |
 | `src/ui/hud.h` / `src/ui/hud.cpp` | HUD 窗口、Direct2D/DirectWrite 渲染、托盘图标、UI 资源创建/销毁 |
 | `src/ui/hud_pagination.h` / `src/ui/hud_pagination.cpp` | HUD 文本行换行、分页计算与可视范围裁剪 |
@@ -274,14 +274,18 @@ Fallback 采用串行策略：primary 先完成自己的 retry/replay，只有�
 
 `main.cpp` 维护单调递增的 recognition-attempt context，保存 primary config、录音/final 状态、原始 PCM 和 fallback claim。Streaming callback 只向主窗口投递消息。如果 provider 在热键松开前已经耗尽重试并回报 final failure，该结果先保存在 attempt context；松手后先保存完整 PCM、执行 too-short/VAD no-speech 门控，再恢复同一 completion 路径。这样既不会拿不完整音频提前 fallback，也不会因当时尚无 PCM 而绕过 fallback。Watchdog 和 provider callback 通过同一个 final-claim guard 竞争，fallback worker 在 side effect 和 dispatch 前再次检查 attempt id。
 
-启用 fallback 时，primary streaming 松手后的 final 总预算仍为自适应 6–12 秒；provider 内部 batch/recorded request 使用独立且更长的预算。v0.9.7 不修改这些 retry/timeout 公式。
+启用 fallback 时，primary streaming 松手后的 final 预算仍为自适应 6–12 秒，且 session 自己的"等 final"只能吃这一段；主窗口 post-stop watchdog 是**总上限**，在此之上固定加 9000ms 供一次连接/replay 重试使用（上限 45000ms）。上述额度与预留统一由 `ComputeCloudAsrPostStopWatchdogMs()` 提供；`qwen_free`（ASR + bundled 后处理两段）与 `volcengine`（opening 守卫）保留各自的多相位预算。provider 内部 batch/recorded request 使用独立且更长的预算。
+
+这笔预留**并不能**让长录音的 replay 真正跑完，代码也不再把这句话当成前提。replay 保持 primary 的实时节奏（burst 上传会触发服务端背压），所以重发一段 30 秒录音要约 30 秒，而预留只有 9000ms。因此 `StreamingAsrSessionBase::ShouldStartFailureReplay()`（底层是 `CloudAsrReplayFitsInBudget()`）会在**失败路径**的 replay 之前检查剩余停录预算，装不下就跳过，让已完成的主流程错误立即抵达 fallback handler，而不是让 attempt 一直挂到外层看门狗 Abort。9000ms 预留下的可达窗口约为**音频 1.5 秒以内**。空结果路径的 replay **有意不门控** —— 跳过它会把一次可疑的空 final 变成 `No speech detected` 且不给 fallback 机会。
+
+结构化运行时日志与 provider 详细日志的开启条件不同。`voxtype_asr_runtime.log` 在 Debug Mode 打开、**或**诊断音频模式非 `off`、**或**千问 IME Free 调试开关打开时写入 —— 诊断音频刻意只打开这条有界的结构化日志，不暴露 provider 报文。而 provider 详细日志（`volc_asr_debug.log`、`mai_asr_debug.log`、`qwen_asr_debug.log`）仍需显式打开 Debug Mode。
 
 Debug Mode 会在 `%TEMP%` 下写入两个有界日志：
 
 - `voxtype_asr_runtime.log`：结构化 attempt/primary/fallback 生命周期事件，只记录后端 id、归一化结果/失败分类、来源、耗时、录音时长和 PCM 大小，不记录识别正文或 provider 原始错误。
 - `volc_asr_debug.log`：隐私脱敏的火山传输/retry 诊断，不持久化 request JSON、response payload、识别正文、provider 原始错误和代理地址字符串。
 
-两个日志都包含完整本地日期/时间、毫秒和 PID；单文件达到 5 MiB 后轮转，保留 `.1`、`.2` 两个归档。Debug Mode 关闭时不写文件。轮转不会主动删除用户已有的 v0.9.7 之前日志；新版本停止追加敏感内容，并在达到大小阈值后按正常规则归档/替换。
+两个日志都包含完整本地日期/时间、毫秒和 PID；单文件达到 5 MiB 后轮转，保留 `.1`、`.2` 两个归档。provider 详细日志在 Debug Mode 关闭时不写文件（结构化运行时日志有上面单独说明的更宽开启条件）。轮转不会主动删除用户已有的 v0.9.7 之前日志；新版本停止追加敏感内容，并在达到大小阈值后按正常规则归档/替换。
 
 ### 模型适配
 

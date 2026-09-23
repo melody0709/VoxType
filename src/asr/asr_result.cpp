@@ -239,3 +239,10 @@ bool ShouldRunFallback(const Config& primary,
     }
     return ClassifyAsrResult(text).kind == AsrResultKind::OperationalError;
 }
+
+std::wstring MakeAsrWatchdogTimeoutText(const std::wstring& providerName) {
+    // "ASR failed:" 已在 LooksLikeOperationalPrefix() 白名单内，且与本仓库
+    // 既有的看门狗出口（火山引擎）保持同一种形态。ProviderName() 只作为
+    // 描述性后缀，不参与分类判断 —— 这正是本函数存在的意义。
+    return L"ASR failed: " + providerName + L" timeout";
+}

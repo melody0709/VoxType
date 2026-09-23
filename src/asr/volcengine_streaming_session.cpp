@@ -191,11 +191,13 @@ public:
 
     DWORD CurrentWatchdogMs() const override {
         if (streaming_.load()) return kVolcRecordingWatchdogMs;
-        const DWORD finalizeMs = VolcFinalizeWaitMs(config_, recordingMs_.load(), capturedPcmBytes_.load());
+        const DWORD postStopMs = ComputeCloudAsrPostStopWatchdogMs(
+            IsFallbackAsrEnabled(config_), recordingMs_.load(),
+            capturedPcmBytes_.load(), kCloudAsrPostStopRetryReserveMs);
         if (openingSession_.load()) {
-            return (std::max)(finalizeMs, kVolcOpeningFinalizeWatchdogMs);
+            return (std::max)(postStopMs, kVolcOpeningFinalizeWatchdogMs);
         }
-        return finalizeMs;
+        return postStopMs;
     }
 
     const wchar_t* ProviderName() const override {

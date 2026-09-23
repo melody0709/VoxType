@@ -54,6 +54,37 @@ DWORD ComputeCloudAsrFinalizeTimeoutMs(double recordingMs, size_t pcmBytes) {
     return ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs, pcmBytes);
 }
 
+DWORD ComputeCloudAsrPostStopWatchdogMs(bool fallbackEnabled,
+                                        double recordingMs,
+                                        size_t pcmBytes,
+                                        DWORD retryReserveMs) {
+    const DWORD primaryWait = fallbackEnabled
+        ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs, pcmBytes)
+        : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs, pcmBytes);
+    // 先封顶再取 max：不能写成 std::clamp(total, primaryWait, cap) ——
+    // clamp 要求 lo <= hi，而一旦将来 primaryWait 的取值上限被抬高到 cap 之上，
+    // 那种写法就是 UB。这里显式表达"封顶但绝不低于 primaryWait"。
+    const DWORD capped = (std::min)(primaryWait + retryReserveMs,
+                                    kCloudAsrPostStopWatchdogMaxMs);
+    return (std::max)(primaryWait, capped);
+}
+
+DWORD EstimateCloudAsrReplaySendMs(size_t replayBytes) {
+    if (replayBytes == 0) return 0;
+    return static_cast<DWORD>(
+        static_cast<double>(replayBytes) / kPcm16k16MonoBytesPerMs);
+}
+
+bool CloudAsrReplayFitsInBudget(DWORD remainingBudgetMs,
+                               size_t replayBytes,
+                               DWORD retryWaitMs,
+                               DWORD safetyMs) {
+    const ULONGLONG needed =
+        static_cast<ULONGLONG>(EstimateCloudAsrReplaySendMs(replayBytes)) +
+        retryWaitMs + safetyMs;
+    return needed <= remainingBudgetMs;
+}
+
 bool IsShortClosedWithoutText(bool streamingMode,
                               bool finalTextEmpty,
                               bool originalServerClosed,

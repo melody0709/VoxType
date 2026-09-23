@@ -31,7 +31,15 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **机械守卫**：`tools\check_architecture.ps1`（当前 **17 项检查**，含 5 项防绕过）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
-- **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。当前最新基线：`0 / 0 / 0 / 148 / 400 / 2`（`globals.h` 彻底消除，`main.cpp` 为 148 行，`settings.cpp` 降至 389 行，跨层 include 违规降至 1 处）。
+- **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。
+  守卫脚本里的**基线常量**（`tools/check_architecture.ps1` 的 `$BASELINES`，**decrease-only**）：
+  `GlobalsIncluders / GlobalsExterns / GlobalsCrossLayerHeader / MainLines / SettingsLines / LayerViolations`
+  = `0 / 0 / 0 / 150 / 400 / 2`。
+  当前**实测值** = `0 / 0 / 0 / 148 / 377 / 1`（`globals.h` 彻底消除；`main.cpp` 148 行，余 2 行；
+  `settings.cpp` 377 行，余 23 行；跨层 include 违规 1 处，余 1 处）。
+  基线自 P0（`847926b`）建立后从未调整过；`main.cpp` 由 150 行收缩至 148 行，故棘轮留有 2 行余量。
+  **基线只降不升**：`main.cpp` / `settings.cpp` 的新代码应进入对应模块，而不是在这两个文件里增长。
+
 - **契约同步是每个阶段的 DoD**：涉及类名、路径、配置项搬迁时，必须同步更新 `ARCHITECTURE.md`、`AGENTS.md`（本文）与守卫脚本里的基线数值。
 - **开工前先做备份**：`.bak\`（仓库根，已在 `.gitignore` 中）。禁止把人工备份放进 `build\`。
 
@@ -74,6 +82,9 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - 复用已有公共层：`asr_dispatcher` / `asr_result` / `cloud_http_common` / `cloud_asr_common` / `PendingPcmBuffer` / VAD trimmer。只有 provider 协议差异留在各自 client/session 内。
 - 音频回调只做轻量采集、可选 VAD trim、`EnqueuePcmChunk()`；不要在 WASAPI/waveIn 回调里做网络请求或 provider 协议逻辑。
 - Streaming 停止录音用 `StopInput()` 通知 session，不要让 `StopRecordingSession()` 同步等待云端 final。
+- **streaming 后端的停录预算统一走 `ComputeCloudAsrPostStopWatchdogMs()`**（`src/asr/cloud_asr_common.h`）：它是"主窗口 post-stop watchdog 的总上限 = primary 自己的 final 等待 + retry 预留"。session 内部"`SendFinish` 后等 final"只能用 `ComputeCloudAsrStreamingFinalWaitMs()` / `ComputeCloudAsrLegacyFinalizeTimeoutMs()` 的值，**不要复用 `CurrentWatchdogMs()` 的返回值**——那会把 retry 预算整段吃掉，内部的 replay retry 永远跑不完（Qwen Audio 3 曾如此）。多相位后端保留自己的 `CurrentWatchdogMs()`：目前只有 `qwen_free`（ASR final 12s + 重连/replay 20s + bundled LLM 15s，其外层刻意大于内层之和）；`volcengine` 用本函数并在其上叠加 opening 守卫。
+- **新增 batch 后端必须显式传入请求超时**（`ComputeCloudAsrRecordedRequestTimeoutMs()` 或 provider 自带超时）。batch 路径**没有**外层看门狗——`kStreamingWatchdogTimer` 只在流式分支设置；一旦某个 client 漏传超时，该 attempt 会永久挂起，回退永不触发（fallback 只在拿到最终文本后才评估），且 `g_activeAttempt` 一直被占用。唯一例外是本地解码：按设计文档要求不加杀死式 timeout。
+- **失败路径的 replay 必须先过预算门控**：replay 保持与主流程相同的实时节奏重发（burst 会上报服务端背压），所以重发长录音本身就要几十秒，而 `kCloudAsrPostStopRetryReserveMs` 只有 9000ms（可达窗口约音频 1.5 秒以内）。启动一个装不下的重试只会把 attempt 挂到外层看门狗 Abort，把 fallback 推迟一整个预留窗口并丢掉更精确的 provider 错误文案。统一用 `StreamingAsrSessionBase::ShouldStartFailureReplay()`（底层 `CloudAsrReplayFitsInBudget()`，`src/asr/cloud_asr_common.h`），并在 `StopInput()` 里记录 `stopTick_` 供其计算剩余预算。**空结果路径（final 为空但未失败）不要门控**——跳过它会把可疑的空 final 直接变成 `No speech detected` 而不给 fallback 机会。
 - 新 provider 如果有跨录音 session 的连接预热/复用句柄，先保留清晰生命周期，不要强行收进单次录音 session。
 - Settings 模块化重构已全面落地强类型注册表与 Tab/Provider 分离架构，新增配置项按"强类型注册表三步规范"执行（见"开发约定"一节）；禁止绕过注册表私自硬编码读写。
 

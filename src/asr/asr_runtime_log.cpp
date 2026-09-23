@@ -99,6 +99,16 @@ void SetDiagnosticAudioEnabled(bool enabled) {
     g_diagnosticAudioLogEnabled.store(enabled, std::memory_order_relaxed);
 }
 
+void ApplyRuntimeLogConfig(const Config& config) {
+    SetDebugModeEnabled(config.enableDebugMode);
+    SetQwenFreeEnabled(config.qwenFreeDebugLog);
+    // "Recording diagnostics enable only the bounded, structured runtime log."
+    // （见 WriteNamedV 的说明）：诊断音频模式非 off 即打开结构化日志，
+    // 而 provider 级 verbose 日志仍只由 Debug Mode 打开。
+    SetDiagnosticAudioEnabled(
+        NormalizeDiagnosticAudioMode(config.diagnosticAudioMode) != L"off");
+}
+
 void Write(const char* format, ...) {
     if (!Enabled() || !format) return;
     std::lock_guard<std::mutex> lock(g_logMutex);

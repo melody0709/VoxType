@@ -114,6 +114,8 @@ public:
         recordingMs_.store(recordingMs);
         capturedBytes_.store(capturedBytes);
         streaming_.store(false);
+        // 外层看门狗就是从这一刻起算的，replay 预算判定要用它算剩余时间。
+        stopTick_.store(GetTickCount64());
     }
 
     void Abort() override {
@@ -130,16 +132,34 @@ public:
 
     DWORD CurrentWatchdogMs() const override {
         if (streaming_.load()) return kRecordingWatchdogMs;
-        const DWORD base = IsFallbackAsrEnabled(config_)
-            ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), capturedBytes_.load())
-            : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), capturedBytes_.load());
-        // Reserve a bounded connection/replay attempt after the primary task.
-        return (std::min<DWORD>)(base + 9000, 45000);
+        // 停录后：主窗口看门狗 = primary 总上限。PrimaryFinalWaitMs() 只用在内层
+        // "SendFinish 后等 final"，两者相加的部分才留给 replay 重试。
+        return ComputeCloudAsrPostStopWatchdogMs(
+            IsFallbackAsrEnabled(config_), recordingMs_.load(),
+            capturedBytes_.load(), kCloudAsrPostStopRetryReserveMs);
     }
 
     const wchar_t* ProviderName() const override { return L"Qwen Audio 3 ASR"; }
 
 private:
+    // primary 自身"发送 finish-task 后等 task-finished"的预算，不含 replay 重试。
+    // 未启用 fallback 时沿用旧的宽松值，避免改动既有非 fallback 路径的等待时长。
+    DWORD PrimaryFinalWaitMs() const {
+        return IsFallbackAsrEnabled(config_)
+            ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), capturedBytes_.load())
+            : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), capturedBytes_.load());
+    }
+
+    // 距停录还剩多少 post-stop 预算、失败路径 replay 是否值得启动，都由
+    // StreamingAsrSessionBase 统一提供（见 asr_streaming_session_base.h）。
+
+    // replay 阶段"等 final"的预算（与 primary 同一套公式，但按 replay 字节数估算）。
+    DWORD ReplayWaitMs(size_t replayBytes) const {
+        return IsFallbackAsrEnabled(config_)
+            ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), replayBytes)
+            : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), replayBytes);
+    }
+
     void SetActiveClient(qwen_audio_streaming::Client* client) {
         std::lock_guard<std::mutex> lock(clientMutex_);
         activeClient_ = client;
@@ -452,12 +472,15 @@ private:
         if (!connected) {
             const bool replayReady = BufferUntilStop(
                 replay, clientBuffer_, connectRetryable, connectError);
+            // 预算装不下这次重发时，ShouldStartFailureReplay() 返回 false，直接落到
+            // else 分支：把连接错误作为失败结果下发，由 fallback handler 接手。
+            const DWORD connectRetryWaitMs = ReplayWaitMs(replay.Size());
             if (!abort_.load() && connectRetryable && replayReady &&
-                replay.Available() && !replay.Empty()) {
+                replay.Available() && !replay.Empty() &&
+                ShouldStartFailureReplay("qwen_audio", "connect", CurrentWatchdogMs(),
+                                         stopTick_.load(), replay.Size(), connectRetryWaitMs)) {
                 NotifyStatus(L"Retrying... Qwen Audio ASR");
-                const DWORD timeout = IsFallbackAsrEnabled(config_)
-                    ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), replay.Size())
-                    : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), replay.Size());
+                const DWORD timeout = connectRetryWaitMs;
                 const RecognitionAttempt retry = RetryRecognitionOnce(replay.Data(), timeout);
                 audio_diagnostics::StageTerminal primaryTerminal =
                     asr_diagnostics::TerminalFromText(AudioErrorText(connectError));
@@ -668,7 +691,11 @@ private:
                     retryWithReplay = replayEnabled;
                 } else {
                     finishTaskSent = true;
-                    const DWORD timeout = CurrentWatchdogMs();
+                    // 内层只等 primary 自己的预算，不管是否启用 fallback：
+                    // CurrentWatchdogMs() 的返回值是主窗口看门狗的总上限（= 本值 + 9000ms
+                    // 重试预留），若这里也用它，外层就会在内层死线之前抢先 Abort，
+                    // 预留整段作废 —— 这正是非 fallback 路径曾经残留的问题。
+                    const DWORD timeout = PrimaryFinalWaitMs();
                     const ULONGLONG deadline = GetTickCount64() + timeout;
                     while (!abort_.load() && !drainFailed.load() && !taskFinished.load() &&
                            GetTickCount64() < deadline) {
@@ -764,12 +791,15 @@ private:
 
         const bool retryEmpty = !noSpeech.load() && !failed && !abort_.load() && finalText.empty() &&
             replay.Available() && replay.Size() >= kEmptyRetryMinBytes;
-        if (!abort_.load() && (retryWithReplay || retryEmpty) &&
+        const DWORD retryTimeout = ReplayWaitMs(replay.Size());
+        // 失败路径先过预算门控：装不下就跳过重试，failed 保持 true，随后
+        // DispatchAttempt() 会下发更精确的 provider 错误并由 fallback 接手。
+        const bool retryFailure = retryWithReplay &&
+            ShouldStartFailureReplay("qwen_audio", "final", CurrentWatchdogMs(),
+                                     stopTick_.load(), replay.Size(), retryTimeout);
+        if (!abort_.load() && (retryFailure || retryEmpty) &&
             replay.Available() && !replay.Empty()) {
             NotifyStatus(L"Retrying... Qwen Audio ASR");
-            const DWORD retryTimeout = IsFallbackAsrEnabled(config_)
-                ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), replay.Size())
-                : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), replay.Size());
             const RecognitionAttempt retry = RetryRecognitionOnce(replay.Data(), retryTimeout);
             if (retry.ok) {
                 finalText = retry.text;
@@ -797,6 +827,7 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<double> recordingMs_{0.0};
     std::atomic<size_t> capturedBytes_{0};
+    std::atomic<ULONGLONG> stopTick_{0};
     std::thread worker_;
     std::mutex clientMutex_;
     qwen_audio_streaming::Client* activeClient_ = nullptr;

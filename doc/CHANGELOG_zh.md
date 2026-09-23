@@ -2,6 +2,87 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.0 (2026-09-23)
+
+### 缺陷修复
+
+- **流式 ASR 超时不再绕过已配置的 fallback。** 主窗口流式看门狗用
+  `session->ProviderName()` 现场拼超时文案 `"<ProviderName> error: timeout"`，而
+  `asr_result_policy::LooksLikeOperationalPrefix()` 持有的是手写前缀白名单。Qwen Audio 3 的
+  provider 名是 `Qwen Audio 3 ASR`，白名单条目却写成 `Qwen Audio ASR error:` —— 差一个字符。
+  于是超时文案被判为 `AsrResultKind::UsableText` 而不是 `OperationalError`；由于
+  `ShouldRunFallback()` 要求 `OperationalError`，回退被**静默跳过**
+  （`fallback_suppressed` 那条日志有同样的前置条件，所以连记录都没有），
+  并且该字符串还会被当作识别结果注入焦点窗口。该缺陷随 Qwen Audio 3 后端于
+  **v0.9.24** 一起引入，与 C++23 架构重构无关 —— P0~P6 只是把这段代码逐字节搬了位置。
+  现统一由 `src/asr/asr_result.cpp` 的 `MakeAsrWatchdogTimeoutText()` 构造，前缀固定为
+  `ASR failed: `（本就在白名单内，且与火山引擎出口一直使用的形态一致）。
+  - 同时消除了 `Local ASR`、`Baidu Cloud`、`Microsoft MAI Transcribe 2` 三处同源隐患：
+    它们当前是 batch 后端、走不到这个看门狗，但一旦补上流式实现就会立刻复现。
+  - 火山引擎有意保留历史文案 `ASR failed: VolcEngine timeout` ——
+    `.plan/complete/cloud-asr-architecture-refactor.md` 要求该标识保持稳定。
+
+- **ASR 运行时日志整条链路已成死代码。** `asr_runtime_log::SetDebugModeEnabled()` /
+  `SetQwenFreeEnabled()` / `SetDiagnosticAudioEnabled()` 有声明、有定义，但**全仓库零调用点**，
+  导致 `Enabled()` 恒为 false、所有 `asr_runtime_log::Write()` 都是空操作：
+  `%TEMP%\voxtype_asr_runtime.log` 停止增长，设置里的 *Open log* 打开的
+  `qwen_asr_debug.log` 从未生成，而排查上述缺陷最需要的 `event=fallback_start` /
+  `event=fallback_suppressed` 根本写不出来。现由
+  `asr_runtime_log::ApplyRuntimeLogConfig(const Config&)` 一处同步三个开关，
+  调用点为 `WM_CREATE`、Settings 保存后的重载路径、托盘 Debug 开关。
+
+### 看门狗预算统一
+
+- **新增共享的停录预算函数** `ComputeCloudAsrPostStopWatchdogMs()`
+  （`src/asr/cloud_asr_common.{h,cpp}`）：主窗口看门狗是 primary 的**总上限**，
+  等于 primary 自己的"等 final"预算加上一次连接/replay 重试的 9000ms 预留
+  （上限 45000ms，两个数值均沿用 Qwen Audio 3 的既有值）。`qwen`、`doubao_ime`、
+  `volcengine` 原先只用裸预算、**完全没有预留**，其内部 `RetryRecognitionOnce`
+  重试连启动的机会都没有 —— 与 Qwen Audio 3 是同一处记账错误，且更严重一层。
+  `qwen_audio` 现也走同一函数，两种 fallback 状态下的数值与改动前完全一致。
+  - `qwen_free`（ASR + bundled VoiceInputWrite/Rewrite 两段）与 `volcengine`
+    （opening 守卫）保留各自的 `CurrentWatchdogMs()`：只统一算术，
+    **不统一** send/drain/retry 流程（遵循本项目"不要把各 provider 重试做成复杂模板"的规则）。
+  - 已写入 `AGENTS.md`：session 内部"等 final"必须用
+    `ComputeCloudAsrStreamingFinalWaitMs()` / `ComputeCloudAsrLegacyFinalizeTimeoutMs()`，
+    **不得**复用 `CurrentWatchdogMs()`；新增 batch 后端必须显式传请求超时，
+    因为 batch 路径完全没有外层看门狗。
+
+- **9 秒预留只装得下短录音，因此 replay 改为"先判断装得下才启动"。**
+  replay 必须保持与主流程相同的实时节奏（burst 上传会触发服务端背压、产生误报的
+  `task-failed`），所以重发一段 30 秒录音本身就要约 30 秒，而预留只有 9000ms。
+  也就是说固定预留**无法**让长录音的 replay 跑完；启动它只会让 attempt 一直挂到
+  外层看门狗抢占为止，把 fallback 推迟一整个预留窗口，并丢掉更精确的 provider 错误文案。
+  现新增 `CloudAsrReplayFitsInBudget()` / `EstimateCloudAsrReplaySendMs()`
+  以及在 `StreamingAsrSessionBase` 上的共享门控 `ShouldStartFailureReplay()`：
+  **失败路径**的 replay 先判断剩余预算，装不下就跳过，让已完成的主流程错误
+  直接交给 fallback handler。9000ms 预留下的可达窗口约为**音频 1.5 秒以内**，
+  这里如实写清，不再用"重试能跑完"含糊带过。
+  - 空结果路径（无文本但未失败）**有意不门控**：跳过它会把一次可疑的空 final 直接变成
+    `No speech detected` 且不给 fallback 机会；而被抢占时它同样会经看门狗文案进入 fallback。
+    该路径残留的多等一段预留时间属已知取舍，已记入方案文档。
+  - `qwen_audio` 的内层"等 final"现在**始终**使用 `PrimaryFinalWaitMs()`。
+    原先在未启用 fallback 时它用 `CurrentWatchdogMs()`，而这个值**就是**外层看门狗的总预算，
+    于是外层必然抢先 Abort、预留形同虚设。这是既有问题，不是本版引入。
+
+### 质量与守卫
+
+- 新增离线回归 `tests/asr_result_classification_test.cpp`：表驱动覆盖全部 9 个后端与
+  各 session 实际会产出的 17 条错误前缀，断言"生产者 → 分类器"的往返一致性，
+  使"显示名当分类键"的耦合无法再次悄悄失效。同类缺陷先前只为 `qwen_free` 补过
+  一条硬编码断言 —— 这正是本次改为表驱动的原因。
+- 新增离线回归 `tests/cloud_asr_timeout_test.cpp`：钉住停录预算算术
+  （预留必须存活、上限生效、启用/未启用 fallback 的大小关系、1s/10s/30s 逐值期望），
+  **并**覆盖 replay 门控——含"30 秒录音绝不可能在预留内跑完一次 replay"这条回归钉。
+  它之所以可测，正是因为把算术与判定都抽成了纯函数。
+- 两个新测试均通过**反证**才被接受：恢复错误的文案拼接会红 29 条，
+  去掉 retry 预留会红 35 条，把 `CloudAsrReplayFitsInBudget()` 改成恒真会再红 5 条。
+  不会失败的测试等于没有测试。
+- 17 项架构不变量全部通过；`main.cpp` 维持 148 / 150 行
+  —— 启动期日志接线放进了 `main_window.cpp` 的 `WM_CREATE`，没有让 `main.cpp` 增长。
+- 修正 `AGENTS.md` 中的基线描述：原文把 `148` 当作棘轮基线（脚本常量实为 `150`），
+  并称 `settings.cpp` 为 389 行（守卫实测为 377）。
+
 ## v0.10.9 (2026-09-23)
 
 ### 新增功能与模型升级

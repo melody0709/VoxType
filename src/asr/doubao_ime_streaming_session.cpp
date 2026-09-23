@@ -143,6 +143,8 @@ public:
         recordingMs_.store(recordingMs);
         capturedPcmBytes_.store(capturedPcmBytes);
         streaming_.store(false);
+        // 外层看门狗就是从这一刻起算的，replay 预算判定要用它算剩余时间。
+        stopTick_.store(GetTickCount64());
     }
 
     void Abort() override {
@@ -161,9 +163,10 @@ public:
 
     DWORD CurrentWatchdogMs() const override {
         if (streaming_.load()) return kDoubaoRecordingWatchdogMs;
-        return IsFallbackAsrEnabled(config_)
-            ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), capturedPcmBytes_.load())
-            : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), capturedPcmBytes_.load());
+        // 停录后：主窗口看门狗 = primary 总上限（primary 自己的 final 等待 + retry 预留）。
+        return ComputeCloudAsrPostStopWatchdogMs(
+            IsFallbackAsrEnabled(config_), recordingMs_.load(),
+            capturedPcmBytes_.load(), kCloudAsrPostStopRetryReserveMs);
     }
 
     const wchar_t* ProviderName() const override {
@@ -171,6 +174,13 @@ public:
     }
 
 private:
+    // replay 阶段"等 final"的预算（与 primary 同一套公式，但按 replay 字节数估算）。
+    DWORD ReplayWaitMs(size_t replayBytes) const {
+        return IsFallbackAsrEnabled(config_)
+            ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), replayBytes)
+            : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), replayBytes);
+    }
+
     audio_diagnostics::StageMetadata PrimaryStage(
         std::wstring reason = {}) const {
         audio_diagnostics::StageMetadata stage =
@@ -751,13 +761,16 @@ private:
 
         const bool shouldRetryEmptyFinal = !failed && finalText.empty() &&
             replayBuffer.Available() && replayBuffer.Size() >= kDoubaoEmptyRetryMinBytes;
+        const DWORD retryTimeout = ReplayWaitMs(replayBuffer.Size());
+        // 失败路径先过预算门控：装不下就跳过重试，failed 保持 true，随后
+        // DispatchFinal() 会下发更精确的 provider 错误并由 fallback 接手。
+        // shouldRetryEmptyFinal 与 shouldRetryFailure 互斥，故收紧条件不改变块内语义。
         const bool shouldRetryFailure = failed && retryWithReplay &&
-            replayBuffer.Available() && !replayBuffer.Empty();
+            replayBuffer.Available() && !replayBuffer.Empty() &&
+            ShouldStartFailureReplay("doubao_ime", "final", CurrentWatchdogMs(),
+                                     stopTick_.load(), replayBuffer.Size(), retryTimeout);
         if (shouldRetryEmptyFinal || shouldRetryFailure) {
             NotifyStatus(L"Retrying... Doubao IME");
-            const DWORD retryTimeout = IsFallbackAsrEnabled(config_)
-                ? ComputeCloudAsrStreamingFinalWaitMs(recordingMs_.load(), replayBuffer.Size())
-                : ComputeCloudAsrLegacyFinalizeTimeoutMs(recordingMs_.load(), replayBuffer.Size());
             DoubaoRetryResult retryResult = RetryRecognitionOnce(replayBuffer.Data(), retryTimeout);
             if (!retryResult.text.empty()) {
                 finalText = retryResult.text;
@@ -790,6 +803,7 @@ private:
     doubao_ime_asr::RealtimeClient* activeClient_ = nullptr;
     std::atomic<double> recordingMs_{0.0};
     std::atomic<size_t> capturedPcmBytes_{0};
+    std::atomic<ULONGLONG> stopTick_{0};
     unsigned nextRetryStageIndex_ = 1;
 };
 
