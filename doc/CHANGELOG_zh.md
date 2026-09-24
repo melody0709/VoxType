@@ -2,6 +2,25 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.1 (2026-09-24)
+
+### 缺陷修复与稳定性加固
+
+- **彻底消除 Settings 设置窗口休眠/熄屏后 DPI 撕裂及后台僵尸隐藏窗口问题。**
+  - **关闭即销毁的干净生命周期**：此前 Settings 窗口采用 `SW_HIDE` 常驻后台。Windows PerMonitorV2 规范明确规定系统绝不向隐藏窗口（`IsWindowVisible == FALSE`）分发 `WM_DPICHANGED`。当用户关掉显示器或电脑休眠时，显卡 HPD 信号断开触发 DWM 回退到 96 DPI 虚拟桌面（567×493 px）；唤醒恢复 144 DPI（150% 缩放）时隐藏窗口无法接收任何通知，外框被永久冻结在 96 DPI；再次打开时 `ShowSettingsWindow` 盲目通过 `SWP_NOSIZE` 继承脏尺寸，引发"外框 96 DPI、内部控件 144 DPI"的严重撕裂（GroupBox 超出截断、Save/Close 按钮落入可视区外 Y ≈ 640 px、Tab 栏被迫启用左右滚动按钮 `Audio ◀ ▶`）。现将关闭改为调用 `DestroyWindow`，彻底释放窗口句柄与 GDI 资源，再次打开时永远基于当前显示器的最新 DPI 干净重建。
+  - **静态 Tab 内部句柄清理**：`WM_DESTROY` 显式遍历调用 `for (auto* t : s_tabs) t->DestroyControls();`，彻底清空各个静态 Tab 对象内部持有的控件句柄向量，杜绝跨窗口生命周期的悬空 HWND 引用。
+  - **权威基准尺寸强守卫**：`HandleSettingsDpiChanged` 强制绑定 `S(UiStyle::SettingsWindowW)` 与 `S(UiStyle::SettingsWindowH)` 权威尺寸，不再盲信显卡驱动唤醒延迟或被裁剪的系统建议矩形。
+  - **退出路径全局热键保护**：在 Settings 窗口的 `WM_DESTROY` 中增加 `if (g_mainWindow && IsWindow(g_mainWindow))` 判断，避免托盘退出（Quit）触发级联销毁时错误地将全局键盘钩子重新挂载。
+  - **创建失败回退安全保护**：在 `ShowSettingsWindow` 增加 `else { InstallKeyboardHook(); }` 兜底，防止窗口创建失败的极端异常路径下热键钩子停摆。
+
+- **全仓静态标签与 Tab 标题 `&` 字符显示全面修复。**
+  - Win32 `STATIC` 控件在未设置 `SS_NOPREFIX` 样式时会将单 `&` 作为助记键吃掉。现为 `CreateLabel`、`CreateHint`、底栏状态行 `IDC_STATUS`、词表状态行 `IDC_VOCAB_TAB_STATUS`（`"Synced across Qwen & Volcano Engine."`）、豆包状态行 `IDC_DOUBAO_IME_STATUS`、Qwen Free 状态行 `IDC_QWEN_FREE_STATUS` 以及 Prompt 对话框标签/描述全量补齐 `SS_NOPREFIX` 样式。
+  - 为 GroupBox（`BS_GROUPBOX`）与 TabControl 标题字符串正确转义为 `&&`（`L"General && Input"`、`L"Audio && Advanced"`、`L"Acoustics && context"`）。
+
+### 行为变更
+
+- **关闭 Settings 将丢弃未保存的编辑草稿**：旧实现因 `SW_HIDE` 隐藏保活使得输入但未保存的草稿在再次打开时依然留在控件中；新实现回归标准 Win32 对话框语义（Close = 取消/丢弃未保存变更，Save = 显式持久化保存），关闭后重新打开将从配置干净重载。
+
 ## v0.11.0 (2026-09-23)
 
 ### 缺陷修复

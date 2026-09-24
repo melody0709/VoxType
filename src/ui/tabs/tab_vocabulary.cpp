@@ -82,7 +82,7 @@ void TabVocabulary::CreateControls(HWND parent) {
     AddVocabControl(edit);
 
     const int footerY = groupBoxY + groupH + S(8);
-    HWND statusLabel = CreateWindowW(L"STATIC", L"Status: Ready", WS_CHILD | WS_VISIBLE,
+    HWND statusLabel = CreateWindowW(L"STATIC", L"Status: Ready", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                      S(30), footerY, S(788), S(24), parent,
                                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOCAB_TAB_STATUS)),
                                      GetParentInstance(parent), nullptr);

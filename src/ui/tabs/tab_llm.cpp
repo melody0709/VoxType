@@ -203,7 +203,7 @@ void TabLlm::CreateControls(HWND parent) {
     {
         HWND hint = CreateWindowW(L"STATIC",
             L"JSON object fields merged into the request body; outer braces are optional.",
-            WS_CHILD | WS_VISIBLE, S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)) + S(UiStyle::EditH) + S(2), S(UiStyle::InputW), S(20), parent, nullptr, GetParentInstance(parent), nullptr);
+            WS_CHILD | WS_VISIBLE | SS_NOPREFIX, S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)) + S(UiStyle::EditH) + S(2), S(UiStyle::InputW), S(20), parent, nullptr, GetParentInstance(parent), nullptr);
         ApplyUiFont(hint);
         MarkSettingsHint(hint);
         AddLlmControl(hint);

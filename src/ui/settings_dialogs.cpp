@@ -676,7 +676,7 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
         state->group1 = CreateWindowW(L"BUTTON", L"Custom cloud tables", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
         ApplyUiFont(state->group1);
-        state->group2 = CreateWindowW(L"BUTTON", L"Acoustics & context", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+        state->group2 = CreateWindowW(L"BUTTON", L"Acoustics && context", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
         ApplyUiFont(state->group2);
         state->group3 = CreateWindowW(L"BUTTON", L"Protocol switches", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -915,12 +915,12 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
         SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(data));
         HINSTANCE hInst = cs->hInstance;
 
-        HWND presetLabel = CreateWindowW(L"STATIC", L"Preset", WS_CHILD | WS_VISIBLE,
+        HWND presetLabel = CreateWindowW(L"STATIC", L"Preset", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                          0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_LABEL)), hInst, nullptr);
         HWND presetCombo = CreateWindowW(WC_COMBOBOXW, nullptr,
                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
                                          0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_PRESET)), hInst, nullptr);
-        HWND presetDesc = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE,
+        HWND presetDesc = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                         0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_DESC)), hInst, nullptr);
         HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,

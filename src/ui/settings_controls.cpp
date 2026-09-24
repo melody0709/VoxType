@@ -86,12 +86,16 @@ int S(int px) {
 void HandleSettingsDpiChanged(HWND hwnd, WPARAM wParam, LPARAM lParam) {
     const UINT newDpi = HIWORD(wParam);
     UpdateUiScaleForDpi(newDpi);
+    const int targetW = S(UiStyle::SettingsWindowW);
+    const int targetH = S(UiStyle::SettingsWindowH);
     RECT* suggested = reinterpret_cast<RECT*>(lParam);
     if (suggested) {
         SetWindowPos(hwnd, nullptr, suggested->left, suggested->top,
-                     suggested->right - suggested->left,
-                     suggested->bottom - suggested->top,
+                     targetW, targetH,
                      SWP_NOZORDER | SWP_NOACTIVATE);
+    } else {
+        SetWindowPos(hwnd, nullptr, 0, 0, targetW, targetH,
+                     SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
     HFONT newFont = ui_theme::UiFontForDpi(newDpi);
     EnumChildWindows(hwnd, [](HWND child, LPARAM lp) -> BOOL {
@@ -135,13 +139,13 @@ void OpenAsrDebugLog(HWND hwnd, const wchar_t* fileName) {
 }
 
 HWND CreateLabel(HWND parent, int x, int y, int w, int h, const wchar_t* text) {
-    HWND hwnd = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE, x, y, w, h, parent, nullptr, GetParentInstance(parent), nullptr);
+    HWND hwnd = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_NOPREFIX, x, y, w, h, parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(hwnd);
     return hwnd;
 }
 
 HWND CreateHint(HWND parent, int x, int y, int w, int h, const wchar_t* text) {
-    HWND hwnd = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_LEFT,
+    HWND hwnd = CreateWindowW(L"STATIC", text, WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
                               x, y, w, h, parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(hwnd);
     MarkSettingsHint(hwnd);

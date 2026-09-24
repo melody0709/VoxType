@@ -44,7 +44,7 @@ void ProviderDoubao::CreateControls(HWND parent) {
 
     HWND doubaoStatus = CreateWindowExW(
         0, L"STATIC", L"",
-        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_WORDELLIPSIS,
+        WS_CHILD | WS_VISIBLE | SS_LEFT | SS_WORDELLIPSIS | SS_NOPREFIX,
         S(UiStyle::InputLeft), S(UiStyle::RowInputY(1)), S(580), S(UiStyle::EditH),
         parent,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_DOUBAO_IME_STATUS)),

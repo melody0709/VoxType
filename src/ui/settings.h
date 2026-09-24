@@ -15,7 +15,7 @@ void SetStatus(HWND hwnd, const std::wstring& text);
 
 void ShowSettingsPage(HWND hwnd, int page);
 void LayoutSettingsWindow(HWND hwnd);
-void HideSettingsWindow(HWND hwnd);
+void CloseSettingsWindow(HWND hwnd);
 
 void LoadSettingsControls(HWND hwnd);
 void SaveSettingsControls(HWND hwnd);

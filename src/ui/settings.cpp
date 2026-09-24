@@ -121,12 +121,10 @@ void LayoutSettingsWindow(HWND hwnd) {
     if (close) MoveWindow(close, rc.right - margin - S(UiStyle::FooterBtnW), btnY, S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
 }
 
-void HideSettingsWindow(HWND hwnd) {
-    g_sharedTestGeneration.fetch_add(1, std::memory_order_relaxed);
-    ui_provider::CancelQwenFreeTests();
-    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_FREE_TEST), TRUE);
-    ShowWindow(hwnd, SW_HIDE);
-    InstallKeyboardHook();
+void CloseSettingsWindow(HWND hwnd) {
+    if (hwnd && IsWindow(hwnd)) {
+        DestroyWindow(hwnd);
+    }
 }
 
 LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -188,14 +186,14 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ApplyUiFont(tab);
         TCITEMW item = {};
         item.mask = TCIF_TEXT;
-        for (auto* name : {L"General & Input", L"Speech Engine", L"Vocabulary", L"LLM", L"Audio & Advanced"}) {
+        for (auto* name : {L"General && Input", L"Speech Engine", L"Vocabulary", L"LLM", L"Audio && Advanced"}) {
             item.pszText = const_cast<LPWSTR>(name);
             TabCtrl_InsertItem(tab, 100, &item);
         }
 
         for (auto* t : s_tabs) t->CreateControls(hwnd);
 
-        HWND status = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE,
+        HWND status = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                     S(UiStyle::Margin) * 2, S(UiStyle::FooterMinTop) + S(21), S(520), S(UiStyle::LabelH), hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATUS)), g_instance, nullptr);
         ApplyUiFont(status);
         CreateButton(hwnd, IDC_SAVE, S(626), S(UiStyle::FooterMinTop) + S(21), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"Save");
@@ -216,7 +214,7 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
             return 0;
         }
         if (controlId == IDC_CANCEL || controlId == IDCANCEL) {
-            HideSettingsWindow(hwnd);
+            CloseSettingsWindow(hwnd);
             return 0;
         }
 
@@ -333,10 +331,12 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     case WM_DESTROY:
         g_sharedTestGeneration.fetch_add(1, std::memory_order_relaxed);
         ui_provider::CancelQwenFreeTests();
+        for (auto* t : s_tabs) t->DestroyControls();
         if (g_settingsWindow == hwnd) g_settingsWindow = nullptr;
+        if (g_mainWindow && IsWindow(g_mainWindow)) InstallKeyboardHook();
         return 0;
     case WM_CLOSE:
-        HideSettingsWindow(hwnd);
+        CloseSettingsWindow(hwnd);
         return 0;
     default:
         for (auto* t : s_tabs) {
@@ -352,23 +352,25 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 void ShowSettingsWindow(HWND owner) {
     UninstallKeyboardHook();
     if (!g_settingsWindow) {
-        UpdateUiScale(nullptr);
+        UpdateUiScale(owner);
+        const int w = S(UiStyle::SettingsWindowW);
+        const int h = S(UiStyle::SettingsWindowH);
+        RECT work = GetWorkAreaForWindow(owner);
+        int x = work.left + (work.right - work.left - w) / 2;
+        int y = work.top + (work.bottom - work.top - h) / 2;
         g_settingsWindow = CreateWindowExW(
             WS_EX_APPWINDOW, kSettingsClass, L"VoxType Settings",
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
-            CW_USEDEFAULT, CW_USEDEFAULT, S(UiStyle::SettingsWindowW), S(UiStyle::SettingsWindowH),
+            x, y, w, h,
             owner, nullptr, g_instance, nullptr);
     }
-    ui_tab::RefreshStartupRegistrationControl(g_settingsWindow, true);
-    RECT rc;
-    GetWindowRect(g_settingsWindow, &rc);
-    int w = rc.right - rc.left, h = rc.bottom - rc.top;
-    RECT work = GetWorkAreaForWindow(owner ? owner : g_settingsWindow);
-    int x = work.left + (work.right - work.left - w) / 2;
-    int y = work.top + (work.bottom - work.top - h) / 2;
-    SetWindowPos(g_settingsWindow, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-    ShowWindow(g_settingsWindow, SW_SHOW);
-    SetForegroundWindow(g_settingsWindow);
+    if (g_settingsWindow) {
+        ui_tab::RefreshStartupRegistrationControl(g_settingsWindow, true);
+        ShowWindow(g_settingsWindow, SW_SHOW);
+        SetForegroundWindow(g_settingsWindow);
+    } else {
+        InstallKeyboardHook();
+    }
 }
 
 bool ProcessSettingsDialogMessage(MSG* msg) {

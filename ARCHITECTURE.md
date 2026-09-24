@@ -182,7 +182,8 @@ When Settings is opened:
 
 1. `UninstallKeyboardHook()` is called to pause global hotkey listening.
 2. User can input `CapsLock` or other key combinations.
-3. When the window is closed, `InstallKeyboardHook()` is called to restore listening.
+3. When the window is closed, it is cleanly destroyed (`DestroyWindow`) rather than hidden (`SW_HIDE`), reclaiming all window handles and GDI resources. Static tab controls are cleared in `WM_DESTROY`, and `InstallKeyboardHook()` is called to restore hotkey listening (guarded by `g_mainWindow` liveness to prevent exit cascades).
+4. Re-opening Settings always recreates the window cleanly from the live monitor DPI via `S(UiStyle::SettingsWindowW)` and `S(UiStyle::SettingsWindowH)`, eliminating sleep/wake DPI mismatch and zombie blind windows. Closing Settings discards uncommitted drafts; clicking Save commits and reloads.
 
 The bottom `Status / Save / Close` is dynamically positioned by `LayoutSettingsWindow()` based on client area height to avoid clipping.
 

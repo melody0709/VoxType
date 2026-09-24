@@ -95,7 +95,7 @@ void ProviderQwenFree::CreateControls(HWND parent) {
     m_controls.push_back(control);
 
     HWND qwenFreeStatus = CreateWindowW(
-        L"STATIC", L"", WS_CHILD | WS_VISIBLE,
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
         S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)) + S(4),
         S(500), S(UiStyle::LabelH), parent,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_FREE_STATUS)),

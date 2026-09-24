@@ -2,6 +2,25 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.11.1 (2026-09-24)
+
+### Bug Fixes & Resilience
+
+- **Settings window DPI sleep/wake distortion and zombie hidden window eliminated.**
+  - **Clean lifecycle on close**: The Settings window previously used `SW_HIDE` to stay resident in memory. Windows PerMonitorV2 strictly never delivers `WM_DPICHANGED` messages to hidden top-level windows (`IsWindowVisible == FALSE`). When the display was powered off or the machine entered sleep/modern standby, the GPU HPD (Hot Plug Detect) drop triggered DWM to fall back to a 96 DPI virtual display (567×493 px). Upon display reconnect/wake, the hidden window remained blind to the 144 DPI (150% scale) restoration. Calling `ShowSettingsWindow` blindly preserved the corrupted 567×493 geometry via `SWP_NOSIZE`, causing the outer window to stay at 96 DPI while inner controls rendered at 144 DPI — truncating GroupBoxes, pushing Save/Close buttons off-screen (Y ≈ 640 px), and forcing TabControl into horizontal scrolling mode (`Audio ◀ ▶`). Closing Settings now calls `DestroyWindow`, completely reclaiming window handles and GDI resources and guaranteeing fresh creation directly mapped to the host monitor's live DPI.
+  - **Static Tab handle cleanup**: `WM_DESTROY` now explicitly invokes `for (auto* t : s_tabs) t->DestroyControls();`, clearing control handle vectors across all static Tab objects and eliminating dangling HWND references across window lifecycles.
+  - **Authoritative geometry enforcement**: `HandleSettingsDpiChanged` now strictly enforces `S(UiStyle::SettingsWindowW)` and `S(UiStyle::SettingsWindowH)` authoritative dimensions instead of relying on potentially delayed or clamped OS `suggested RECT` sizes.
+  - **Global hotkey hook protection on exit**: Settings `WM_DESTROY` now gates `InstallKeyboardHook()` with `if (g_mainWindow && IsWindow(g_mainWindow))`, preventing tray Quit cascades from inadvertently re-registering the global keyboard hook after the main window had uninstalled it.
+  - **CreateWindowEx fallback safety**: Added an `else { InstallKeyboardHook(); }` fallback in `ShowSettingsWindow` to ensure hotkey listening is restored if window creation ever fails.
+
+- **Global static label and Tab title ampersand (`&`) display fixed.**
+  - Win32 `STATIC` controls without the `SS_NOPREFIX` style treat single `&` characters as accelerator keys, swallowing the symbol. Added `SS_NOPREFIX` across `CreateLabel`, `CreateHint`, bottom status `IDC_STATUS`, Vocabulary status `IDC_VOCAB_TAB_STATUS` (`"Synced across Qwen & Volcano Engine."`), Doubao IME status `IDC_DOUBAO_IME_STATUS`, Qwen Free status `IDC_QWEN_FREE_STATUS`, and Prompt dialog labels/descriptions.
+  - GroupBox controls (`BS_GROUPBOX`) and TabControl titles now properly escape ampersands as `&&` (`L"General && Input"`, `L"Audio && Advanced"`, `L"Acoustics && context"`).
+
+### Behavioral Changes
+
+- **Closing Settings discards unedited drafts**: Previously, `SW_HIDE` preserved uncommitted text edits across hide/show cycles. Under the clean lifecycle model, closing Settings via Close, [✕], or Esc discards uncommitted changes, while clicking Save commits and reloads the configuration.
+
 ## v0.11.0 (2026-09-23)
 
 ### Bug Fixes
