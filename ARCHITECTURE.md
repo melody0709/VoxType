@@ -180,9 +180,9 @@ Settings is a standard Win32 window with 5 tabs:
 
 When Settings is opened:
 
-1. `UninstallKeyboardHook()` is called to pause global hotkey listening.
-2. User can input `CapsLock` or other key combinations.
-3. When the window is closed, it is cleanly destroyed (`DestroyWindow`) rather than hidden (`SW_HIDE`), reclaiming all window handles and GDI resources. Static tab controls are cleared in `WM_DESTROY`, and `InstallKeyboardHook()` is called to restore hotkey listening (guarded by `g_mainWindow` liveness to prevent exit cascades).
+1. Global hotkey listening stays active, so the configured hotkey can be exercised on the spot while Settings is open.
+2. Focusing the `VoxType.HotkeyEdit` control suspends the listener (`SetHotkeyListenerSuspended(true)`), so the field can capture the currently configured key itself; the listener resumes when focus leaves the control. The decision is made from the incoming `WM_KILLFOCUS` `wParam` target (documented contract, may be NULL), not `GetFocus()`. Switching tabs hides the previous page's controls, so `TCN_SELCHANGE` explicitly moves focus off a control that just became invisible (the shortcut field included) instead of relying on the tab control taking focus from the click. Two "focus changes while the key is held" paths are closed explicitly: because the field hands focus back on the same `KEYDOWN` that records the key, the listener stays in pass-through until no *candidate* key is still down — the key just recorded in the field (Save may promote it to the hotkey) as well as the currently configured key — so an auto-repeat cannot be matched; and if a recording was already running when the field took focus, the listener posts the matching stop command rather than leaving the recording running.
+3. When the window is closed, it is cleanly destroyed (`DestroyWindow`) rather than hidden (`SW_HIDE`), reclaiming all window handles and GDI resources. Static tab controls are cleared in `WM_DESTROY`, and `SetHotkeyListenerSuspended(false)` is called as a safety net; the hook itself is installed once at startup and removed only at process exit.
 4. Re-opening Settings always recreates the window cleanly from the live monitor DPI via `S(UiStyle::SettingsWindowW)` and `S(UiStyle::SettingsWindowH)`, eliminating sleep/wake DPI mismatch and zombie blind windows. Closing Settings discards uncommitted drafts; clicking Save commits and reloads.
 
 The bottom `Status / Save / Close` is dynamically positioned by `LayoutSettingsWindow()` based on client area height to avoid clipping.
@@ -197,6 +197,7 @@ Normal hotkey behavior:
 - `WM_KEYUP` / `WM_SYSKEYUP`: Stop recording and submit to ASR.
 - Matches the configured main key and modifier keys.
 - During recording, `g_activeHotkeyKey` is saved to avoid failure to stop when the main key is released after the modifier key.
+- While a `VoxType.HotkeyEdit` control holds focus, the hook passes every event through (`CallNextHookEx`, no matching and no consumption) so the field can record the currently configured key itself; leaving the field restores normal matching. Suspending mid-gesture discards a pending CapsLock long-press verdict, terminates a recording that had already started (CapsLock long-press or a held plain key) by posting the matching stop command, and a resume requested while either the just-recorded key or the configured key is still held is deferred until no such key is down (Save may promote the recorded key before it is released). Because Windows updates the async key state only after the hook callback returns, a release is normally confirmed by the next keyboard event — the check inside the KEYUP event itself is opportunistic — and the next press still triggers normally because that confirmation runs before matching.
 
 `CapsLock` is a special default hotkey:
 
@@ -505,6 +506,6 @@ The current architecture is a pure C++ single-process design. Future considerati
 - Win32 UI is prone to text clipping on high DPI; HUD uses DIP measurement and converts to physical pixels, Settings controls still need sufficient height.
 - Model loading must always be in the worker, never blocking the UI thread.
 - Models are large; memory usage needs real-world testing.
-- Global hotkeys must not intercept user input when Settings is open.
+- Global hotkeys stay live while Settings is open on purpose: the listener is suspended only while the `VoxType.HotkeyEdit` field holds focus, so a deliberate long-press of the recording hotkey there starts a recording (that is the intended on-the-spot test, and a short CapsLock tap still toggles Caps Lock).
 - Clipboard injection may fail for some elevated privilege windows.
 - Punctuation model can change sentence breaks but cannot correct ASR typos.

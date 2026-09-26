@@ -2,6 +2,18 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.11.2 (2026-09-25)
+
+### Improvements
+
+- **The recording hotkey now stays active while Settings is open.** Opening Settings no longer uninstalls the global keyboard hook for the whole window lifetime. The listener is suspended only while the shortcut field (`VoxType.HotkeyEdit`) holds focus (`SetHotkeyListenerSuspended(true)`), so that field can record the key that is currently configured; it resumes once focus has left the field and no candidate key is still held (the focus decision uses the incoming `WM_KILLFOCUS` `wParam` target, not `GetFocus()`). `WM_DESTROY` performs a safety-net `SetHotkeyListenerSuspended(false)`, and the hook itself is installed once at startup and removed only at process exit.
+  - Previously `ShowSettingsWindow()` called `UninstallKeyboardHook()`, so the entire Settings window ran with no listener: the hotkey could not be tried out without closing Settings, and every open/close reinstalled the hook and reset the CapsLock gesture state. That unhook existed only because a live listener consumes the configured key before the field can capture it.
+  - CapsLock semantics are unchanged: a short tap still toggles Caps Lock; only a deliberate 300 ms long-press starts a recording.
+  - Suspending mid-gesture discards a pending CapsLock long-press verdict so no capture is left orphaned.
+  - Switching tabs hides the previous page's controls, so `TCN_SELCHANGE` now explicitly moves focus off a control that just became hidden (the shortcut field included) instead of relying on the tab control taking focus from the click.
+  - Because the field hands focus back on the same `KEYDOWN` that records the key, a resume requested while a candidate key is still held — the newly recorded key (which Save may promote to the hotkey) or the currently configured key — is deferred until none of them is down, so its auto-repeat cannot be matched and start a recording.
+  - If a recording was already running when the field took focus, the listener now posts the matching stop command instead of leaving the recording running with its `KEYUP` passed through.
+
 ## v0.11.1 (2026-09-24)
 
 ### Bug Fixes & Resilience

@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.11.1</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.11.2</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -100,6 +100,7 @@ the packager re-extracts and hashes each result before publishing it.
 - `Hold hotkey` — Click the input box then press the hotkey to record
   - `Esc` cancels this recording, `Backspace/Delete` clears the hotkey
   - Default CapsLock: Short press toggles Caps Lock, long press 300ms triggers voice input
+  - The recording hotkey stays active while Settings is open (press it to try it out); it is suspended only while this input box holds focus
 - `Partial result` — Live typewriter preview while speaking; applies to every streaming backend (Local, Qwen, Volcano Engine, Doubao IME, Qwen IME Free)
 - `Start VoxType when I sign in to Windows` registers the current user's
   Windows Run entry. It is off by default and can be safely enabled for either

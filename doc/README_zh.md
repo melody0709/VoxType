@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.11.1</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.11.2</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -91,6 +91,7 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 - `Hold hotkey` — 点击输入框后按快捷键录入
   - `Esc` 取消本次录入，`Backspace/Delete` 清空快捷键
   - 默认 CapsLock：短按切换大小写，长按 300ms 触发语音输入
+  - Settings 打开期间录音热键保持可用（可直接按住现场试听）；仅当本输入框持有焦点时监听器才挂起
 - `Partial result` — 说话期间的实时打字机预览，对全部流式后端（Local / 千问 / 火山 / 豆包 IME / 千问 IME 免 Key）统一生效
 - `Start VoxType when I sign in to Windows` — 写入当前用户的开机启动项，默认关闭；移动 Portable 目录后保存会自动修正记录的可执行文件路径
 

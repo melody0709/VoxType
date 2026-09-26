@@ -231,6 +231,15 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         NMHDR* hdr = reinterpret_cast<NMHDR*>(lParam);
         if (hdr && hdr->idFrom == IDC_SETTINGS_TAB && hdr->code == TCN_SELCHANGE) {
             ShowSettingsPage(hwnd, TabCtrl_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_TAB)));
+            // Switching pages hides the previous page's controls. Do not rely on the
+            // tab control taking focus from the click: if the focused control just
+            // became invisible (e.g. the shortcut field, which suspends the global
+            // hotkey listener while it holds focus), move focus to the tab so the
+            // listener resumes and the hotkey keeps working on the newly shown page.
+            HWND focus = GetFocus();
+            if (focus && IsChild(hwnd, focus) && !IsWindowVisible(focus)) {
+                SetFocus(GetDlgItem(hwnd, IDC_SETTINGS_TAB));
+            }
             return 0;
         }
         break;
@@ -333,7 +342,9 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ui_provider::CancelQwenFreeTests();
         for (auto* t : s_tabs) t->DestroyControls();
         if (g_settingsWindow == hwnd) g_settingsWindow = nullptr;
-        if (g_mainWindow && IsWindow(g_mainWindow)) InstallKeyboardHook();
+        // The listener stays installed for the process lifetime; only make sure no
+        // destroy path can leave it suspended.
+        SetHotkeyListenerSuspended(false);
         return 0;
     case WM_CLOSE:
         CloseSettingsWindow(hwnd);
@@ -350,7 +361,6 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 }
 
 void ShowSettingsWindow(HWND owner) {
-    UninstallKeyboardHook();
     if (!g_settingsWindow) {
         UpdateUiScale(owner);
         const int w = S(UiStyle::SettingsWindowW);
@@ -368,8 +378,6 @@ void ShowSettingsWindow(HWND owner) {
         ui_tab::RefreshStartupRegistrationControl(g_settingsWindow, true);
         ShowWindow(g_settingsWindow, SW_SHOW);
         SetForegroundWindow(g_settingsWindow);
-    } else {
-        InstallKeyboardHook();
     }
 }
 

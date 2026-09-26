@@ -183,9 +183,36 @@ bool s_capsLockHotkeyPending = false;
 bool s_capsLockLongPressActive = false;
 bool s_capsLockWasOn = false;
 HFONT s_defaultFont = nullptr;
+bool s_listenerSuspended = false;
+// Main key just recorded in the shortcut field. It may still be physically held, and
+// Save can promote it to the configured hotkey, so it blocks a resume until released.
+UINT s_recordedHotkeyKey = 0;
+// A resume was requested while a blocking key was still down; withheld until release.
+bool s_resumeDeferred = false;
 
 HWND EffectiveTargetWindow() {
     return s_targetWindow ? s_targetWindow : g_mainWindow;
+}
+
+bool IsHotkeyEditWindow(HWND hwnd) {
+    if (!hwnd) return false;
+    wchar_t cls[64] = {};
+    if (GetClassNameW(hwnd, cls, 64) <= 0) return false;
+    return _wcsicmp(cls, kHotkeyEditClass) == 0;
+}
+
+// A resume must be withheld while a held key could still be matched as the hotkey:
+// the key just recorded in the field (Save may promote it to the configured hotkey)
+// and the currently configured main key. Only main keys matter: matching always runs
+// on a main-key KEYDOWN, so a held modifier alone cannot start a recording.
+bool AnyResumeBlockingKeyDown() {
+    if (s_recordedHotkeyKey != 0 &&
+        (GetAsyncKeyState(static_cast<int>(s_recordedHotkeyKey)) & 0x8000) != 0) {
+        return true;
+    }
+    const HotkeyConfig hotkey = CurrentConfiguredHotkey();
+    return !hotkey.IsEmpty() &&
+           (GetAsyncKeyState(static_cast<int>(hotkey.key)) & 0x8000) != 0;
 }
 } // namespace
 
@@ -220,6 +247,37 @@ void ResetCapsLockHotkeyState() {
 
 bool IsCapsLockOn() {
     return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+}
+
+void SetHotkeyListenerSuspended(bool suspended) {
+    if (suspended) {
+        s_resumeDeferred = false;
+        s_recordedHotkeyKey = 0;
+        if (s_listenerSuspended) return;
+        s_listenerSuspended = true;
+        // A recording may already be in flight when the shortcut field takes focus
+        // (hotkey held, then the field is clicked). From here on the matching KEYUP is
+        // passed through, so the recording would never be stopped: terminate it here.
+        const bool capsLockRecording = s_capsLockLongPressActive;
+        const bool plainRecording = s_activeHotkeyKey != 0 && s_activeHotkeyKey != VK_CAPITAL;
+        ResetCapsLockHotkeyState();   // drops a pending 300 ms CapsLock capture if any
+        if (capsLockRecording) {
+            PostHotkeyRecordingCommand(kHotkeyCapsLockRecordingStop);
+        } else if (plainRecording) {
+            PostHotkeyRecordingCommand(kHotkeyRecordingStop);
+        }
+        return;
+    }
+    if (!s_listenerSuspended) return;
+    // The field moves focus away on the same KEYDOWN that records the key, so that key
+    // is usually still held — and Save can promote it to the configured hotkey. Keep
+    // passing events through until no blocking key is down, otherwise an auto-repeat
+    // would be matched and start a recording.
+    if (AnyResumeBlockingKeyDown()) {
+        s_resumeDeferred = true;
+        return;
+    }
+    s_listenerSuspended = false;
 }
 
 void SendCapsLockTap() {
@@ -272,6 +330,37 @@ void FinishCapsLockHotkeyPress() {
 }
 
 LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
+    if (code == HC_ACTION && s_resumeDeferred) {
+        const bool isKeyUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+        if (isKeyUp) {
+            if (!AnyResumeBlockingKeyDown()) {
+                s_resumeDeferred = false;
+                s_listenerSuspended = false;
+            }
+            // While a resume is deferred no KEYDOWN was matched (the hook has been
+            // passing events through ever since the field took focus), so no KEYUP may
+            // be matched either: matching it would post a stop for a recording that was
+            // never started. This also avoids depending on the KEYUP carrying the same
+            // vkCode as the recorded key (side-Alt arrives as VK_MENU + extended).
+            // NOTE: Windows updates the async key state only after this callback
+            // returns, so the check above usually still sees the key as down here; the
+            // reliable confirmation is the next keyboard event (self-heal below). The
+            // next press still triggers normally because the heal runs before matching.
+            return CallNextHookEx(s_keyboardHook, code, wParam, lParam);
+        }
+        if (!AnyResumeBlockingKeyDown()) {
+            // Self-heal when the releasing KEYUP was never observed (e.g. swallowed by
+            // another hook): resume once no blocking key is down.
+            s_resumeDeferred = false;
+            s_listenerSuspended = false;
+        }
+    }
+    if (code == HC_ACTION && s_listenerSuspended) {
+        // A shortcut field is being recorded, or a deferred resume is still waiting for
+        // the recorded key to be released: pass every event through so the key reaches
+        // the control instead of being consumed by the hotkey.
+        return CallNextHookEx(s_keyboardHook, code, wParam, lParam);
+    }
     if (code == HC_ACTION) {
         const auto* event = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
         const HotkeyConfig hotkey = CurrentConfiguredHotkey();
@@ -366,11 +455,19 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             state->original = state->hotkey;
             InvalidateRect(hwnd, nullptr, TRUE);
         }
+        SetHotkeyListenerSuspended(true);
         return 0;
     case WM_KILLFOCUS:
         if (state) {
             state->capturing = false;
             InvalidateRect(hwnd, nullptr, TRUE);
+        }
+        // WM_KILLFOCUS wParam is the window receiving focus (may be NULL). Use the
+        // documented contract rather than GetFocus(), whose value is unspecified
+        // while this message is handled, to tell whether focus moved between
+        // shortcut fields.
+        if (!IsHotkeyEditWindow(reinterpret_cast<HWND>(wParam))) {
+            SetHotkeyListenerSuspended(false);
         }
         return 0;
     case WM_LBUTTONDOWN:
@@ -388,6 +485,7 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         if (wParam == VK_ESCAPE) {
             state->hotkey = state->original;
             state->capturing = false;
+            s_recordedHotkeyKey = 0;
             SetFocus(GetParent(hwnd));
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
@@ -395,6 +493,7 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         if (wParam == VK_BACK || wParam == VK_DELETE) {
             state->hotkey = HotkeyConfig{};
             state->hotkey.key = 0;
+            s_recordedHotkeyKey = 0;
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
@@ -415,6 +514,9 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
             state->hotkey = hotkey;
             state->capturing = false;
             InvalidateRect(hwnd, nullptr, TRUE);
+            // Remembered so a resume stays withheld while this key is still held: Save
+            // may promote it to the configured hotkey before the key is released.
+            s_recordedHotkeyKey = hotkey.key;
             SetFocus(GetParent(hwnd));
         }
         return 0;

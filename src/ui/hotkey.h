@@ -55,6 +55,9 @@ void SetDefaultUiFont(HFONT font);
 LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wParam, LPARAM lParam);
 void InstallKeyboardHook();
 void UninstallKeyboardHook();
+// Suspends the global listener while a VoxType.HotkeyEdit holds focus, so that
+// control can capture the currently configured key instead of it being consumed.
+void SetHotkeyListenerSuspended(bool suspended);
 
 void ApplyUiFont(HWND hwnd, HFONT font = nullptr);
 LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

@@ -92,7 +92,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 - 不要把 LLM 接成默认纠错，容易乱改用户意思。
 - 不要让 UI 线程加载模型或等待 ASR。
-- 不要在 Settings 打开时继续拦截录音快捷键。
+- 不要在**快捷键输入框正在录入时**继续拦截录音快捷键：全局监听器的挂起粒度是「`VoxType.HotkeyEdit` 是否持有焦点」（`SetHotkeyListenerSuspended`），**不是**「Settings 是否打开」。Settings 打开期间热键保持可用以便现场试听；离开输入框、切页、切到其它应用、关闭 Settings 都必须恢复监听（关闭路径由 `WM_DESTROY` 兜底复位，钩子本体只在启动与进程退出时装卸）。两条"按住期间改变焦点"的约束不得回退：**录入后候选键（刚录入的键——Save 会把它变成当前热键——或当前配置键）仍有按下时，恢复监听必须延迟到它们都松开**（否则该键的 auto-repeat 会被匹配成热键并启动一次录音）；**输入框取得焦点时若录音已开始，挂起必须先补发对应的停止命令**（否则 KEYUP 被透传、录音停不下来）。
 - 不要依赖固定窗口高度放底部按钮。
 - 不要为了美观牺牲控件可读性，高 DPI 优先留空间。
 - 不要新增第四个 JSON 取值函数。项目里已有三族：`ExtractJsonString(json, key, fallback)`（`src/audio/engine.cpp`，声明在 `engine.h`）、`ExtractJsonString(json, key)`（`src/asr/qwen_free_proto_llm.cpp`，2 参重载）、以及 `src/core/utils.h` 的转义感知族（`DecodeJsonStringAt` / `ExtractJsonStringDecoded` / `ExtractJsonArrayFirstStringDecoded`）。新增前先查重；P2 之后 `engine.cpp` 那一族应迁入 Core 并合并为单一定义。

@@ -139,9 +139,9 @@ Settings 是普通 Win32 窗口，目前分 5 个 tab：
 
 打开 Settings 时：
 
-1. 调用 `UninstallKeyboardHook()` 暂停全局快捷键监听。
-2. 用户可以录入 `CapsLock` 或其他组合键。
-3. 关闭窗口时调用 `InstallKeyboardHook()` 恢复监听。
+1. 全局快捷键监听保持工作，配置的热键可在 Settings 打开期间直接试听。
+2. 焦点落到 `VoxType.HotkeyEdit` 输入框时挂起监听（`SetHotkeyListenerSuspended(true)`），输入框即可录入当前已配置的那个键；焦点离开输入框即恢复。判定使用 `WM_KILLFOCUS` 的 `wParam`（文档化契约，可为 NULL），不使用 `GetFocus()`。切页会隐藏上一页控件，`TCN_SELCHANGE` 会显式把焦点从"刚变为不可见的控件"（含快捷键输入框）移走，不依赖 TabControl 是否从点击中接管焦点。两条"按住按键期间改变焦点"的路径也被显式收口：输入框在录入该键的同一次 `KEYDOWN` 上就交还焦点，因此监听器保持透传直到**候选键**（刚录入的键——Save 可能把它变成当前热键——以及当前配置键）都不再按下（auto-repeat 不会被匹配成热键）；若输入框取得焦点时录音已经开始，监听器会补发对应的停止命令，而不是放任录音继续。
+3. 关闭窗口时干净销毁（`DestroyWindow`）而非隐藏（`SW_HIDE`），回收全部窗口句柄与 GDI 资源；`WM_DESTROY` 里执行一次 `SetHotkeyListenerSuspended(false)` 兜底复位，钩子本体只在启动时安装、进程退出时卸载。
 
 底部 `Status / Save / Close` 由 `LayoutSettingsWindow()` 根据客户区高度动态定位，避免裁切。
 
@@ -155,6 +155,7 @@ Settings 是普通 Win32 窗口，目前分 5 个 tab：
 - `WM_KEYUP` / `WM_SYSKEYUP`: 停止录音并提交 ASR。
 - 匹配配置中的主键和修饰键。
 - 录音期间保存 `g_activeHotkeyKey`，避免松开主键时因修饰键已释放导致无法停止。
+- 当 `VoxType.HotkeyEdit` 输入框持有焦点时，hook 对所有事件直接透传（`CallNextHookEx`，不匹配、不吞键），输入框可自行录入当前配置的键；焦点离开后恢复正常匹配。手势进行中挂起会丢弃待决的 CapsLock 长按判定，并对**已经开始**的录音（CapsLock 长按或普通键按住）补发对应的停止命令；若请求恢复时**候选键**（刚录入的键或当前配置键）仍有按下的，则延迟到它们都不再按下后再恢复匹配（Windows 在钩子回调返回后才更新异步键状态，所以松键通常由**下一个键盘事件**确认，KEYUP 事件内的检查只是机会性路径；因为确认先于匹配，松手后的第一次按键仍能正常触发）。
 
 `CapsLock` 是特殊默认热键：
 
@@ -452,6 +453,6 @@ LLM 必须默认关闭，并加入：
 - Win32 UI 在高 DPI 下容易裁切文字；HUD 使用 DIP 测量并转物理像素，Settings 控件仍要留足高度。
 - 模型加载必须永远在 worker 里，不能阻塞 UI 线程。
 - 模型大，内存占用需要实测。
-- 全局快捷键不能在 Settings 打开时拦截用户录入。
+- 全局快捷键在 Settings 打开期间**刻意保持可用**：只有 `VoxType.HotkeyEdit` 输入框持有焦点时才挂起监听，因此在设置界面里刻意长按录音热键会真的开始录音（这正是"现场试听"的目标；短按 CapsLock 仍只切换大小写）。
 - 剪贴板注入对部分高权限窗口可能失败。
 - 标点模型会改断句，但不能修正 ASR 错字。
