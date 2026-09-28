@@ -157,7 +157,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     rem replay target from rotting silently. It was unlinkable for a whole
     rem refactor cycle before 2026-09-28 because nothing verified it.
     echo Building offline protocol/request regression tests...
-    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test asr_audio_replay
+    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test asr_audio_replay
     if errorlevel 1 exit /b !ERRORLEVEL!
     set "VOXTYPE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_free_protocol_test.exe"
     if not exist "!VOXTYPE_TEST_EXE!" (
@@ -222,6 +222,14 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running HUD pagination regression tests...
     "!VOXTYPE_HUD_PAGINATION_TEST_EXE!"
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    set "VOXTYPE_DIALOG_POSITIONING_TEST_EXE=%BUILD_ROOT%\artifacts\tests\dialog_positioning_test.exe"
+    if not exist "!VOXTYPE_DIALOG_POSITIONING_TEST_EXE!" (
+        echo ERROR: Dialog positioning test executable was not produced: !VOXTYPE_DIALOG_POSITIONING_TEST_EXE!
+        exit /b 1
+    )
+    echo Running dialog positioning regression tests...
+    "!VOXTYPE_DIALOG_POSITIONING_TEST_EXE!"
     if errorlevel 1 exit /b !ERRORLEVEL!
 )
 

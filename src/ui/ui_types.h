@@ -27,6 +27,10 @@ constexpr int SettingsWindowW = 850;
 constexpr int SettingsWindowH = 740;
 // Conservative caption/frame allowance used by the static layout validator.
 constexpr int SettingsWindowNonClientReserveH = 48;
+// Secondary dialogs (Advanced / Manage popups) anchor to the side of the
+// Settings window instead of centering on top of it. The gap must always be
+// converted through S(); never use it as a raw pixel constant.
+constexpr int DialogAnchorGap = 12;
 constexpr int Margin = 12;
 constexpr int ContentLeft = 42;
 constexpr int InputLeft = 188;

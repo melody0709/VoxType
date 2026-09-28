@@ -48,7 +48,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/app/` | Application entry point, main window, recording orchestrator, Win32 resources |
 | `src/asr/` | Local ASR engine, ASR provider clients, batch/streaming sessions, metrics, dispatch helpers, context-turn assembly |
 | `src/audio/` | Audio capture (WASAPI / waveIn), FireRed VAD, streaming VAD trimmer |
-| `src/ui/` | HUD, HUD pagination, hotkey handling, Settings window, UI theme/controls |
+| `src/ui/` | HUD, HUD pagination, hotkey handling, Settings window, secondary dialog anchoring, UI theme/controls |
 | `src/platform/` | Platform integration (text injector, clipboard, Windows message emulation) |
 | `src/core/` | Core app messages/state, path service, config store, LLM refine, input context reading, vocabulary manager, shared recognition history |
 
@@ -86,6 +86,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/ui/tabs/` | Modular Settings tab panels: `General`, `Recognition`, `Cloud ASR`, `Vocabulary`, `LLM`, and `Prompt` |
 | `src/ui/providers/` | Modular Cloud ASR provider sub-panels: `Baidu`, `Volcengine`, `Qwen`, `MiMo`, `Doubao IME`, `Qwen Free`, and `MAI` |
 | `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Encapsulated Settings dialog control handles and layout visibility toggles |
+| `src/ui/dialog_positioning.h` / `src/ui/dialog_positioning.cpp` | Pure geometry for anchoring secondary Settings dialogs beside the Settings window (right/left/below/above with a largest-space fallback and work-area clamping) and the minimum anchor shift that keeps dialog and window from overlapping |
 | `src/app/main.cpp` | Slim Win32 application entry point (`wWinMain`) and message pump |
 | `src/app/main_window.h` / `src/app/main_window.cpp` | Main hidden message window, tray dispatch, hotkey handling, timer triggers |
 | `src/app/recording_session_controller.h` / `src/app/recording_session_controller.cpp` | State machine orchestrating recording lifecycle, VAD trimming, and ASR dispatch |

@@ -88,6 +88,7 @@ add_executable(VoxType WIN32
     src/ui/form_builder.cpp
     src/ui/settings.cpp
     src/ui/settings_controls.cpp
+    src/ui/dialog_positioning.cpp
     src/ui/settings_dialogs.cpp
     src/ui/ui_theme.cpp
     src/ui/tabs/tab_general.cpp
@@ -332,6 +333,21 @@ set_target_properties(hud_pagination_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
 add_test(NAME hud_pagination_test COMMAND hud_pagination_test)
+
+add_executable(dialog_positioning_test
+    tests/dialog_positioning_test.cpp
+    src/ui/dialog_positioning.cpp
+)
+target_include_directories(dialog_positioning_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/ui"
+)
+if(MSVC)
+    target_compile_options(dialog_positioning_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(dialog_positioning_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME dialog_positioning_test COMMAND dialog_positioning_test)
 
 # Developer-only diagnostic replay utility. It reuses the production ASR
 # sessions but remains outside the canonical runtime payload and normal build.

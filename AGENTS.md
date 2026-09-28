@@ -128,6 +128,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
   1. DirectWrite/Direct2D（HUD）使用 DIP 测量，`SetWindowPos` 使用物理像素，跨屏移动必须重新根据目标显示器 DPI 计算缩放。
   2. Win32 窗口（Settings / 对话框）逻辑设计基准为 144 DPI（Scale = 1.0），在 96 DPI 标准屏下缩放系数为 0.6667。控件与文字高度必须预留安全容限（单行标签高不低于 30、两行提示不低于 48、按钮不低于 34），严禁在局部私自缩减，否则在 96 DPI 下字体行高将超越控件物理边框，引发文字横向腰斩或 descender（y/g/p 下延）硬件级裁切。
   3. 任何新建弹窗（Dialog/Prompt）均需统一继承 `UpdateUiScale`、`UiStyle::*` 与 `WM_DPICHANGED` 机制，严禁使用固定写死的外框与控件绝对像素。
+- **【A】Settings 二级对话框必须锚定在主窗口侧边，不得恢复为"相对父窗口居中"**：`ShowInputDialog` / `ShowVolcAdvancedDialog` / `ShowQwenAdvancedDialog` / `ShowPromptManageDialog` 统一走 `src/ui/dialog_positioning.*`（右 → 左 → 下 → 上 → 最大剩余空间，再 clamp 进工作区；间距 12 DIP 必须经 `S()` 折算）。Qwen（900 DIP 高）/ 火山（800 DIP 高）对话框高于主窗口（740 DIP），居中必然全遮主窗口。**主窗口让位只在"四向锚定全部失败且结果仍与主窗口相交"时发生**（由 `AnchorShiftGuard` 做最小水平位移并在所有退出路径回位）；空间足够时主窗口位移必须为 0。回归覆盖见 `tests/dialog_positioning_test.cpp`。
 - **【A】FireRedVAD**：fbank 期望 int16 范围（-32768~32767），不是归一化 float，传入前必须乘 32768。
 - **【A】公共 VAD trim 只裁剪头尾静音**，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是**追加输出语义**，调用方要自己清空/使用局部 `outputs`。
 - **【A】Streaming VAD 的 no-speech 判断用 `StreamingVadTrimmer::DetectedSpeech()`**，不要重新引入 provider 专属 `g_xxxVadState`。

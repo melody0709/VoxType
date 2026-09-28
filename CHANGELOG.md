@@ -2,6 +2,17 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.11.5 (2026-09-28)
+
+### UI & Layout
+
+- **Secondary Settings dialogs now anchor beside the Settings window instead of covering it.**
+  - Root cause: all four secondary dialogs (`Qwen ASR Advanced Settings`, `Volcano Engine Advanced Settings`, `System Prompt Management`, `Add Provider`) were positioned by `CalculateCenteredDialogPos`, which centres them on the Settings window rectangle. The Qwen (780×900) and Volcano Engine (810×800) dialogs are taller than the Settings window itself (850×740), so centring always hid the entire window behind them.
+  - New pure-geometry module `src/ui/dialog_positioning.{h,cpp}`: a dialog is placed on the right side of the Settings window, then left, below, and above; when no side fits it takes the side with the largest remaining space and the result is clamped into the monitor work area. Side-by-side placements are vertically centred against the window, stacked placements are left aligned, and the 12 DIP gap is always converted through `S()` (the reference implementation hard-codes a raw pixel gap; that part was not copied).
+  - The Settings window only gives way when the four-way search fails on every side and the clamped result still overlaps it: `ComputeAnchorShiftForSideBySide()` then returns the minimum horizontal shift (it only ever moves left) that lets the dialog fit beside the window, and `AnchorShiftGuard` restores the original position on every exit path, including a failed `CreateWindowExW`. When space is available the window is never moved.
+  - Coverage: `tests/dialog_positioning_test.cpp` (10 cases, including "a fitting side never overlaps the anchor", which keeps the shift path from running while space is sufficient) wired into `build.bat --test`; the rule is also recorded as a class-A invariant in `AGENTS.md` and in the `src/ui/` module list of `ARCHITECTURE.md`.
+  - Known limitation (unchanged): on work areas shorter than the dialog (for example 1920×1080 at 200%), the dialog is pinned to the top of the work area and its footer buttons can still fall off-screen.
+
 ## v0.11.4 (2026-09-28)
 
 ### UI & Layout

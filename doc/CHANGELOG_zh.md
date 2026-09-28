@@ -2,6 +2,17 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.5 (2026-09-28)
+
+### 界面与布局优化
+
+- **Settings 二级对话框改为锚定在主窗口侧边，不再遮挡主窗口。**
+  - **根因**：四个二级对话框（`Qwen ASR Advanced Settings`、`Volcano Engine Advanced Settings`、`System Prompt Management`、`Add Provider`）此前统一由 `CalculateCenteredDialogPos` 以主 Settings 窗口矩形为中心居中。千问（780×900）与火山（810×800）对话框比主窗口（850×740）还高，居中必然把主窗口完整盖住。
+  - **新增纯几何模块 `src/ui/dialog_positioning.{h,cpp}`**：定位顺序为右 → 左 → 下 → 上；四向都放不下时取剩余空间最大的一侧，并把结果 clamp 进显示器工作区。左右并排时与主窗口垂直居中对齐、上下堆叠时左对齐；12 DIP 间距始终经 `S()` 折算（参考实现硬编码裸像素间距，此处未沿用）。
+  - **主窗口让位仅在必要时发生**：只有四向锚定全部失败、且 clamp 后的结果仍与主窗口相交时，`ComputeAnchorShiftForSideBySide()` 才给出"让对话框恰好放下"的最小水平位移（只会左移），并由 `AnchorShiftGuard` 在所有退出路径回位（含 `CreateWindowExW` 失败提前返回）；空间足够时主窗口零位移。
+  - **回归覆盖**：新增 `tests/dialog_positioning_test.cpp`（10 组用例，含"四向成功必不与主窗口相交"的零位移断言），并接入 `build.bat --test` 的构建与运行列表；定位规则同时沉淀为 `AGENTS.md` 的【A】类不变量与 `ARCHITECTURE.md` 的 `src/ui/` 模块清单。
+  - **已知限制（未变化）**：当工作区高度小于对话框高度（如 1920×1080 @200%）时，对话框贴工作区顶部，底部按钮仍可能落于屏幕外。
+
 ## v0.11.4 (2026-09-28)
 
 ### 界面与布局优化

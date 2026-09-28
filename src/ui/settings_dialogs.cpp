@@ -3,6 +3,7 @@
 #endif
 #include "settings_dialogs.h"
 #include "settings_controls.h"
+#include "dialog_positioning.h"
 #include "hotkey.h"
 #include "ui_types.h"
 #include "ui_utils.h"
@@ -14,7 +15,6 @@
 #include <commctrl.h>
 #include <windowsx.h>
 #include <shellapi.h>
-#include <algorithm>
 #include <format>
 #include <vector>
 
@@ -135,23 +135,73 @@ void LayoutQwenAdvancedDlg(HWND hwnd, const QwenAdvancedControls& c) {
     if (c.cancelButton) MoveWindow(c.cancelButton, S(UiStyle::QwenAdvancedDialogCancelBtnX), S(UiStyle::QwenAdvancedDialogFooterY), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
 }
 
-POINT CalculateCenteredDialogPos(HWND parent, int width, int height) {
-    RECT work = GetWorkAreaForWindow(parent);
-    RECT parentRect = {};
-    if (parent) {
-        GetWindowRect(parent, &parentRect);
-    } else {
-        parentRect = work;
+// Where a secondary dialog should open: next to the Settings window when a
+// side free of overlap exists, otherwise the best-fitting overlapping spot.
+// The Settings window only gives way (moveAnchor) when no side can hold the
+// dialog without overlap; anchorPos then carries the shifted position.
+struct AnchoredPlacement {
+    POINT dialogPos = {};
+    bool moveAnchor = false;
+    POINT anchorPos = {};
+};
+
+// Moves the Settings window aside while a secondary dialog is open and
+// restores its original position on every exit path.
+class AnchorShiftGuard {
+public:
+    AnchorShiftGuard(HWND anchor, bool shift, POINT target) : anchor_(anchor) {
+        if (!shift || !anchor_) return;
+        RECT rc = {};
+        if (!GetWindowRect(anchor_, &rc)) return;
+        original_ = { rc.left, rc.top };
+        moved_ = true;
+        SetWindowPos(anchor_, nullptr, target.x, target.y, 0, 0,
+                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
-    int x = parentRect.left + ((parentRect.right - parentRect.left) - width) / 2;
-    int y = parentRect.top + ((parentRect.bottom - parentRect.top) - height) / 2;
-    const int workLeft = static_cast<int>(work.left);
-    const int workTop = static_cast<int>(work.top);
-    const int workRight = static_cast<int>(work.right);
-    const int workBottom = static_cast<int>(work.bottom);
-    x = std::clamp(x, workLeft, (std::max)(workLeft, workRight - width));
-    y = std::clamp(y, workTop, (std::max)(workTop, workBottom - height));
-    return { x, y };
+    ~AnchorShiftGuard() {
+        if (moved_) {
+            SetWindowPos(anchor_, nullptr, original_.x, original_.y, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+    AnchorShiftGuard(const AnchorShiftGuard&) = delete;
+    AnchorShiftGuard& operator=(const AnchorShiftGuard&) = delete;
+
+private:
+    HWND anchor_ = nullptr;
+    POINT original_ = {};
+    bool moved_ = false;
+};
+
+AnchoredPlacement CalculateAnchoredPlacement(HWND anchorWnd, int width, int height) {
+    RECT work = GetWorkAreaForWindow(anchorWnd);
+    RECT anchor = work;
+    if (anchorWnd) {
+        GetWindowRect(anchorWnd, &anchor);
+    }
+    const int gap = S(UiStyle::DialogAnchorGap);
+    const int anchorW = anchor.right - anchor.left;
+
+    AnchoredPlacement placement;
+    placement.dialogPos = ComputeAnchoredDialogPos(anchor, work, width, height, gap);
+
+    // The four-way search clears the anchor whenever any side fits, so the
+    // Settings window only gives way when every side fails and the clamped
+    // result still overlaps it - and then only by the minimum distance.
+    const RECT dialog = { placement.dialogPos.x, placement.dialogPos.y,
+                          placement.dialogPos.x + width, placement.dialogPos.y + height };
+    const bool overlaps = dialog.left < anchor.right && dialog.right > anchor.left &&
+                          dialog.top < anchor.bottom && dialog.bottom > anchor.top;
+    if (overlaps && anchorWnd) {
+        const int shiftedLeft = ComputeAnchorShiftForSideBySide(anchor, work, width, gap);
+        if (shiftedLeft != anchor.left) {
+            placement.moveAnchor = true;
+            placement.anchorPos = { shiftedLeft, anchor.top };
+            const RECT shifted = { shiftedLeft, anchor.top, shiftedLeft + anchorW, anchor.bottom };
+            placement.dialogPos = ComputeAnchoredDialogPos(shifted, work, width, height, gap);
+        }
+    }
+    return placement;
 }
 
 void RunModalDialogLoop(HWND dlg, HWND parent) {
@@ -1187,12 +1237,14 @@ bool ShowInputDialog(HWND parent, const wchar_t* title, std::wstring& out) {
     UpdateUiScale(parent);
     const int width = S(UiStyle::InputDlgW);
     const int height = S(UiStyle::InputDlgH);
-    POINT pos = CalculateCenteredDialogPos(parent, width, height);
+    const AnchoredPlacement placement = CalculateAnchoredPlacement(parent, width, height);
+    AnchorShiftGuard anchorGuard(parent, placement.moveAnchor, placement.anchorPos);
 
     HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
                                L"VoxTypeInputDlg", title,
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                               pos.x, pos.y, width, height, parent, nullptr, hInst, &data);
+                               placement.dialogPos.x, placement.dialogPos.y,
+                               width, height, parent, nullptr, hInst, &data);
     if (!dlg) return false;
     RunModalDialogLoop(dlg, parent);
     if (data.ok) { out = data.result; return true; }
@@ -1219,7 +1271,8 @@ bool ShowVolcAdvancedDialog(HWND parent, VolcAdvancedDialogData& data, VolcAdvan
     data.ok = false;
     const int width = S(UiStyle::VolcAdvancedDialogW);
     const int height = S(UiStyle::VolcAdvancedDialogH);
-    POINT pos = CalculateCenteredDialogPos(parent, width, height);
+    const AnchoredPlacement placement = CalculateAnchoredPlacement(parent, width, height);
+    AnchorShiftGuard anchorGuard(parent, placement.moveAnchor, placement.anchorPos);
 
     VolcAdvancedDialogState state;
     state.data = &data;
@@ -1228,7 +1281,8 @@ bool ShowVolcAdvancedDialog(HWND parent, VolcAdvancedDialogData& data, VolcAdvan
     HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
                                L"VoxTypeVolcAdvancedDlg", L"Volcano Engine Advanced Settings",
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                               pos.x, pos.y, width, height, parent, nullptr, hInst, &state);
+                               placement.dialogPos.x, placement.dialogPos.y,
+                               width, height, parent, nullptr, hInst, &state);
     if (!dlg) return false;
     RunModalDialogLoop(dlg, parent);
     return data.ok;
@@ -1254,7 +1308,8 @@ bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvan
     data.ok = false;
     const int width = S(UiStyle::QwenAdvancedDialogW);
     const int height = S(UiStyle::QwenAdvancedDialogH);
-    POINT pos = CalculateCenteredDialogPos(parent, width, height);
+    const AnchoredPlacement placement = CalculateAnchoredPlacement(parent, width, height);
+    AnchorShiftGuard anchorGuard(parent, placement.moveAnchor, placement.anchorPos);
 
     QwenAdvancedDialogState state;
     state.data = &data;
@@ -1263,7 +1318,8 @@ bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvan
     HWND dialog = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
                                   L"VoxTypeQwenAdvancedDlg", L"Qwen ASR Advanced Settings",
                                   WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                                  pos.x, pos.y, width, height, parent, nullptr, hInst, &state);
+                                  placement.dialogPos.x, placement.dialogPos.y,
+                                  width, height, parent, nullptr, hInst, &state);
     if (!dialog) return false;
     RunModalDialogLoop(dialog, parent);
     return data.ok;
@@ -1295,12 +1351,14 @@ bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* 
     UpdateUiScale(parent);
     const int width = S(UiStyle::PromptDlgW);
     const int height = S(UiStyle::PromptDlgH);
-    POINT pos = CalculateCenteredDialogPos(parent, width, height);
+    const AnchoredPlacement placement = CalculateAnchoredPlacement(parent, width, height);
+    AnchorShiftGuard anchorGuard(parent, placement.moveAnchor, placement.anchorPos);
 
     HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
                                L"VoxTypePromptManageDlg", L"System Prompt Management",
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                               pos.x, pos.y, width, height, parent, nullptr, hInst, &data);
+                               placement.dialogPos.x, placement.dialogPos.y,
+                               width, height, parent, nullptr, hInst, &data);
     if (!dlg) return false;
     RunModalDialogLoop(dlg, parent);
     if (data.ok) {
