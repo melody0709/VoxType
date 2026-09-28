@@ -4,6 +4,7 @@
 
 #include "qwen_audio_streaming.h"
 
+#include "asr_context.h"
 #include "asr_runtime_log.h"
 #include "qwen_audio_json.h"
 #include "qwen_audio_profile.h"
@@ -61,6 +62,30 @@ std::string TruncateLogText(const std::wstring& value, size_t maxBytes = 256) {
     std::string text = WideToUtf8(value);
     if (text.size() > maxBytes) text.resize(maxBytes);
     return text;
+}
+
+// Serializes context turns as the provider's message array. Every turn is
+// re-capped here as a second line of defence, so the request can never exceed
+// the documented per-turn character budget even if an assembled turn was built
+// by an older caller.
+std::string BuildContextMessagesJson(const std::vector<std::wstring>& turns,
+                                     size_t maxCharacters) {
+    // The provider keeps only the newest five messages and caps each message at
+    // the documented character budget, so normalize and window here: an
+    // oversized context never relies on the server to trim it.
+    const std::vector<std::wstring> clamped = asr_context::ClampTurns(
+        turns, asr_context::kMaxContextTurns, maxCharacters);
+    std::string json = "[";
+    bool first = true;
+    for (const std::wstring& text : clamped) {
+        if (!first) json += ",";
+        first = false;
+        json += "{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"";
+        json += EscapeJson(text);
+        json += "\"}]}";
+    }
+    json += "]";
+    return json;
 }
 
 Url ParseUrl(const std::wstring& value, std::wstring& error) {
@@ -203,37 +228,35 @@ std::string BuildRunTaskMessageImpl(const Config& cfg, const std::string& taskId
         json += ",\"special_word_filter\":" +
             qwen_special_word_filter::BuildJson(specialFilter);
     }
-    std::wstring context = Trim(cfg.inputContextText);
-    if (context.size() > qwen_context::kMaxContextCharacters) {
-        context = input_context::TakeFirstN(context, qwen_context::kMaxContextCharacters);
-    }
-    if (context.empty()) {
+    std::vector<std::wstring> contextTurns = cfg.historyContextTurns;
+    const std::wstring fieldTurn =
+        asr_context::NormalizeTurn(cfg.inputContextText, qwen_context::kMaxContextCharacters);
+    if (!fieldTurn.empty()) contextTurns.push_back(fieldTurn);
+    if (contextTurns.empty()) {
         json += "},\"input\":{}}}";
     } else {
-        json += "},\"input\":{\"context\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"";
-        json += EscapeJson(context);
-        json += "\"}]}]}}}";
+        json += "},\"input\":{\"context\":";
+        json += BuildContextMessagesJson(contextTurns, qwen_context::kMaxContextCharacters);
+        json += "}}}";
     }
     return json;
 }
 
 std::string BuildContinueTaskMessageImpl(const std::string& taskId,
-                                         const std::wstring& contextText) {
-    std::wstring context = Trim(contextText);
-    if (context.size() > qwen_context::kMaxContextCharacters) {
-        context = input_context::TakeFirstN(context, qwen_context::kMaxContextCharacters);
-    }
+                                         const std::wstring& contextText,
+                                         const std::vector<std::wstring>& historyTurns) {
+    std::vector<std::wstring> turns = historyTurns;
+    const std::wstring fieldTurn =
+        asr_context::NormalizeTurn(contextText, qwen_context::kMaxContextCharacters);
+    if (!fieldTurn.empty()) turns.push_back(fieldTurn);
     std::string json = "{\"header\":{\"action\":\"continue-task\",\"task_id\":\"" +
         taskId + "\",\"streaming\":\"duplex\"},\"payload\":{\"input\":{";
-    if (context.empty()) {
-        // An explicit empty context lets the worker clear a stale initial
-        // snapshot when the focused field was cleared before key release.
-        json += "\"context\":[]}}}";
-    } else {
-        json += "\"context\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"";
-        json += EscapeJson(context);
-        json += "\"}]}]}}}";
-    }
+    // The context array is always explicit, so an empty one still clears a stale
+    // initial snapshot (the focused field was cleared before key release) while a
+    // refresh keeps the history turns recorded at run-task time.
+    json += "\"context\":";
+    json += BuildContextMessagesJson(turns, qwen_context::kMaxContextCharacters);
+    json += "}}}";
     return json;
 }
 
@@ -270,8 +293,9 @@ std::string BuildRunTaskMessage(const Config& config, const std::string& taskId)
 }
 
 std::string BuildContinueTaskMessage(const std::string& taskId,
-                                     const std::wstring& contextText) {
-    return BuildContinueTaskMessageImpl(taskId, contextText);
+                                     const std::wstring& contextText,
+                                     const std::vector<std::wstring>& historyTurns) {
+    return BuildContinueTaskMessageImpl(taskId, contextText, historyTurns);
 }
 
 std::string BuildFinishTaskMessage(const std::string& taskId) {
@@ -531,7 +555,8 @@ bool Client::ContinueContext(const std::wstring& contextText, std::wstring& erro
         return false;
     }
     const std::string taskId = impl_->TaskIdSnapshot();
-    const std::string msg = BuildContinueTaskMessage(taskId, contextText);
+    const std::string msg = BuildContinueTaskMessage(
+        taskId, contextText, impl_->config.historyContextTurns);
     DWORD sendError = NO_ERROR;
     if (!impl_->transport.Send(WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE,
                                msg.data(), msg.size(), kSendTimeoutMs,

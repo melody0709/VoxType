@@ -2,7 +2,11 @@
 #define NOMINMAX
 #endif
 
+#include "app_state.h"
+#include "asr_context.h"
+#include "asr_history.h"
 #include "asr_result.h"
+#include "asr_runtime_log.h"
 #include "asr_session.h"
 #include "asr_streaming_session.h"
 #include "audio_capture.h"
@@ -13,6 +17,7 @@
 #include "input_context.h"
 #include "path_service.h"
 #include "qwen_audio_streaming.h"
+#include "qwen_context.h"
 #include "vad_detector.h"
 #include "wasapi_capture.h"
 #include "qwen_audio_streaming_session.h"
@@ -22,6 +27,11 @@
 #include "volcengine_streaming_session.h"
 
 #include <windows.h>
+// The windowless replay set below mirrors the HUD globals, so the Direct2D and
+// DirectWrite interface types must be declared here as well (they used to arrive
+// transitively through the removed globals.h).
+#include <d2d1.h>
+#include <dwrite.h>
 
 #include <algorithm>
 #include <atomic>
@@ -42,12 +52,14 @@
 // replay executable owns an isolated, windowless set so it can reuse the real
 // Config, AsrEngine, IAsrSession, and IStreamingAsrSession implementations
 // without starting the tray application or touching its active recording.
-HINSTANCE g_instance = nullptr;
-HWND g_mainWindow = nullptr;
+// NOTE: globals that a compiled module owns are NOT defined here — the replay
+// target links the production modules (app_state, audio_capture,
+// streaming_vad_trimmer, engine_local, asr_metrics, config_store), so a second
+// definition would be a duplicate symbol. Only the windowless, HUD-free
+// leftovers live here.
 HWND g_settingsWindow = nullptr;
 HWND g_hudWindow = nullptr;
 HHOOK g_keyboardHook = nullptr;
-HICON g_appIcon = nullptr;
 HFONT g_uiFont = nullptr;
 HFONT g_titleFont = nullptr;
 HFONT g_sectionFont = nullptr;
@@ -63,30 +75,13 @@ ID2D1LinearGradientBrush* g_hudBarGradientIdle = nullptr;
 ID2D1GradientStopCollection* g_hudBarGradientStopsRec = nullptr;
 ID2D1GradientStopCollection* g_hudBarGradientStopsIdle = nullptr;
 IDWriteTextFormat* g_hudTextFormat = nullptr;
-Config g_config;
-std::atomic<bool> g_enableDebugMode{false};
-bool g_recording = false;
 UINT g_activeHotkeyKey = 0;
 bool g_capsLockHotkeyPending = false;
 bool g_capsLockLongPressActive = false;
 bool g_capsLockWasOn = false;
 std::wstring g_hudText;
-HWAVEIN g_waveIn = nullptr;
-WAVEHDR g_waveHeaders[8] = {};
-std::vector<std::vector<BYTE>> g_waveBuffers;
-std::vector<BYTE> g_audioData;
-CRITICAL_SECTION g_audioLock;
-std::atomic<bool> g_captureActive{false};
-std::atomic<bool> g_captureSuppressed{false};
-std::atomic<uint64_t> g_audioCaptureGeneration{0};
-std::atomic<bool> g_audioCaptureFailurePending{false};
-std::atomic<DWORD> g_audioCaptureFailureCode{0};
-std::atomic<bool> g_audioCaptureFailureWasapi{false};
-std::atomic<float> g_audioLevel{0.0f};
 float g_hudSmoothedLevel = 0.0f;
 bool g_hudHasSpoken = false;
-std::atomic<bool> g_vadDetectedVoice{false};
-WasapiCapture g_wasapiCapture;
 std::vector<HWND> g_recognitionControls;
 std::vector<HWND> g_generalControls;
 std::vector<HWND> g_llmControls;
@@ -115,23 +110,8 @@ bool g_mimoKeyVisible = false;
 bool g_maiOpenRouterKeyVisible = false;
 bool g_maiAzureKeyVisible = false;
 std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
-std::unique_ptr<StreamingVadTrimmer> g_streamingVadTrimmer;
-CRITICAL_SECTION g_streamingSessionCs;
-AsrEngine g_asrEngine;
 int g_cloudProviderIdx = 0;
 HWND g_cloudAsrHintControl = nullptr;
-std::atomic<double> g_vadMs{0.0};
-std::atomic<double> g_asrDecodeMs{0.0};
-std::atomic<double> g_punctMs{0.0};
-std::atomic<double> g_cloudApiMs{0.0};
-std::atomic<double> g_llmMs{0.0};
-std::wstring g_vadModelName;
-std::mutex g_vadMetricsMutex;
-std::atomic<size_t> g_vadTrimmedSamples{0};
-std::vector<float> g_streamingVadSamples;
-std::atomic<bool> g_streamingVadReady{false};
-InputContextResult g_inputContextResult;
-std::mutex g_inputContextMutex;
 
 namespace {
 
@@ -145,6 +125,7 @@ struct Options {
     bool usePostprocess = false;
     bool listBackends = false;
     bool informationalExit = false;
+    int contextRounds = 0;
 };
 
 struct WavInput {
@@ -159,6 +140,14 @@ struct BackendRequest {
     Config config;
     bool forceBatch = false;
 };
+
+// Synthetic rounds used by --context-rounds. The replay path captures the final
+// text through a callback instead of the production dispatcher, so the shared
+// recognition history would always be empty and the dialog-context paths could
+// never be exercised without a live microphone. These rounds are diagnostic
+// data, not transcriptions of the WAV.
+constexpr wchar_t kSyntheticContextTurn[] =
+    L"the day after tomorrow 是星期三，我们昨天在 GitHub 上讨论划词翻译与 gittag";
 
 struct StreamingFinalState {
     std::mutex mutex;
@@ -367,6 +356,8 @@ void PrintUsage() {
         << "  --fast               Feed streaming providers without real-time cadence.\n"
         << "  --show-text          Print transcript to the console; never writes it to disk.\n"
         << "  --list-backends      Show backend IDs.\n"
+        << "  --context-rounds <n> Seed n synthetic recognition-history rounds so the\n"
+        << "                       dialog-context path is exercised (diagnostic only).\n"
         << "  --help               Show this help.\n\n"
         << "Cloud backends upload the selected WAV when explicitly requested.\n";
 }
@@ -396,6 +387,8 @@ bool ParseArguments(int argc, wchar_t** argv, Options& options) {
             options.fastStreaming = true;
         } else if (arg == L"--use-config-vad") {
             options.useConfigVad = true;
+        } else if (arg == L"--context-rounds" && i + 1 < argc) {
+            options.contextRounds = _wtoi(argv[++i]);
         } else if (arg == L"--use-postprocess") {
             options.usePostprocess = true;
         } else if (arg == L"--list-backends") {
@@ -507,6 +500,19 @@ bool ResolveBackend(const Config& loaded,
         request.config.qwenFreePunctEnabled = false;
         request.config.qwenFreeCorrectEnabled = false;
         request.config.qwenFreeRewriteEnabled = false;
+    }
+
+    if (options.contextRounds > 0) {
+        asr_history::Clear();
+        for (int i = 0; i < options.contextRounds; ++i) {
+            asr_history::Add(kSyntheticContextTurn);
+        }
+        // Mirror what BeginAsrAttempt assembles for a Qwen attempt so the
+        // provider sees the same multi-turn context the application would send.
+        request.config.qwenContextHistoryTurns = asr_context::BuildHistoryTurns(
+            asr_history::Snapshot(),
+            static_cast<size_t>(options.contextRounds),
+            qwen_context::kMaxContextCharacters);
     }
     return true;
 }
@@ -720,6 +726,9 @@ int wmain(int argc, wchar_t** argv) {
 
     RuntimeScope runtime;
     LoadConfig(g_config);
+    // Honour the loaded Debug Mode switch so a diagnostic run writes the same
+    // runtime log lines the application would (%TEMP%\voxtype_asr_runtime.log).
+    asr_runtime_log::ApplyRuntimeLogConfig(g_config);
     const Config loaded = g_config;
     std::cout << "runtime_dir=" << Utf8ForConsole(RuntimeAssetDir())
               << " config=" << Utf8ForConsole(ConfigPath())

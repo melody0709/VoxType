@@ -446,6 +446,33 @@ int main() {
                    json.find("前文") != std::string::npos &&
                    json.find("input_text") < json.find("input_audio"),
                "HTTP request places input-field context before audio");
+
+        qwen_audio_http::Config multiTurnHttp;
+        multiTurnHttp.model = L"qwen-audio-3.0-asr-flash";
+        multiTurnHttp.historyContextTurns = { L"历史一", L"历史二" };
+        multiTurnHttp.inputContextText = L"当前字段";
+        const std::string multiHttpJson =
+            qwen_audio_http::BuildRequestJsonForTest(multiTurnHttp, "AQID");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(multiHttpJson)) &&
+                   multiHttpJson.find("历史一") != std::string::npos &&
+                   multiHttpJson.find("历史二") != std::string::npos &&
+                   multiHttpJson.find("当前字段") != std::string::npos &&
+                   multiHttpJson.find("历史一") < multiHttpJson.find("历史二") &&
+                   multiHttpJson.find("历史二") < multiHttpJson.find("当前字段") &&
+                   multiHttpJson.find("当前字段") < multiHttpJson.find("input_audio"),
+               "HTTP request places every context turn before the audio message");
+
+        qwen_audio_http::Config windowedHttp;
+        windowedHttp.model = L"qwen-audio-3.0-asr-flash";
+        windowedHttp.historyContextTurns = { L"轮一", L"轮二", L"轮三", L"轮四", L"轮五" };
+        windowedHttp.inputContextText = L"轮六";
+        const std::string windowedHttpJson =
+            qwen_audio_http::BuildRequestJsonForTest(windowedHttp, "AQID");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(windowedHttpJson)) &&
+                   windowedHttpJson.find("轮一") == std::string::npos &&
+                   windowedHttpJson.find("轮二") != std::string::npos &&
+                   windowedHttpJson.find("轮六") != std::string::npos,
+               "HTTP request windows six context turns down to five messages");
         Expect(json.find("\"sample_rate\":\"16000\"") != std::string::npos,
                "HTTP request serializes sample_rate with the documented string type");
         Expect(json.find("semantic_punctuation") == std::string::npos &&
@@ -486,20 +513,27 @@ int main() {
     }
 
     {
+        // Head vs tail: a repeated-character sample cannot tell the two apart,
+        // so the text changes halfway through. The tail (closest to the caret)
+        // must survive and the head must be dropped.
         InputContextResult input;
-        input.inputFieldText = std::wstring(401, L'甲');
+        input.inputFieldText = std::wstring(100, L'甲') + std::wstring(400, L'乙');
         const std::wstring sanitized = qwen_context::SanitizeText(input);
-        Expect(sanitized.size() == 400 && sanitized.front() == L'甲' && sanitized.back() == L'甲',
-               "context keeps the first 400 characters and drops character 401");
+        Expect(sanitized.size() == 400 && sanitized.find(L'甲') == std::wstring::npos &&
+                   sanitized.front() == L'乙' && sanitized.back() == L'乙',
+               "context keeps the last 400 characters (tail) and drops the head");
 
-        std::wstring emojiBoundary(399, L'a');
-        emojiBoundary.push_back(static_cast<wchar_t>(0xD83D));
-        emojiBoundary.push_back(static_cast<wchar_t>(0xDE00));
-        const std::wstring safePrefix = input_context::TakeFirstN(emojiBoundary, 400);
-        Expect(safePrefix.size() == 399 &&
-                   (safePrefix.empty() || !input_context::IsHighSurrogate(safePrefix.back())) &&
-                   (safePrefix.empty() || !input_context::IsLowSurrogate(safePrefix.back())),
-               "context truncation never returns a lone UTF-16 surrogate");
+        // A tail cut that would split a surrogate pair must step past it.
+        std::wstring emojiTail = std::wstring(401, L'a');
+        emojiTail[0] = static_cast<wchar_t>(0xD83D);
+        emojiTail[1] = static_cast<wchar_t>(0xDE00);
+        InputContextResult emojiInput;
+        emojiInput.inputFieldText = emojiTail;
+        const std::wstring safeTail = qwen_context::SanitizeText(emojiInput);
+        Expect(!safeTail.empty() &&
+                   !input_context::IsLowSurrogate(safeTail.front()) &&
+                   !input_context::IsHighSurrogate(safeTail.front()),
+               "a tail cut never starts on a lone UTF-16 surrogate");
 
         qwen_audio_http::Config longHttp;
         longHttp.model = L"qwen-audio-3.0-asr-flash";
@@ -549,6 +583,86 @@ int main() {
                    longContinue.find(WideToUtf8(std::wstring(400, L'丙'))) != std::string::npos &&
                    longContinue.find(WideToUtf8(std::wstring(401, L'丙'))) == std::string::npos,
                "continue-task context is capped at 400 characters");
+
+        // Multi-turn context: history turns precede the focused-field turn, and a
+        // continue-task refresh must repeat them instead of dropping them.
+        qwen_audio_streaming::Config multiTurn;
+        multiTurn.model = L"qwen-audio-3.0-asr-flash-streaming";
+        multiTurn.historyContextTurns = { L"较早的一轮", L"较新的一轮" };
+        multiTurn.inputContextText = L"当前输入框";
+        const std::string multiRunTask =
+            qwen_audio_streaming::BuildRunTaskMessage(multiTurn, "task-1");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(multiRunTask)) &&
+                   multiRunTask.find("较早的一轮") != std::string::npos &&
+                   multiRunTask.find("较新的一轮") != std::string::npos &&
+                   multiRunTask.find("当前输入框") != std::string::npos &&
+                   multiRunTask.find("较早的一轮") < multiRunTask.find("较新的一轮") &&
+                   multiRunTask.find("较新的一轮") < multiRunTask.find("当前输入框"),
+               "streaming run-task orders history turns oldest first before the field turn");
+
+        const std::string multiContinue = qwen_audio_streaming::BuildContinueTaskMessage(
+            "task-1", L"刷新后的输入框", multiTurn.historyContextTurns);
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(multiContinue)) &&
+                   multiContinue.find("较早的一轮") != std::string::npos &&
+                   multiContinue.find("较新的一轮") != std::string::npos &&
+                   multiContinue.find("刷新后的输入框") != std::string::npos,
+               "continue-task keeps the history turns while replacing the field turn");
+
+        const std::string historyOnly = qwen_audio_streaming::BuildContinueTaskMessage(
+            "task-1", L"", multiTurn.historyContextTurns);
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(historyOnly)) &&
+                   historyOnly.find("\"context\":[]") == std::string::npos &&
+                   historyOnly.find("较新的一轮") != std::string::npos,
+               "clearing the focused field keeps the history turns instead of wiping the context");
+
+        // History without any focused-field text: the history switch must not
+        // depend on the focused-field switch (the earlier nesting made the
+        // history option silently inert on its own).
+        qwen_audio_streaming::Config historyOnlyConfig;
+        historyOnlyConfig.model = L"qwen-audio-3.0-asr-flash-streaming";
+        historyOnlyConfig.historyContextTurns = { L"仅历史轮" };
+        const std::string historyOnlyMsg =
+            qwen_audio_streaming::BuildRunTaskMessage(historyOnlyConfig, "task-1");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(historyOnlyMsg)) &&
+                   historyOnlyMsg.find("仅历史轮") != std::string::npos &&
+                   historyOnlyMsg.find("input_text") != std::string::npos,
+               "history turns are sent even when the focused-field context is empty");
+
+        // Single-turn regression: with the history off, the run-task body keeps
+        // the pre-multi-turn message shape (exact fragment, not a golden diff).
+        qwen_audio_streaming::Config singleTurn;
+        singleTurn.model = L"qwen-audio-3.0-asr-flash-streaming";
+        singleTurn.inputContextText = L"焦点文本";
+        const std::string singleTurnMsg =
+            qwen_audio_streaming::BuildRunTaskMessage(singleTurn, "task-1");
+        Expect(singleTurnMsg.find(
+                   "\"input\":{\"context\":[{\"role\":\"user\",\"content\":"
+                   "[{\"type\":\"input_text\",\"text\":\"焦点文本\"}]}]}}}") != std::string::npos,
+               "single-turn run-task keeps the original byte-identical context shape");
+
+        // Head vs tail discriminator: repeated characters cannot distinguish a
+        // head cut from a tail cut, so the sample changes halfway through.
+        const std::wstring mixedField = std::wstring(100, L'甲') + std::wstring(500, L'乙');
+        const std::string tailContinue =
+            qwen_audio_streaming::BuildContinueTaskMessage("task-1", mixedField);
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(tailContinue)) &&
+                   tailContinue.find("甲") == std::string::npos &&
+                   tailContinue.find(WideToUtf8(std::wstring(400, L'乙'))) != std::string::npos,
+               "continue-task keeps the tail of an over-long field text");
+
+        // The provider keeps at most five context messages: five history turns
+        // plus a field turn must window down to the newest five.
+        qwen_audio_streaming::Config windowed;
+        windowed.model = L"qwen-audio-3.0-asr-flash-streaming";
+        windowed.historyContextTurns = { L"轮一", L"轮二", L"轮三", L"轮四", L"轮五" };
+        windowed.inputContextText = L"轮六";
+        const std::string windowedMsg =
+            qwen_audio_streaming::BuildRunTaskMessage(windowed, "task-1");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(windowedMsg)) &&
+                   windowedMsg.find("轮一") == std::string::npos &&
+                   windowedMsg.find("轮二") != std::string::npos &&
+                   windowedMsg.find("轮六") != std::string::npos,
+               "six context turns window down to the provider's five-message limit");
 
         qwen_special_word_filter::Config filter;
         std::wstring filterError;

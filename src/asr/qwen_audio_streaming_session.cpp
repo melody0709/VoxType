@@ -46,9 +46,13 @@ qwen_audio_streaming::Config BuildConfig(const Config& c) {
     out.languageHints = c.qwenLanguageHints.empty() ? c.qwenLanguage : c.qwenLanguageHints;
     out.vocabularyId = c.qwenVocabularyId;
     out.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(c.qwenVocabulary);
+    // The field turn follows the focused-field switch; the history turns follow
+    // the history switch, which is independent (an enabled history must not be
+    // dropped just because focused-field context is off).
     out.inputContextText = c.qwenInputContextSnapshotCaptured
         ? c.qwenInputContextSnapshot
         : L"";
+    out.historyContextTurns = c.qwenContextHistoryTurns;
     // A dynamic context refresh is only meaningful when the user has also
     // opted in to sending focused-field context at all.  Keep the privacy
     // boundary explicit even if an old config file enables only the refresh
@@ -423,10 +427,11 @@ private:
 
         if (config_.qwenEnableInputContext) {
             QwenAudioSessionDebugLog(
-                "event=input_context using_snapshot=%d captured=%d chars=%zu",
+                "event=input_context using_snapshot=%d captured=%d chars=%zu history_turns=%zu",
                 config_.qwenInputContextSnapshotCaptured ? 1 : 0,
                 cfg_.inputContextText.empty() ? 0 : 1,
-                cfg_.inputContextText.size());
+                cfg_.inputContextText.size(),
+                cfg_.historyContextTurns.size());
         }
 
         if (cfg_.apiKey.empty()) {

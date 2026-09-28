@@ -46,11 +46,11 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | Directory | Responsibility |
 |-----------|----------------|
 | `src/app/` | Application entry point, main window, recording orchestrator, Win32 resources |
-| `src/asr/` | Local ASR engine, ASR provider clients, batch/streaming sessions, metrics, dispatch helpers |
+| `src/asr/` | Local ASR engine, ASR provider clients, batch/streaming sessions, metrics, dispatch helpers, context-turn assembly |
 | `src/audio/` | Audio capture (WASAPI / waveIn), FireRed VAD, streaming VAD trimmer |
 | `src/ui/` | HUD, HUD pagination, hotkey handling, Settings window, UI theme/controls |
 | `src/platform/` | Platform integration (text injector, clipboard, Windows message emulation) |
-| `src/core/` | Core app messages/state, path service, config store, LLM refine, input context reading |
+| `src/core/` | Core app messages/state, path service, config store, LLM refine, input context reading, vocabulary manager, shared recognition history |
 
 | File | Responsibility |
 |------|---------------|
@@ -61,7 +61,9 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/core/asr_probe_service.h` / `src/core/asr_probe_service.cpp` | Decoupled ASR connection probe service interface and registration |
 | `src/app/asr_probe_service_impl.h` / `src/app/asr_probe_service_impl.cpp` | ASR probe service implementation connecting probe requests to backend providers |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | Application and models directory path resolution, log/config file path queries |
-| `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | Universal custom vocabulary manager: parsing (JSON/lines), linear weight scaling, and transpilation to the Volcano Engine hotword/correct table, the Qwen vocabulary, sherpa hotwords, and the LLM `【用户词表】` system section |
+| `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | Universal custom vocabulary manager and the single source of truth for hotwords (`%APPDATA%\VoxType\vocabulary.json`): parsing (JSON/lines), the 1–5 ordinary / 50 super weight contract, and weight-ordered transpilation to the Qwen immediate vocabulary, the Volcano Engine `corpus.context` hotwords plus `dialog_ctx`, the context word list, the sherpa hotword file (pre-wired, not yet consumed), and the LLM `【用户词表】` system section |
+| `src/core/asr_history.h` / `src/core/asr_history.cpp` | Session-wide ring buffer of recent final transcripts (storage only, thread-safe, capped at 20 rounds); recorded once per recognition inside `DispatchAsrFinalText` and read by every context-enhancement consumer |
+| `src/asr/asr_context.h` / `src/asr/asr_context.cpp` | Context-turn assembly shared by the cloud backends: round budget selection, tail-first per-turn character capping, and the continue-task field-turn replacement that keeps the history |
 | `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Direct text injection into active windows via clipboard paste or WM_CHAR character streaming (WeChat) |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | Local sherpa-onnx recognizer, VAD detector, punctuation model lifecycle, preload, DLL availability checks |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | Thread-safe performance latency metrics (VAD, ASR, Punctuation, Cloud API, LLM) |
@@ -175,7 +177,7 @@ Settings is a standard Win32 window with 5 tabs:
 - `General`: recording hotkey, optional current-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VoxType` startup registration, and shared recording diagnostics (`Off` / `Failures only` / `All recordings`) with folder and managed-delete actions.
 - `Recognition`: ASR Backend, optional Fallback backend, model, model directory, threads, VAD, VAD model, and Punctuation (`Disabled` / `Auto punctuate`).
 - `Cloud ASR`: Cloud provider selection and Baidu/Volcengine/Qwen/MiMo/MAI/Doubao IME/Qwen IME Free provider-specific fields.
-- `Vocabulary`: Universal vocabulary management (%APPDATA%\VoxType\vocabulary.json), shared with Qwen and Volcano Engine. Each entry is also offered to the LLM refine system prompt as a `【用户词表】` section when `Feed vocabulary to LLM` is on, where it only protects spellings that already appear and never replaces a recognised variant.
+- `Vocabulary`: Universal vocabulary management (%APPDATA%\VoxType\vocabulary.json), shared with Qwen and Volcano Engine. Weights are `1–5` (default `4`, an ordinary hotword) or `50` (a super hotword, at most 50 of them; 2000 entries overall); every consumer receives the list sorted highest-weight first, so provider caps never demote or drop the user's most important words. Each entry is also offered to the LLM refine system prompt as a `【用户词表】` section when `Feed vocabulary to LLM` is on, where it only protects spellings that already appear and never replaces a recognised variant.
 - `LLM`: Master toggle (`Enable LLM Refinement`), Provider selection (Provider dropdown + [+] / [−]), API Base URL, API Key, Model, Extra Params, Prompt preset selection with modal `Manage...` dialog (spacious multiline System Prompt editor, presets labelled with their version and reset), `Feed vocabulary to LLM`, Test Connection, and Debug log. Prompts are recognised by a stored preset id and upgraded when the built-in preset text changes; anything hand-edited is pinned to `Custom`.
 
 When Settings is opened:
@@ -445,7 +447,7 @@ compatibility and are normalized to the same value at load/save time.
 - `asr_backend`: Active ASR backend (`local`, `baidu`, `volcengine`, `qwen`, `mimo`, `mai`, `doubao_ime`, or `qwen_free`).
 - `fallback_asr_backend`: Optional serial fallback (`none`, `local`, `baidu`, `qwen`, `mimo`, `mai`, `doubao_ime`, or `qwen_free`); it must differ from `asr_backend`. Volcengine is not a fallback target.
 - `diagnostic_audio_mode`: Shared recording diagnostics policy (`off`, `failures`, or `all`); defaults to `off` and applies to every ASR provider/stage.
-- `qwen_*`: Qwen profile selection, Beijing Audio 3 HTTP/WSS endpoints, language hints, vocabulary JSON, semantic punctuation, sentence silence, multi-threshold, heartbeat, speech-noise threshold, and chunk settings. Legacy realtime turn detection remains fixed to Manual and is not persisted.
+- `qwen_*`: Qwen profile selection, Beijing Audio 3 HTTP/WSS endpoints, language hints, vocabulary JSON, semantic punctuation, sentence silence, multi-threshold, heartbeat, speech-noise threshold, and chunk settings. Context enhancement is three independent switches — `qwen_enable_input_context` (focused input field), `qwen_history_context` with `qwen_history_context_rounds` (recent final transcripts from `src/core/asr_history.*`, 1–5 rounds, off by default), and the Volcano Engine equivalents `volc_enable_input_context` / `volc_enable_context` + `volc_context_history` / `volc_reuse_vocabulary`. The focused-field snapshot itself is runtime-only and never persisted. Legacy realtime turn detection remains fixed to Manual and is not persisted.
 - `qwen_free_*`: Qwen IME Free bundled `VoiceInputWrite` post-processing switches, experimental selection rewrite, local protocol diagnostics, and optional shell-directory override. Backend enablement is derived from `asr_backend` / `fallback_asr_backend`; the optional UTDID diagnostic override is DPAPI-encrypted.
 - `mimo_*`: Xiaomi MiMo ASR API key, OpenAI-compatible Base URL, model, and language (`auto`, `zh`, `en`). The API key is DPAPI-encrypted in `mimo_api_key`.
 - `mai_*`: MAI API channel (`openrouter` or `azure`), independent DPAPI-encrypted keys, Azure resource-root endpoint, and language (`auto`, `zh`, `en`, `yue`). Model IDs, OpenRouter URL, and Azure API version are fixed code constants.

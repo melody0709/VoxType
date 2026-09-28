@@ -97,6 +97,14 @@ $qwenInputContextY = Get-UiInt 'QwenInputContextY'
 $qwenInputContextX = Get-UiInt 'QwenInputContextX'
 $qwenInputContextW = Get-UiInt 'QwenInputContextW'
 $qwenInputContextHintY = Get-UiInt 'QwenInputContextHintY'
+$qwenHistoryContextY = Get-UiInt 'QwenHistoryContextY'
+$qwenHistoryContextX = Get-UiInt 'QwenHistoryContextX'
+$qwenHistoryContextW = Get-UiInt 'QwenHistoryContextW'
+$qwenHistoryRoundsLabelX = Get-UiInt 'QwenHistoryRoundsLabelX'
+$qwenHistoryRoundsLabelW = Get-UiInt 'QwenHistoryRoundsLabelW'
+$qwenHistoryRoundsEditX = Get-UiInt 'QwenHistoryRoundsEditX'
+$qwenHistoryRoundsEditW = Get-UiInt 'QwenHistoryRoundsEditW'
+$qwenHistoryContextHintY = Get-UiInt 'QwenHistoryContextHintY'
 $qwenAdvancedButtonY = Get-UiInt 'QwenAdvancedButtonY'
 $qwenAdvancedHintY = Get-UiInt 'QwenAdvancedHintY'
 $qwenTestBtnX = Get-UiInt 'QwenTestBtnX'
@@ -250,7 +258,14 @@ if (($qwenLanguageHintY + $qwenHintH) -gt $qwenChunkY) { throw 'Qwen language hi
 if (($qwenChunkY + $editHeight) -gt $qwenChunkHintY) { throw 'Qwen chunk row overlaps its hint line' }
 if (($qwenChunkHintY + $qwenHintH) -gt $qwenInputContextY) { throw 'Qwen chunk hint overlaps the input-context row' }
 if (($qwenInputContextY + $checkHeight) -gt $qwenInputContextHintY) { throw 'Qwen input-context row overlaps its hint line' }
-if (($qwenInputContextHintY + $qwenHintH) -gt $qwenAdvancedButtonY) { throw 'Qwen input-context hint overlaps the action row' }
+if (($qwenInputContextHintY + $qwenHintH) -gt $qwenHistoryContextY) { throw 'Qwen input-context hint overlaps the history-context row' }
+if (($qwenHistoryContextY + $checkHeight) -gt $qwenHistoryContextHintY) { throw 'Qwen history-context row overlaps its hint line' }
+if (($qwenHistoryContextHintY + $qwenHintH) -gt $qwenAdvancedButtonY) { throw 'Qwen history-context hint overlaps the action row' }
+if (($qwenHistoryContextX + $qwenHistoryContextW) -gt $workAreaRight) { throw 'Qwen history-context checkbox exceeds the Settings design width' }
+if (($qwenHistoryContextX -ne $inputLeft) -or ($qwenHistoryContextW -lt 300)) { throw 'Qwen history-context checkbox must sit on its own row in the input column with room for its label' }
+if (($qwenHistoryContextX + $qwenHistoryContextW) -gt $qwenHistoryRoundsLabelX) { throw 'Qwen history-context checkbox overlaps the Rounds label' }
+if (($qwenHistoryRoundsLabelX + $qwenHistoryRoundsLabelW) -gt $qwenHistoryRoundsEditX) { throw 'Qwen Rounds label overlaps its edit box' }
+if (($qwenHistoryRoundsEditX + $qwenHistoryRoundsEditW) -gt $workAreaRight) { throw 'Qwen Rounds edit box exceeds the Settings design width' }
 if (($qwenAdvancedButtonY + $actionButtonH) -gt $qwenAdvancedHintY) { throw 'Qwen action row overlaps its hint line' }
 if (($qwenAdvancedHintY + $qwenHintH) -gt $tabContentBottom) {
     throw "Qwen basic settings reach the tab work-area bottom: bottom=$($qwenAdvancedHintY + $qwenHintH), limit=$tabContentBottom"

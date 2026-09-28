@@ -81,7 +81,7 @@ The Resource ID corresponds to the billing method, selected when enabling the se
 
 **Limitations:**
 - Up to 500 tables per application
-- Up to 2000 hotwords per table
+- Up to 5000 hotwords per table
 - Each hotword must be under 10 characters
 - Weight range 1–10, default 4
 - No punctuation (except newlines and spaces)
@@ -165,18 +165,18 @@ Only effective in `bigmodel_nostream` mode. The parameter is not sent in other m
 
 ### 3.7 Input Field Context
 
-When `Read input field context` is checked, the current input field text is automatically read at the start of recording and sent as ASR context to improve recognition accuracy.
+When `Use focused input field text as context` is checked, the current input field text is automatically read at the start of recording and sent as ASR context to improve recognition accuracy.
 
 **How it works:**
 1. At recording start, input field text is read using a layered fallback approach
 2. Methods are tried in order: WM_GETTEXT (Edit controls) → UIA Value → TextPattern → TextPattern2 → Parent element walk → ElementFromPoint → MSAA
-3. The read text is truncated to the last 200 characters and built into the `corpus.context` field
+3. The read text is truncated to the last 200 characters (tail-first) and built into the `corpus.context` field
 4. The entire process has a 200ms timeout protection, never blocking recording startup
-5. Password fields are automatically skipped (`UIA_IsPasswordPropertyId` detection)
+5. Password fields are skipped **before any read pattern runs** (`UIA_IsPasswordPropertyId`; a classic Win32 password edit is detected from `ES_PASSWORD` without UI Automation at all). An explicit `TRUE` payload stops the whole chain — parent walk, point element and MSAA included — and clears the text, and the sender re-checks the flag as defence in depth. A recording that began in such a control is also kept out of the recognition history (see §3.10)
 
 **Context priority:**
 - When input field has text: only input field text is sent (`includeHistory=false`), avoiding duplication
-- When input field is empty: if `Use history as context` is also checked, history is used as fallback
+- When input field is empty: if `Enable history context` is also checked, history is used as fallback
 - The two switches are independent and do not depend on each other
 
 **Compatibility:**
@@ -198,6 +198,13 @@ When `Read input field context` is checked, the current input field text is auto
 
 **Hotwords and correction tables are supported in all modes.**
 
+**Shared vocabulary (`Reuse common vocabulary`)**:
+
+- When checked, `vocabulary.json` from the top-level `Vocabulary` tab is sent as the **inline hotword transfer** (`corpus.context.hotwords`) in the documented `{"word": "..."}` form.
+- **The weight only decides the order; no weight field is sent.** The official "Hotwords & Context" page (`6561/2604976`) states that the big model has "no weight concept like the small model has", and the inline `hotwords` object defines neither `scale` nor `weight`. The list is weight-ordered before truncation because the server keeps the front and truncates the tail, so the words that survive are the highest-weight ones.
+- Capacity: 100 tokens on the bidirectional path (`bigmodel`, or `bigmodel_async` without the second pass) and 5000 words otherwise (`bigmodel_nostream`, `bigmodel_async` with the second pass; the file itself caps at 2000 entries). **There is no client-side word cap** — tokens are not words (the docs suggest 30-50 short words for the 100-token budget), so any fixed count would be guesswork. Only the weight order is applied, letting the server keep the front of the list and truncate the tail by its real token budget. Sends write an `event=volc_inline_hotwords_prepared` debug log (written while the request is built, before the connection attempt, so it does not prove delivery).
+- The docs note that the inline transfer takes priority over a hotword table, and that hotwords are "effective but limited" on the bidirectional path while the non-streaming/second-pass path is "better", so prefer a `Hotwords ID` there.
+
 ### 3.9 Extra Params
 
 Click the `Edit Params` button to open an editing dialog for additional `request`-level JSON parameters.
@@ -216,19 +223,20 @@ VoxType provides two independent context sources, controlled by separate switche
 
 | Switch | Context Source | Description |
 |--------|---------------|-------------|
-| `Use history as context` | Recognition history | Sends the last N recognition results as dialog context |
-| `Read input field context` | Input field text | Reads the last 200 characters from the current input field (see §3.7) |
+| `Enable history context` (Advanced dialog, with `History turns` 1–20, default 3) | Recognition history | Sends the last N recognition results as dialog context |
+| `Use focused input field text as context` | Input field text | Reads the last 200 characters from the current input field (see §3.7) |
 
 **Context priority:**
 - When input field has text: only input field text is sent, history is not sent (avoiding duplication)
-- When input field is empty: if `Use history as context` is checked, history is used as fallback
+- When input field is empty: if `Enable history context` is checked, history is used as fallback
 - Window title is no longer sent as context (minimal ASR benefit)
 
 **History context how it works:**
-1. After each recognition completes, the result is stored in an in-memory history queue
-2. On the next recording (when input field is empty), history results are built into the `corpus.context` field
-3. Format: `{"context_type":"dialog_ctx","context_data":[{"text":"..."}]}`
-4. This JSON object is serialized as a string (inner quotes escaped) as the value of `context`
+1. Final transcripts are recorded exactly once, by `DispatchAsrFinalText()`, into the shared ring buffer in `src/core/asr_history.*`; every backend reads the same buffer and Volcano Engine no longer keeps a private queue. Only usable text is stored, so no-speech placeholders and operational errors never enter it.
+2. Privacy: a recording that started in a password control — or whose focus could not be verified — never enters that buffer, because this history can be uploaded by any context switch. The filtering therefore happens at write time (`asr_context::ShouldRecordHistory`), and a skip is logged as `reason=sensitive_focus` / `reason=focus_unknown`. "Dictated into a password box first, switch enabled later" therefore cannot leak either.
+3. On the next recording (when input field is empty), the newest `History turns` entries are ordered newest to oldest and built into the `corpus.context` field.
+4. Format: `{"context_type":"dialog_ctx","context_data":[{"text":"..."}]}`
+5. This JSON object is serialized as a string (inner quotes escaped) as the value of `context`
 
 **Limitations:**
 - Bidirectional streaming modes (`bigmodel` / `bigmodel_async`): 100 tokens

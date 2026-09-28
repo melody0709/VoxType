@@ -8,7 +8,9 @@
 #include "asr_diagnostics.h"
 #include "asr_runtime_log.h"
 #include "cloud_asr_common.h"
+#include "asr_context.h"
 #include "asr_dispatcher.h"
+#include "asr_history.h"
 #include "doubao_ime_asr.h"
 #include "doubao_ime_streaming_session.h"
 #include "qwen_streaming_session.h"
@@ -460,22 +462,79 @@ uint64_t BeginAsrAttempt(const Config& config, SelectionContext selection) {
     const uint64_t attemptId = ++g_asrAttemptSeq;
     Config attemptConfig = config;
     attemptConfig.asrAttemptId = attemptId;
+
+    // Privacy probe for the sendable recognition history. It runs for EVERY
+    // recording, not only when a context switch is already enabled: the history
+    // is a shared resource that any consumer may upload later (Qwen multi-turn,
+    // Volcano Engine dialog_ctx), so a transcript dictated into a password
+    // control must be excluded when it is written — a request-time check would
+    // miss exactly the "dictated while off, switch turned on later" case.
+    //
+    // It is started BEFORE the focused-field read below on purpose: that read can
+    // wait for its UI Automation timeout, and the probe's worker queries the
+    // focused element asynchronously. The probe captures the focus it must belong
+    // to synchronously (CaptureSensitiveFocusAnchor) and reports "focus moved"
+    // when the element no longer matches, so this is a cross-check rather than a
+    // start-of-recording snapshot. The answer is read when the transcript
+    // arrives, so nothing here delays the recording start.
+    attemptConfig.asrSensitiveProbe = input_context::BeginSensitiveFocusProbe();
+
+    // Focused-field context: gated on the focused-field switch only. Existing
+    // behaviour, unchanged.
     if (config.asrBackend == L"qwen" && config.qwenEnableInputContext &&
         (qwen_audio_profile::IsHttpModel(config.qwenModel) ||
          qwen_audio_profile::IsStreamingModel(config.qwenModel))) {
         attemptConfig.qwenInputContextSnapshotCaptured = true;
-        {
-            std::lock_guard<std::mutex> lk(g_inputContextMutex);
-            attemptConfig.qwenInputContextSnapshot =
-                qwen_context::CaptureInputFieldText(&g_inputContextResult);
-            asr_runtime_log::Write(
-                "event=input_context_snapshot captured=%d chars=%zu layer=%d timed_out=%d password=%d",
-                attemptConfig.qwenInputContextSnapshot.empty() ? 0 : 1,
-                attemptConfig.qwenInputContextSnapshot.size(),
-                g_inputContextResult.successLayer,
-                g_inputContextResult.timedOut ? 1 : 0,
-                g_inputContextResult.isPassword ? 1 : 0);
+        std::lock_guard<std::mutex> lk(g_inputContextMutex);
+        attemptConfig.qwenInputContextSnapshot =
+            qwen_context::CaptureInputFieldText(&g_inputContextResult);
+        asr_runtime_log::Write(
+            "event=input_context_snapshot captured=%d chars=%zu layer=%d timed_out=%d password=%d",
+            attemptConfig.qwenInputContextSnapshot.empty() ? 0 : 1,
+            attemptConfig.qwenInputContextSnapshot.size(),
+            g_inputContextResult.successLayer,
+            g_inputContextResult.timedOut ? 1 : 0,
+            g_inputContextResult.isPassword ? 1 : 0);
+    }
+
+    // Multi-turn context enhancement: gated on the history switch alone, so an
+    // enabled history is not silently dropped when the focused-field switch is
+    // off. Assembly happens outside the UI-context lock (asr_history and the
+    // vocabulary file). It is deliberately independent of `asrBackend`: a
+    // fallback attempt that lands on Qwen must carry the same history, and a
+    // non-Qwen attempt simply never reads these fields.
+    if (config.qwenHistoryContext) {
+        // The provider keeps five context messages, and the focused-field turn
+        // (when it has text) takes one of them.
+        size_t turnBudget = asr_context::kMaxContextTurns;
+        const bool fieldTurnPresent = !asr_context::NormalizeTurn(
+            attemptConfig.qwenInputContextSnapshot,
+            qwen_context::kMaxContextCharacters).empty();
+        if (fieldTurnPresent) --turnBudget;
+        const size_t rounds = (std::min)(
+            static_cast<size_t>((std::clamp)(config.qwenHistoryContextRounds, 1, 5)),
+            turnBudget);
+        attemptConfig.qwenContextHistoryTurns = asr_context::BuildHistoryTurns(
+            asr_history::Snapshot(), rounds, qwen_context::kMaxContextCharacters);
+        bool vocabFallback = false;
+        if (attemptConfig.qwenContextHistoryTurns.empty() && !fieldTurnPresent) {
+            // Windows where the focused text is unreadable (terminal, games,
+            // canvas editors) and no history exists yet would otherwise send no
+            // context at all; a domain word list is the provider's documented
+            // "词表" form for exactly that case.
+            const std::wstring words = vocabulary_manager::BuildVocabularyWordList(
+                vocabulary_manager::GetEffectiveVocabularyEntries(config.qwenVocabulary),
+                qwen_context::kMaxContextCharacters);
+            if (!words.empty()) {
+                attemptConfig.qwenContextHistoryTurns.push_back(words);
+                vocabFallback = true;
+            }
         }
+        asr_runtime_log::Write(
+            "event=history_context_turns turns=%zu field_turn=%d vocab_fallback=%d",
+            attemptConfig.qwenContextHistoryTurns.size(),
+            fieldTurnPresent ? 1 : 0,
+            vocabFallback ? 1 : 0);
     }
     const audio_diagnostics::AttemptMetadata diagnosticMetadata =
         asr_diagnostics::MakeAttemptMetadata(attemptConfig);

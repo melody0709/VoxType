@@ -12,6 +12,9 @@
 #include "utils.h"
 #include "config_registry.h"
 #include "vocabulary_manager.h"
+#include "asr_context.h"
+#include "asr_history.h"
+#include "input_context.h"   // sensitive-focus probe answers / fail-closed mapping
 #include "baidu_asr.h"       // ExtractJsonInt / ExtractBaiduResultText
 #include "mai_transcribe.h"
 #include "volcengine_asr.h"  // BuildExtraParamsJson
@@ -465,11 +468,11 @@ int wmain() {
                   offLoaded.qwenDisfluencyRemovalEnabled == false,
               "Audio 3.1 settings round-trip as their defaults");
     }
-    // 28) 全量 99 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 28) 全量 101 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 99, "registry total entry count is 99");
+        CHECK(reg.GetEntries().size() == 101, "registry total entry count is 101");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -530,6 +533,8 @@ int wmain() {
             "qwen_speech_noise_threshold": 0.35,
             "qwen_enable_input_context": true,
             "qwen_enable_continue_context": true,
+            "qwen_history_context": true,
+            "qwen_history_context_rounds": 4,
             "qwen_special_word_replace": "foo=bar",
             "qwen_special_word_empty": "baz",
             "qwen_system_reserved_filter": true,
@@ -627,6 +632,8 @@ int wmain() {
         CHECK(std::abs(cfg.qwenSpeechNoiseThreshold - 0.35f) < 0.001f, "legacy fixture 55: qwenSpeechNoiseThreshold");
         CHECK(cfg.qwenEnableInputContext == true, "legacy fixture 56: qwenEnableInputContext");
         CHECK(cfg.qwenEnableContinueContext == true, "legacy fixture 57: qwenEnableContinueContext");
+        CHECK(cfg.qwenHistoryContext == true, "legacy fixture: qwenHistoryContext");
+        CHECK(cfg.qwenHistoryContextRounds == 4, "legacy fixture: qwenHistoryContextRounds");
         CHECK(cfg.qwenSpecialWordReplaceList == L"foo=bar", "legacy fixture 58: qwenSpecialWordReplaceList");
         CHECK(cfg.qwenSpecialWordEmptyList == L"baz", "legacy fixture 59: qwenSpecialWordEmptyList");
         CHECK(cfg.qwenSystemReservedFilter == true, "legacy fixture 60: qwenSystemReservedFilter");
@@ -758,19 +765,24 @@ int wmain() {
 
     // Vocabulary Manager Unit & Regression Tests
     {
-        // 1. Proportional linear scaling
-        CHECK(vocabulary_manager::WeightToScale10(1) == 1, "vocab scale10 min");
-        CHECK(vocabulary_manager::WeightToScale10(25) == 5, "vocab scale10 mid");
-        CHECK(vocabulary_manager::WeightToScale10(50) == 10, "vocab scale10 max");
-
-        CHECK(std::abs(vocabulary_manager::WeightToVolcengineScale(1) - 1.0f) < 0.11f, "vocab volc scale min");
-        CHECK(std::abs(vocabulary_manager::WeightToVolcengineScale(25) - 2.0f) < 0.05f, "vocab volc scale mid");
-        CHECK(std::abs(vocabulary_manager::WeightToVolcengineScale(50) - 3.0f) < 0.01f, "vocab volc scale max");
+        // 1. Weight mapping. The shared scale is 1-5 (documented default 4) plus
+        //    50 for a super hotword: 6-49 saturate at 5 and only >= 50 becomes
+        //    super, so a bare word can never consume one of the 50 super slots.
+        CHECK(vocabulary_manager::IsSuperHotword(50), "vocab weight 50 is super");
+        CHECK(vocabulary_manager::IsSuperHotword(100), "vocab saturated weight is super");
+        CHECK(!vocabulary_manager::IsSuperHotword(49), "vocab weight 49 is not super");
+        CHECK(!vocabulary_manager::IsSuperHotword(5), "vocab weight 5 is not super");
+        CHECK(vocabulary_manager::kOrdinaryWeightDefault == 4,
+              "vocab documents 4 as the ordinary default");
 
         CHECK(vocabulary_manager::WeightToQwen(50) == 50, "vocab qwen weight 50 -> 50");
-        CHECK(vocabulary_manager::WeightToQwen(10) == 50, "vocab qwen weight 10 -> 50");
+        CHECK(vocabulary_manager::WeightToQwen(100) == 50, "vocab qwen saturated weight -> 50");
+        CHECK(vocabulary_manager::WeightToQwen(49) == 5, "vocab qwen weight 49 saturates at 5");
+        CHECK(vocabulary_manager::WeightToQwen(10) == 5, "vocab qwen weight 10 stays an ordinary hotword");
         CHECK(vocabulary_manager::WeightToQwen(5) == 5, "vocab qwen weight 5 -> 5");
+        CHECK(vocabulary_manager::WeightToQwen(4) == 4, "vocab qwen recommended default stays 4");
         CHECK(vocabulary_manager::WeightToQwen(2) == 2, "vocab qwen weight 2 -> 2");
+        CHECK(vocabulary_manager::WeightToQwen(0) == 1, "vocab qwen non-positive weight clamps to 1");
 
         // 2. Validation
         CHECK(vocabulary_manager::IsValidTerm(L"张启明"), "vocab valid chinese term");
@@ -812,7 +824,9 @@ int wmain() {
             CHECK(parsedLines->size() == 3, "vocab parse lines count 3");
             CHECK((*parsedLines)[0].word == L"李悦宁" && (*parsedLines)[0].weight == 50, "line entry 1");
             CHECK((*parsedLines)[1].word == L"王协宁" && (*parsedLines)[1].weight == 20, "line entry 2");
-            CHECK((*parsedLines)[2].word == L"Claude" && (*parsedLines)[2].weight == 50, "line entry 3 default weight");
+            CHECK((*parsedLines)[2].word == L"Claude" &&
+                      (*parsedLines)[2].weight == vocabulary_manager::kOrdinaryWeightDefault,
+                  "a bare line entry uses the ordinary default weight (4)");
         }
 
         // 5. Transpilation to Qwen (including 50 super-priority cap)
@@ -841,21 +855,63 @@ int wmain() {
         CHECK(count50 == 50, "vocab qwen max 50 super-priorities capped at 50");
         CHECK(count5 == 10, "vocab qwen excess capped down to 5");
 
-        // 6. Transpilation to Volcengine hotwords & context
-        vocabulary_manager::VocabularyList volcEntries = {
-            { L"张启明", 50 },
-            { L"张启星", 25 }
+        // The caps must go to the user's most important words, not to whichever
+        // words happen to sit at the end of the file.
+        vocabulary_manager::VocabularyList ordered = {
+            { L"低权重", 1 },
+            { L"次高权重", 5 },
+            { L"最高权重", 50 },
         };
-        std::string volcHotwords = vocabulary_manager::TranspileToVolcengineHotwordsJson(volcEntries);
-        CHECK(volcHotwords.find("\"scale\":3.0") != std::string::npos, "volc hotwords scale 3.0");
-        CHECK(volcHotwords.find("\"scale\":2.0") != std::string::npos, "volc hotwords scale 2.0");
+        const std::wstring orderedJson =
+            Utf8ToWide(vocabulary_manager::TranspileToQwenJson(ordered));
+        CHECK(orderedJson.find(L"\"最高权重\":50") != std::wstring::npos,
+              "the highest-weight entry keeps a super slot regardless of file order");
+        CHECK(orderedJson.find(L"\"最高权重\":") < orderedJson.find(L"\"低权重\":"),
+              "qwen vocabulary is emitted highest weight first");
+        CHECK(vocabulary_manager::TranspileToQwenJson({}).empty(),
+              "an empty vocabulary emits no JSON object");
 
+        // 6. Transpilation to Volcengine context. The sample is deliberately
+        // ASCENDING in file order, so only real weight sorting can produce the
+        // descending output asserted below.
+        vocabulary_manager::VocabularyList volcEntries = {
+            { L"第三词", 4 },
+            { L"张启星", 25 },
+            { L"张启明", 50 },
+        };
         std::wstring ctxJson = vocabulary_manager::BuildVolcengineContextJson(
-            volcEntries, L"hello input", { L"history turn 1" });
+            volcEntries, L"hello input", { L"older turn", L"newer turn" });
         CHECK(ctxJson.find(L"\"hotwords\":[") != std::wstring::npos, "volc context has hotwords");
+        CHECK(ctxJson.find(L"{\"word\":\"张启明\"}") != std::wstring::npos,
+              "volc inline hotwords use the documented word-only object");
+        CHECK(ctxJson.find(L"\"scale\"") == std::wstring::npos,
+              "volc inline hotwords carry no undocumented weight/scale field");
+        CHECK(ctxJson.find(L"{\"word\":\"张启明\"") != std::wstring::npos &&
+                  ctxJson.find(L"{\"word\":\"张启星\"") != std::wstring::npos &&
+                  ctxJson.find(L"{\"word\":\"第三词\"") != std::wstring::npos,
+              "volc context emits every inline hotword");
+        // Ordering is the only weight lever the provider offers: it keeps the
+        // front of the list and truncates the tail, so the important words must
+        // come first.
+        CHECK(ctxJson.find(L"{\"word\":\"张启明\"") < ctxJson.find(L"{\"word\":\"张启星\"") &&
+                  ctxJson.find(L"{\"word\":\"张启星\"") < ctxJson.find(L"{\"word\":\"第三词\""),
+              "volc inline hotwords are ordered by weight for the server-side tail cut");
         CHECK(ctxJson.find(L"\"context_type\":\"dialog_ctx\"") != std::wstring::npos, "volc context has dialog_ctx");
         CHECK(ctxJson.find(L"\"text\":\"hello input\"") != std::wstring::npos, "volc context has input text");
-        CHECK(ctxJson.find(L"\"text\":\"history turn 1\"") != std::wstring::npos, "volc context has history");
+        CHECK(ctxJson.find(L"\"text\":\"hello input\"") < ctxJson.find(L"\"text\":\"newer turn\"") &&
+                  ctxJson.find(L"\"text\":\"newer turn\"") < ctxJson.find(L"\"text\":\"older turn\""),
+              "volc context_data is newest-first with the field text as the current turn");
+        CHECK(vocabulary_manager::BuildVolcengineContextJson({}).empty(),
+              "an empty context produces no corpus payload");
+
+        // 6b. Vocabulary word list used as the focused-field fallback
+        const std::wstring wordList = vocabulary_manager::BuildVocabularyWordList(
+            { { L"低", 1 }, { L"高优先级词", 50 }, { L"中", 25 } }, 64);
+        CHECK(wordList.find(L"高优先级词 中 低") == 0,
+              "the vocabulary word list keeps weight order");
+        CHECK(wordList.size() <= 64, "the vocabulary word list respects its character budget");
+        CHECK(vocabulary_manager::BuildVocabularyWordList({ { L"甲", 4 } }, 0).empty(),
+              "a zero-character budget yields an empty word list");
 
         // 7. Transpilation to Sherpa-onnx
         std::string sherpaHotwords = vocabulary_manager::TranspileToSherpaHotwords(volcEntries);
@@ -931,6 +987,198 @@ int wmain() {
               "the highest-weight entry survives the cap");
         CHECK(capped.find(L"（已截断）") != std::wstring::npos,
               "an over-budget vocabulary is marked as truncated");
+    }
+
+    // Shared recognition history and multi-turn context assembly
+    {
+        asr_history::Clear();
+        CHECK(asr_history::Size() == 0, "a cleared recognition history is empty");
+
+        asr_history::Add(L"第一句");
+        asr_history::Add(L"第二句");
+        CHECK(asr_history::Size() == 2, "recognition history counts its rounds");
+        asr_history::Add(L"");
+        CHECK(asr_history::Size() == 2, "an empty transcript is not recorded");
+
+        const auto newestOnly = asr_context::BuildHistoryTurns(asr_history::Snapshot(), 1, 400);
+        CHECK(newestOnly.size() == 1 && newestOnly[0] == L"第二句",
+              "a one-round budget keeps the newest transcript");
+
+        for (size_t i = 0; i < asr_history::kMaxRetainedRounds + 5; ++i) {
+            asr_history::Add(L"轮" + std::to_wstring(i));
+        }
+        CHECK(asr_history::Size() == asr_history::kMaxRetainedRounds,
+              "the recognition history never exceeds its retained-round cap");
+
+        const auto threeRounds = asr_context::BuildHistoryTurns(asr_history::Snapshot(), 3, 400);
+        CHECK(threeRounds.size() == 3 && threeRounds.back() == L"轮24",
+              "a three-round budget keeps the three newest transcripts");
+        const auto fiveRounds = asr_context::BuildHistoryTurns(asr_history::Snapshot(), 5, 400);
+        CHECK(fiveRounds.size() == 5 && fiveRounds.front() == L"轮20" &&
+                  fiveRounds.back() == L"轮24",
+              "context turns are ordered oldest first");
+
+        // Head vs tail discriminator: repeated characters cannot tell the two
+        // apart, so the sample changes halfway through.
+        const std::wstring headAndTail = std::wstring(100, L'甲') + std::wstring(500, L'乙');
+        const auto tailCapped = asr_context::BuildHistoryTurns({ headAndTail }, 1, 400);
+        CHECK(tailCapped.size() == 1 && tailCapped[0].size() == 400 &&
+                  tailCapped[0].find(L'甲') == std::wstring::npos &&
+                  tailCapped[0].find(L'乙') != std::wstring::npos,
+              "a capped turn keeps the text closest to the caret (tail), not the head");
+
+        // Provider window: five context messages, oldest dropped first, blanks
+        // never consume a slot.
+        const auto windowed = asr_context::ClampTurns(
+            { L"一", L"二", L"三", L"四", L"五", L"六" },
+            asr_context::kMaxContextTurns, 400);
+        CHECK(windowed.size() == asr_context::kMaxContextTurns &&
+                  windowed.front() == L"二" && windowed.back() == L"六",
+              "the context window keeps the newest five turns in oldest-first order");
+        const auto blanksDropped = asr_context::ClampTurns({ L"", L"有", L"   " }, 5, 400);
+        CHECK(blanksDropped.size() == 1 && blanksDropped[0] == L"有",
+              "blank context turns are dropped instead of consuming the window");
+        CHECK(asr_context::ClampTurns({ L"甲" }, 0, 400).empty(),
+              "a zero-turn window yields no turns");
+
+        CHECK(asr_context::BuildHistoryTurns(asr_history::Snapshot(), 0, 400).empty(),
+              "a zero-round budget yields no history turns");
+
+        // Sendable-history policy: usable text alone is not enough. A recording
+        // that started in a sensitive control must be excluded at write time,
+        // because the history can be uploaded later by any context consumer.
+        CHECK(asr_context::ShouldRecordHistory(true, false),
+              "usable text is recorded when the recording was not sensitive");
+        CHECK(!asr_context::ShouldRecordHistory(true, true),
+              "a transcript from a sensitive control is never recorded");
+        CHECK(!asr_context::ShouldRecordHistory(false, false),
+              "operational text is never recorded");
+        CHECK(!asr_context::ShouldRecordHistory(false, true),
+              "an operational transcript from a sensitive control is never recorded");
+
+        // The actual keep/discard decision reads the raw probe answer, and it is
+        // fail-closed: only an explicit "safe" answer may record. An unverified
+        // focus (and a missing probe) refuses the write, because leaving the
+        // transcript in an uploadable history is the higher risk; the skip is
+        // logged as reason=focus_unknown.
+        CHECK(!input_context::MustSkipHistoryForFocus(
+                  std::make_shared<std::atomic<int>>(input_context::kSensitiveProbeSafe)),
+              "only an explicit safe answer permits recording");
+        const int mustSkip[] = {
+            input_context::kSensitiveProbeSensitive,
+            input_context::kSensitiveProbeUnknownNotStarted,
+            input_context::kSensitiveProbeUnknownProbeBusy,
+            input_context::kSensitiveProbeUnknownUiaUnavailable,
+            input_context::kSensitiveProbeUnknownNoFocusedElement,
+            input_context::kSensitiveProbeUnknownNoHandle,
+            input_context::kSensitiveProbeUnknownFocusMoved,
+            input_context::kSensitiveProbeUnknownNoProbe,
+            input_context::kSensitiveProbeUnknownNoStartFocus,
+            input_context::kSensitiveProbeUnknownPasswordQuery,
+        };
+        for (int answer : mustSkip) {
+            const std::string label = std::string("probe answer ") +
+                input_context::SensitiveFocusAnswerName(answer) +
+                " must refuse the history write";
+            CHECK(input_context::MustSkipHistoryForFocus(
+                      std::make_shared<std::atomic<int>>(answer)),
+                  label.c_str());
+        }
+        CHECK(input_context::MustSkipHistoryForFocus(nullptr),
+              "a recording without a probe is treated as unverified");
+        CHECK(input_context::SensitiveFocusAnswer(nullptr) ==
+                  input_context::kSensitiveProbeUnknownNoProbe,
+              "a missing probe reports unknown_no_probe, not sensitive");
+
+        // The UIA password property is tri-state: only an explicit boolean false
+        // may ever become Safe, so a control whose password state cannot be read
+        // is never recorded.
+        VARIANT boolTrue;
+        VariantInit(&boolTrue);
+        boolTrue.vt = VT_BOOL;
+        boolTrue.boolVal = VARIANT_TRUE;
+        VARIANT boolFalse;
+        VariantInit(&boolFalse);
+        boolFalse.vt = VT_BOOL;
+        boolFalse.boolVal = VARIANT_FALSE;
+        VARIANT noValue;
+        VariantInit(&noValue);
+
+        CHECK(input_context::PasswordQueryState(S_OK, boolTrue) ==
+                  input_context::kPasswordQueryPassword,
+              "an explicit true reads as a password control");
+        CHECK(input_context::PasswordQueryState(S_OK, boolFalse) ==
+                  input_context::kPasswordQueryNotPassword,
+              "an explicit false reads as not a password control");
+        CHECK(input_context::PasswordQueryState(E_FAIL, noValue) ==
+                  input_context::kPasswordQueryFailed,
+              "a failed property read is not 'not a password control'");
+        CHECK(input_context::PasswordQueryState(S_OK, noValue) ==
+                  input_context::kPasswordQueryFailed,
+              "a property read without a boolean value is undecidable");
+        CHECK(input_context::PasswordQueryState(S_FALSE, boolFalse) ==
+                  input_context::kPasswordQueryFailed,
+              "a non-S_OK property result is undecidable even with a false payload");
+        VARIANT nonCanonicalBool;
+        VariantInit(&nonCanonicalBool);
+        nonCanonicalBool.vt = VT_BOOL;
+        nonCanonicalBool.boolVal = 1;
+        CHECK(input_context::PasswordQueryState(S_OK, nonCanonicalBool) ==
+                  input_context::kPasswordQueryFailed,
+              "a non-canonical VARIANT_BOOL is undecidable");
+
+        // The text reader stops on the payload alone: a contradictory status must
+        // not turn an explicit password signal back into "keep reading".
+        CHECK(input_context::PasswordPayloadIsTrue(boolTrue),
+              "an explicit TRUE payload is a password signal");
+        CHECK(!input_context::PasswordPayloadIsTrue(boolFalse),
+              "an explicit FALSE payload is not a password signal");
+        CHECK(!input_context::PasswordPayloadIsTrue(nonCanonicalBool),
+              "a non-canonical payload is not an explicit password signal");
+        CHECK(!input_context::PasswordPayloadIsTrue(noValue),
+              "an empty payload is not a password signal");
+
+        CHECK(input_context::SensitiveProbeAnswerFromUia(
+                  input_context::kPasswordQueryFailed, false, false) ==
+                  input_context::kSensitiveProbeUnknownPasswordQuery,
+              "an undecidable password read must never become safe");
+        CHECK(input_context::SensitiveProbeAnswerFromUia(
+                  input_context::kPasswordQueryPassword, false, false) ==
+                  input_context::kSensitiveProbeSensitive,
+              "an explicit password hit is conclusive without a window handle");
+        CHECK(input_context::SensitiveProbeAnswerFromUia(
+                  input_context::kPasswordQueryNotPassword, true, true) ==
+                  input_context::kSensitiveProbeSafe,
+              "safe needs an explicit false and a matching anchor window");
+        CHECK(input_context::SensitiveProbeAnswerFromUia(
+                  input_context::kPasswordQueryNotPassword, false, false) ==
+                  input_context::kSensitiveProbeUnknownNoHandle,
+              "a missing window handle cannot be cross-checked");
+        CHECK(input_context::SensitiveProbeAnswerFromUia(
+                  input_context::kPasswordQueryNotPassword, true, false) ==
+                  input_context::kSensitiveProbeUnknownFocusMoved,
+              "an element outside the anchored window is not safe");
+
+        // Without a focused control at recording start there is nothing to
+        // cross-check the asynchronous query against, so it cannot be Safe.
+        CHECK(input_context::InitialSensitiveProbeAnswer(true, false, false) ==
+                  input_context::kSensitiveProbeUnknownNoStartFocus,
+              "no focused control at recording start means unknown");
+        CHECK(input_context::InitialSensitiveProbeAnswer(false, false, false) ==
+                  input_context::kSensitiveProbeUnknownNoFocusedElement,
+              "no foreground window means unknown");
+        CHECK(input_context::InitialSensitiveProbeAnswer(true, true, true) ==
+                  input_context::kSensitiveProbeSensitive,
+              "a Win32 password edit is decisive");
+        CHECK(input_context::InitialSensitiveProbeAnswer(true, true, false) ==
+                  input_context::kSensitiveProbeUnknownNotStarted,
+              "a complete anchor lets the UI Automation worker run");
+        VariantClear(&boolTrue);
+        VariantClear(&boolFalse);
+        VariantClear(&noValue);
+        VariantClear(&nonCanonicalBool);
+
+        asr_history::Clear();
     }
 
     // 12. Scheme A: AsrBackendDisplayName hierarchical (Provider / Model) tests

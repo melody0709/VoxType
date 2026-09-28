@@ -6,7 +6,9 @@
 
 #include <string>
 #include <vector>
+#include <atomic>
 #include <cstdint>
+#include <memory>
 
 #ifndef AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
 #define AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
@@ -126,6 +128,27 @@ struct Config {
     bool qwenEnableInputContext = false;
     std::wstring qwenInputContextSnapshot;
     bool qwenInputContextSnapshotCaptured = false;
+    // Opt-in multi-turn context enhancement: recent recognition results (and the
+    // vocabulary as a domain word list when nothing else is available) are sent
+    // as extra user turns. Off by default because it forwards previous
+    // transcripts to the cloud, exactly like volcEnableContext.
+    bool qwenHistoryContext = false;
+    int qwenHistoryContextRounds = 3;
+    // Runtime only (never persisted): the sensitive-control probe started before
+    // the focused-field read of this recording
+    // (input_context::BeginSensitiveFocusProbe). Its answer is read when the final
+    // transcript is recorded, because the history is sendable to the cloud and a
+    // transcript dictated into a password control must never enter it — not even
+    // later, after the user enables a context feature. The mapping is
+    // fail-closed (input_context::MustSkipHistoryForFocus): an unverified focus
+    // also refuses the write, which only costs later context enhancement.
+    // Shared ownership is intentional: Config is copied by value into every
+    // session/attempt snapshot and must keep observing one answer.
+    std::shared_ptr<std::atomic<int>> asrSensitiveProbe;
+    // Runtime only (never persisted): the turns assembled for this attempt,
+    // oldest first. The focused-field text travels separately in
+    // qwenInputContextSnapshot so the continue-task refresh can keep the history.
+    std::vector<std::wstring> qwenContextHistoryTurns;
     uint64_t asrAttemptId = 0;
     std::wstring mimoApiKey;
     std::wstring mimoBaseUrl = L"https://api.xiaomimimo.com/v1";

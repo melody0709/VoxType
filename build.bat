@@ -152,8 +152,12 @@ if errorlevel 1 exit /b !ERRORLEVEL!
 call :write_layout_readme
 
 if "!VOXTYPE_TEST_MODE!"=="1" (
+    rem asr_audio_replay is BUILT here (never run): it stays EXCLUDE_FROM_ALL for
+    rem the normal build, but linking it in the test gate keeps the developer-only
+    rem replay target from rotting silently. It was unlinkable for a whole
+    rem refactor cycle before 2026-09-28 because nothing verified it.
     echo Building offline protocol/request regression tests...
-    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test
+    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test asr_audio_replay
     if errorlevel 1 exit /b !ERRORLEVEL!
     set "VOXTYPE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_free_protocol_test.exe"
     if not exist "!VOXTYPE_TEST_EXE!" (

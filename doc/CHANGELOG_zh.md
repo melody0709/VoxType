@@ -17,6 +17,29 @@
   - **3.1 专属参数接入**：新增 `vad_model`（仅 3.1 流式，可在近场 `near_meeting_16k` 与默认远场 `far_field_meeting_16k` 之间切换）与 `keep_dialect`（3.1 全代次，保留方言表达而非转写为普通话）。两者在 Qwen 高级设置中可调，并按模型代次门控发送——3.0 请求保持原样，协议层已加入回归测试。
   - **一手文档沉淀**：通过本地 CDP 调试通道直连百炼控制台实地取证，归档调研报告于 `.plan/feat/QWEN_AUDIO_3_1_ASR_INTEGRATION_PLAN.md` 并整合成技术规范 `doc/qwen/Qwen-Audio-3.x-ASR.md`。
 
+### 热词与上下文增强
+
+- **热词权重语义跨后端统一**（调研报告：`.plan/feat/QWEN_HOTWORDS_AND_CONTEXT_RESEARCH.md`，结论经百炼与火山引擎在线文档逐条复核）：
+  - 共享权重语义收敛为 `1–5` 普通热词（官方推荐起始值 `4`）+ `50` 超级热词；新增 `IsSuperHotword()` 作为唯一判据，转写层、Vocabulary 页状态栏与单测共用同一份定义。
+  - 未显式填写权重的词条默认值由 `50` 改为 `4`：裸词不再吃满 50 个超级热词配额，也不再触发官方警示的"发音相近词被过度纠偏"。`WeightToQwen()` 只把 `>= 50` 映射为超级热词（`6–49` 饱和到普通 `5`），输出恒在 `{1..5, 50}` 内，与 `qwen_audio_json::IsValidVocabulary` 的不可重试硬校验保持一致。
+  - `TranspileToQwenJson()` 与火山内联热词列表**先按权重降序稳定排序、再做 50 超级 / 2000 条截断**，写在词表末尾的高权重词不会再被降级或丢弃。
+  - 火山 `context_data` 改为**从新到旧**输出（焦点输入框文本作为当前轮），与官方文档一致。
+  - **火山引擎文档未定义热词权重**：官方《热词与上下文》（`6561/2604976`）称大模型"没有类似小模型的权重概念"，内联格式只有 `{"word": "..."}`。因此**删除** `"scale"` 字段与 `WeightToVolcengineScale()`——没有任何文档定义该字段，且官方明确否认存在权重概念。（这是**文档论证，不是实测**：旧版本里服务端是忽略还是未被消费过 `scale` 从未验证。）
+  - 共享权重在火山链路只用于**排序**——这是该链路唯一存在的杠杆：服务端"从前往后保留、末尾按 token 截断"（双向流式 100 tokens / 非流式 5000 词）。**不做固定条数的客户端裁剪**：token 与词数不是一回事，只有排序是可辩护的策略。每次组装请求写 `event=volc_inline_hotwords_prepared`（它在建请求体阶段记录，早于连接尝试，**不能**作为"服务端已收到"的证据）。
+  - 删除重复且从未被生产使用的 `WeightToScale10()` / `TranspileToVolcengineHotwordsJson()`，避免误以为 1–10 权重通道已生效。
+- **Qwen 可选多轮上下文增强**：
+  - 新增 `src/core/asr_history.*` 全局识别历史环形缓冲（20 轮），在共享的 `DispatchAsrFinalText()` 出口**每轮只记录一次**，所有后端共同贡献、不会重复计数；火山会话内的私有 `g_volcRecognitionHistory` 队列随之移除并改读共享历史。
+  - 新增 `src/asr/asr_context.*` 负责上下文轮次装配：取最近 `qwen_history_context_rounds`（1–5）轮识别结果（旧→新排列），每轮按**尾部**截到官方 400 字符上限，再追加焦点输入框轮；当输入框与历史都没有文本时改用词表作为领域词表（官方文档记载的"词表"形态），使终端/游戏/Canvas 等取不到文本的窗口也能获得上下文。
+  - **两个上下文开关相互独立**：`qwen_history_context` 不再依赖 `qwen_enable_input_context`（此前的嵌套会让历史选项单独开启时静默失效），并且历史装配不再受主后端限制，**Qwen fallback 尝试同样携带历史**。
+  - Qwen 流式 `input.context` 与非实时 `input.messages` 现在发送 `[历史轮…, 字段轮]`；由于官方只保留**最近 5 条**上下文消息，焦点字段轮会在有文本时占一个名额，两个报文构造器都用 `asr_context::ClampTurns` 把数组收敛到 5 条。`continue-task` 刷新只替换字段轮，不再整段清空历史。
+  - 新增配置项 `qwen_history_context`（默认关闭——会把历史转写送往云端，隐私口径与 `volcEnableContext` 一致）与 `qwen_history_context_rounds`（默认 3，钳制 1–5），在 Qwen 面板独占一行并使用单行可读的提示文案，纳入 DPI 布局校验脚本断言。
+  - 上下文截断统一为**保尾部**（含 `qwen_context::SanitizeText`），消除此前"读层保尾、发层保头"的语义矛盾。
+- **隐私：密码框里的口述内容不会进入可发送的识别历史**。敏感控件探测（`input_context::BeginSensitiveFocusProbe`：Win32 `ES_PASSWORD` 同步 + UI Automation `IsPassword` 异步）现在**每次录音都执行**，且**排在焦点字段读取之前**（该读取最长等 200 ms，探测会在工作线程里核对自己在录音开始时捕获的焦点），答案随 attempt 传递。判定为 fail-closed 且作用在**写入时**：`input_context::MustSkipHistoryForFocus()` + `asr_context::ShouldRecordHistory()`，只有明确 `safe` 才记录。所有未核实的结果一律拒绝并记 `reason=focus_unknown answer=<原因>`（命中密码记 `reason=sensitive_focus`）：焦点已移走、元素无窗口句柄、UIA 不可用、录音开始时没有焦点控件，以及**密码属性读取失败或返回非布尔值**——因为只有明确的 `false` 才能读作"不是密码控件"。跳过历史只影响后续上下文增强，本次识别与上屏不受影响。**保证边界**：核对是 HWND 级的，同一窗口内两个元素之间的切换（浏览器密码框→普通框共用渲染窗口句柄）无法区分；这个缺口正是探测要尽早启动的原因。最初实现的"准备请求时过滤"留了两条可达路径：关着开关在密码框口述、之后开启开关；以及火山读取同一份共享历史。此外 UIA 读取链一旦发现密码控件即终止（父元素遍历 / 坐标点元素 / MSAA 全部不再继续）并清空文本，火山发送层再自查一次标记作为纵深防御；两个 UIA 操作的单飞守卫都改由工作线程释放（超时返回不再释放）。读 `UIA_IsPasswordPropertyId` 的两条路径**刻意采用不同规则**，且都拆成可单测的纯函数：**取字链**只看载荷（明确 `TRUE` 即停止，忽略 HRESULT，矛盾状态不得把密码信号变回"继续读"），**敏感探测**只认 `S_OK` + 规范布尔值、其余一律 Unknown。
+- **实跑验证（2026-09-28，真实凭据 + 回放工具）**：301 条内联词表在 `bigmodel` 下被接受、不报错，且权重排序在真实请求里可观测；`bigmodel` 下的 `dialog_ctx` 请求**被接受**但该样本**未观察到效果**（与无上下文基线逐字相同，与官方"N/A"一致——"该模式一定忽略"属于超出证据的推断），而同一段音频在 `bigmodel_nostream` 下**不带任何热词/上下文就已识别正确**——因此该样本无法证明 nostream 侧的增益（早前一度把纠正归功于热词，已被这条对照推翻）。Qwen 多轮上下文在 HTTP 批量与 `/api-ws/v1/inference` 两条链路上均被接受，且是在**焦点字段开关关闭**的情况下，这正是"开关独立"修复的实跑证据。证据文件、命令与"明确不可观测"的部分记入调研报告 §8。
+- **开发工具**：`tools/asr_audio_replay`（唯一把 WAV 走生产云端 session 的回放工具）在模块重构后**已无法链接**——它重复定义了 `app_state`/`audio_capture`/`streaming_vad_trimmer`/`engine_local` 已拥有的全局量且缺少 `asr_metrics.cpp`。现已修复，并新增 `--context-rounds` 诊断注入；`build.bat --test` 会构建它（不运行）以防再次在守卫之外静默腐烂。
+- **验证**：`asr_json_protocol_test` 新增权重映射、权重排序、词表列表、历史缓冲、5 条消息窗口与"保头/保尾"判别样本断言；`qwen_audio_json_test` 新增多轮 `input.context` / `input.messages`、5 条窗口、保留历史的 `continue-task`，以及一条**精确单轮片段断言**证明历史关闭时报文形状不变；`build.bat --test` 全绿，17 项架构守卫与 DPI 布局校验一并通过。
+- **文档勘误**：修正火山引擎词表上限（每张词表 5000 个热词，非 2000），并在 `doc/volcengine/volcengine_asr_guide_zh.md` 与 `volcengine_asr_guide.md` 中记录"内联热词无权重字段"的官方契约。官方速查表"双向流式上下文容量 = N/A"与流式 API 文档"800 tokens / 20 轮"的表述冲突，已作为开放问题记入调研报告。
+
 ## v0.11.2 (2026-09-25)
 
 ### 功能改进

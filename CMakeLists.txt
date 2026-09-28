@@ -44,6 +44,7 @@ add_executable(VoxType WIN32
     src/core/debug_logger.cpp
     src/core/config_store.cpp
     src/core/config_registry.cpp
+    src/core/asr_history.cpp
     src/core/vocabulary_manager.cpp
     src/core/asr_probe_service.cpp
     src/core/app_state.cpp
@@ -58,6 +59,7 @@ add_executable(VoxType WIN32
     src/asr/asr_session.cpp
     src/asr/asr_diagnostics.cpp
     src/asr/asr_result.cpp
+    src/asr/asr_context.cpp
     src/asr/asr_dispatcher.cpp
     src/asr/asr_runtime_log.cpp
     src/asr/cloud_asr_common.cpp
@@ -192,6 +194,7 @@ add_executable(qwen_audio_json_test
     src/asr/qwen_asr.cpp
     src/asr/qwen_audio_http.cpp
     src/asr/qwen_audio_streaming.cpp
+    src/asr/asr_context.cpp
     src/asr/winhttp_websocket_transport.cpp
     src/asr/cloud_asr_common.cpp
     src/asr/cloud_http_common.cpp
@@ -248,8 +251,10 @@ add_executable(asr_json_protocol_test
     tests/asr_json_protocol_test.cpp
     src/audio/audio_diagnostics.cpp
     src/asr/asr_result.cpp
+    src/asr/asr_context.cpp
     src/asr/cloud_http_common.cpp
     src/asr/mai_transcribe.cpp
+    src/core/asr_history.cpp
     src/core/config_registry.cpp
     src/core/path_service.cpp
     src/core/vocabulary_manager.cpp
@@ -336,6 +341,8 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/core/debug_logger.cpp
     src/core/config_store.cpp
     src/core/config_registry.cpp
+    src/core/app_state.cpp
+    src/core/asr_history.cpp
     src/core/vocabulary_manager.cpp
     src/audio/audio_capture.cpp
     src/audio/audio_chunk_sink.cpp
@@ -348,6 +355,7 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/asr/asr_session.cpp
     src/asr/asr_diagnostics.cpp
     src/asr/asr_result.cpp
+    src/asr/asr_context.cpp
     src/asr/asr_dispatcher.cpp
     src/asr/asr_runtime_log.cpp
     src/asr/cloud_asr_common.cpp
@@ -369,6 +377,7 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/asr/qwen_free_proto_unet.cpp
     src/asr/volcengine_net_diag.cpp
     src/asr/volcengine_streaming_session.cpp
+    src/asr/asr_metrics.cpp
 )
 target_compile_definitions(asr_audio_replay PRIVATE UNICODE _UNICODE)
 target_include_directories(asr_audio_replay PRIVATE

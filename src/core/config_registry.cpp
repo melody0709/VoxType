@@ -320,6 +320,8 @@ void InitializeRegistry() {
     reg.Register({"qwen_speech_noise_threshold", &Config::qwenSpeechNoiseThreshold, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"qwen_enable_input_context", &Config::qwenEnableInputContext, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"qwen_enable_continue_context", &Config::qwenEnableContinueContext, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"qwen_history_context", &Config::qwenHistoryContext, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"qwen_history_context_rounds", &Config::qwenHistoryContextRounds});
     reg.Register({"qwen_special_word_replace", &Config::qwenSpecialWordReplaceList});
     reg.Register({"qwen_special_word_empty", &Config::qwenSpecialWordEmptyList});
     reg.Register({"qwen_system_reserved_filter", &Config::qwenSystemReservedFilter, CryptoPolicy::None, BoolJsonFormat::Literal});

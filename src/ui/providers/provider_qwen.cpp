@@ -114,6 +114,26 @@ void ProviderQwen::CreateControls(HWND parent) {
                          L"Sends up to 400 chars of focused input text.");
     AddQwenAudio3Control(control);
 
+    // Multi-turn context enhancement sits on its own row: it forwards previous
+    // transcripts (and, when nothing else is readable, the vocabulary) so it
+    // must stay a separate, explicit opt-in from the focused-field switch.
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenHistoryContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"History ctx");
+    AddQwenAudio3Control(control);
+    HWND qwenHistoryContext = CreateCheckBox(parent, IDC_QWEN_HISTORY_CONTEXT,
+                                             S(UiStyle::QwenHistoryContextX), S(UiStyle::QwenHistoryContextY), S(UiStyle::QwenHistoryContextW), S(UiStyle::CheckH),
+                                             L"Use recent recognition results");
+    AddQwenAudio3Control(qwenHistoryContext);
+    control = CreateLabel(parent, S(UiStyle::QwenHistoryRoundsLabelX), S(UiStyle::QwenHistoryContextY) + S(UiStyle::LabelYOffset), S(UiStyle::QwenHistoryRoundsLabelW), S(UiStyle::LabelH), L"Rounds");
+    AddQwenAudio3Control(control);
+    HWND qwenHistoryRounds = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                                             S(UiStyle::QwenHistoryRoundsEditX), S(UiStyle::QwenHistoryContextY), S(UiStyle::QwenHistoryRoundsEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_HISTORY_ROUNDS)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(qwenHistoryRounds);
+    AddQwenAudio3Control(qwenHistoryRounds);
+    control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenHistoryContextHintY),
+                         S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
+                         L"Sends recent recognition results as context.");
+    AddQwenAudio3Control(control);
+
     control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenAdvancedButtonY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Advanced");
     AddQwenAudio3Control(control);
     HWND btnAdv = CreateButton(parent, IDC_QWEN_ADVANCED,
@@ -234,6 +254,9 @@ void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_LANGUAGE_HINTS), cfg.qwenLanguageHints.c_str());
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_CHUNK_MS), std::to_wstring(cfg.qwenChunkMs).c_str());
     Button_SetCheck(GetDlgItem(parent, IDC_QWEN_INPUT_CONTEXT), cfg.qwenEnableInputContext ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(parent, IDC_QWEN_HISTORY_CONTEXT), cfg.qwenHistoryContext ? BST_CHECKED : BST_UNCHECKED);
+    SetWindowTextW(GetDlgItem(parent, IDC_QWEN_HISTORY_ROUNDS),
+                   std::to_wstring(std::clamp(cfg.qwenHistoryContextRounds, 1, 5)).c_str());
 
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_VOCABULARY_ID), cfg.qwenVocabularyId.c_str());
     std::wstring vocabText = cfg.qwenVocabulary;
@@ -292,6 +315,14 @@ void ProviderQwen::SaveControls(HWND parent, Config& cfg) {
     cfg.qwenChunkMs = std::clamp(_wtoi(chunkBuf), 20, 1000);
 
     cfg.qwenEnableInputContext = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_INPUT_CONTEXT)) == BST_CHECKED;
+    cfg.qwenHistoryContext = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_HISTORY_CONTEXT)) == BST_CHECKED;
+    {
+        wchar_t roundsBuf[16] = {};
+        GetWindowTextW(GetDlgItem(parent, IDC_QWEN_HISTORY_ROUNDS), roundsBuf, 16);
+        // The provider keeps at most five rounds and an empty box must not read
+        // as "zero rounds", so clamp instead of trusting the raw value.
+        cfg.qwenHistoryContextRounds = std::clamp(_wtoi(roundsBuf), 1, 5);
+    }
 
     cfg.qwenVocabularyId = QwenControlText(parent, IDC_QWEN_VOCABULARY_ID, 512);
     cfg.qwenVocabulary = QwenControlText(parent, IDC_QWEN_VOCABULARY);

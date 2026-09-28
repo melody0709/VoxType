@@ -4,6 +4,7 @@
 
 #include "qwen_audio_http.h"
 
+#include "asr_context.h"
 #include "asr_runtime_log.h"
 #include "cloud_asr_common.h"
 #include "cloud_http_common.h"
@@ -162,13 +163,17 @@ Endpoint ParseEndpoint(std::wstring url) {
 
 std::string BuildRequestImpl(const Config& cfg, const std::string& audio) {
     std::string json = "{\"model\":\"" + JsonEscape(cfg.model) + "\",\"input\":{\"messages\":[";
-    std::wstring context = Trim(cfg.inputContextText);
-    if (context.size() > qwen_context::kMaxContextCharacters) {
-        context = input_context::TakeFirstN(context, qwen_context::kMaxContextCharacters);
-    }
-    if (!context.empty()) {
+    std::vector<std::wstring> contextTurns = cfg.historyContextTurns;
+    const std::wstring fieldTurn =
+        asr_context::NormalizeTurn(cfg.inputContextText, qwen_context::kMaxContextCharacters);
+    if (!fieldTurn.empty()) contextTurns.push_back(fieldTurn);
+    // Same window as the streaming builder: the provider keeps at most five
+    // context messages, so the newest turns (the field turn included) win.
+    for (const std::wstring& text : asr_context::ClampTurns(
+             contextTurns, asr_context::kMaxContextTurns,
+             qwen_context::kMaxContextCharacters)) {
         json += "{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"" +
-            JsonEscape(context) + "\"}]},";
+            JsonEscape(text) + "\"}]},";
     }
     json += "{\"role\":\"user\",\"content\":[{\"type\":\"input_audio\",\"input_audio\":{\"data\":\"data:audio/wav;base64," + audio + "\"}}]}],\"parameters\":{\"format\":\"wav\",\"sample_rate\":\"16000\"";
     AppendHints(json, cfg.languageHints);

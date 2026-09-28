@@ -10,6 +10,7 @@
 
 #include <string>
 #include <set>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <future>
@@ -124,27 +125,66 @@ inline std::string GetControlTypeName(CONTROLTYPEID ct) {
     }
 }
 
-inline bool IsPasswordElement(IUIAutomationElement* pElement) {
+// Three states for the UIA password property: only an explicit boolean false
+// means "not a password control". A failed or undecidable read must never be
+// mistaken for it, or the fail-closed probe would call an unknown control Safe.
+enum : int {
+    kPasswordQueryFailed = -1,
+    kPasswordQueryNotPassword = 0,
+    kPasswordQueryPassword = 1,
+};
+
+// The payload signal on its own: an explicit TRUE means the control IS a
+// password field. Used by the text reader, which must stop on that signal
+// whatever status the call reported.
+inline bool PasswordPayloadIsTrue(const VARIANT& value) {
+    return value.vt == VT_BOOL && value.boolVal == VARIANT_TRUE;
+}
+
+// Pure mapping of the raw property read; unit-tested instead of trusted. Stricter
+// than the payload rule above: only a canonical value returned with S_OK may
+// decide, so the fail-closed probe never reads an undecidable answer as Safe.
+inline int PasswordQueryState(HRESULT hr, const VARIANT& value) {
+    if (hr != S_OK) return kPasswordQueryFailed;
+    if (value.vt != VT_BOOL) return kPasswordQueryFailed;
+    if (PasswordPayloadIsTrue(value)) return kPasswordQueryPassword;
+    if (value.boolVal == VARIANT_FALSE) return kPasswordQueryNotPassword;
+    return kPasswordQueryFailed;
+}
+
+inline int ReadPasswordQueryState(IUIAutomationElement* pElement) {
+    if (!pElement) return kPasswordQueryFailed;
     VARIANT var;
-    HRESULT hr = pElement->GetCurrentPropertyValue(UIA_IsPasswordPropertyId, &var);
-    if (SUCCEEDED(hr) && var.vt == VT_BOOL && var.boolVal == VARIANT_TRUE) {
-        VariantClear(&var);
-        return true;
-    }
+    VariantInit(&var);
+    const HRESULT hr = pElement->GetCurrentPropertyValue(UIA_IsPasswordPropertyId, &var);
+    const int state = PasswordQueryState(hr, var);
+    // Initialized before the call and cleared on every path: a failed read leaves
+    // the VARIANT untouched, and clearing an uninitialized one is undefined.
     VariantClear(&var);
-    return false;
+    return state;
+}
+
+inline bool IsPasswordElement(IUIAutomationElement* pElement) {
+    // Reader rule: only an explicit TRUE payload stops ordinary field extraction,
+    // so an undecidable read never blocks text capture in controls whose UIA
+    // property is temporarily unavailable. The status is deliberately not
+    // consulted: a contradictory one (S_FALSE with a TRUE payload) must not turn a
+    // password signal back into "keep reading". The sensitive-focus probe uses
+    // ReadPasswordQueryState() instead, whose rule is stricter still.
+    if (!pElement) return false;
+    VARIANT var;
+    VariantInit(&var);
+    pElement->GetCurrentPropertyValue(UIA_IsPasswordPropertyId, &var);
+    const bool password = PasswordPayloadIsTrue(var);
+    VariantClear(&var);
+    return password;
 }
 
 inline bool TryGetValueText(IUIAutomationElement* pElement,
                             size_t maxTextCharacters,
                             InputContextResult& result) {
-    if (IsPasswordElement(pElement)) {
-        result.isPassword = true;
-        result.failReason = "PASSWORD";
-        return false;
-    }
-
     VARIANT varValue;
+    VariantInit(&varValue);
     HRESULT hr = pElement->GetCurrentPropertyValue(UIA_ValueValuePropertyId, &varValue);
     if (SUCCEEDED(hr) && varValue.vt == VT_BSTR && varValue.bstrVal && varValue.bstrVal[0] != L'\0') {
         std::wstring text = varValue.bstrVal;
@@ -278,6 +318,16 @@ inline bool TryReadFromElement(IUIAutomationElement* pElement, POINT pt, bool ha
                                InputContextResult& result) {
     if (!pElement) return false;
 
+    // Check the password flag before ANY read pattern: TextPattern, ValuePattern
+    // and the caret-based readers can all return the very text this check
+    // protects, so detecting it afterwards is too late.
+    if (IsPasswordElement(pElement)) {
+        result.isPassword = true;
+        result.failReason = "PASSWORD";
+        result.inputFieldText.clear();
+        return false;
+    }
+
     CONTROLTYPEID ct = 0;
     pElement->get_CurrentControlType(&ct);
     result.controlType = GetControlTypeName(ct);
@@ -298,6 +348,12 @@ inline bool TryWalkParentsForText(IUIAutomation* pAutomation,
                                    POINT pt, bool hasPt,
                                    size_t maxTextCharacters,
                                    InputContextResult& result) {
+    if (IsPasswordElement(pStart)) {
+        result.isPassword = true;
+        result.inputFieldText.clear();
+        return false;
+    }
+
     IUIAutomationTreeWalker* pWalker = nullptr;
     HRESULT hr = pAutomation->get_ControlViewWalker(&pWalker);
     if (FAILED(hr) || !pWalker) return false;
@@ -326,6 +382,13 @@ inline bool TryWalkParentsForText(IUIAutomation* pAutomation,
             pParent->Release();
             pWalker->Release();
             return true;
+        }
+
+        if (result.isPassword) {
+            // A password control appeared in the ancestor chain: stop walking so
+            // no higher-level container can hand back its text.
+            pParent->Release();
+            break;
         }
 
         pCurrent = pParent;
@@ -373,6 +436,13 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
         result.focusWindowClass = classNameUtf8;
 
         if (_wcsicmp(className, L"Edit") == 0) {
+            // A password edit answers WM_GETTEXT with its real contents, so the
+            // style must be checked before this fast path reads anything.
+            if ((GetWindowLongW(hwndFocus, GWL_STYLE) & ES_PASSWORD) != 0) {
+                result.isPassword = true;
+                result.failReason = "PASSWORD";
+                return result;
+            }
             wchar_t buf[4096] = {};
             LRESULT sent = SendMessageTimeoutW(hwndFocus, WM_GETTEXT, 4095,
                                                (LPARAM)buf, SMTO_ABORTIFHUNG, 500, nullptr);
@@ -413,6 +483,11 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
             pAutomation->Release();
             return result;
         }
+        if (result.isPassword) {
+            pFocused->Release();
+            pAutomation->Release();
+            return result;
+        }
 
         if (TryWalkParentsForText(pAutomation, pFocused, uiaPt, hasCaretPt,
                                   maxTextCharacters, result)) {
@@ -423,10 +498,24 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
         pFocused->Release();
     }
 
+    if (result.isPassword) {
+        // The focused control is a password field: terminate the whole chain.
+        // The from-point element and the MSAA fallback below can both return the
+        // password text, and the caller only needs to know "not readable".
+        result.inputFieldText.clear();
+        pAutomation->Release();
+        return result;
+    }
+
     IUIAutomationElement* pFromPt = nullptr;
     hr = pAutomation->ElementFromPoint(uiaPt, &pFromPt);
     if (SUCCEEDED(hr) && pFromPt) {
         if (TryReadFromElement(pFromPt, uiaPt, hasCaretPt, maxTextCharacters, result)) {
+            pFromPt->Release();
+            pAutomation->Release();
+            return result;
+        }
+        if (result.isPassword) {
             pFromPt->Release();
             pAutomation->Release();
             return result;
@@ -439,6 +528,12 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
             return result;
         }
         pFromPt->Release();
+    }
+
+    if (result.isPassword) {
+        result.inputFieldText.clear();
+        pAutomation->Release();
+        return result;
     }
 
     if (hwndFocus) {
@@ -471,14 +566,218 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
     return result;
 }
 
-inline std::atomic<bool> s_uiaThreadRunning{false};
+// One flag per UI Automation operation: the field reader and the sensitive-focus
+// probe run next to each other (the probe is started first so its query lands as
+// close to recording start as possible), and each flag is released by its own
+// worker thread when it really finishes.
+inline std::atomic<bool> s_uiaReadRunning{false};
+inline std::atomic<bool> s_uiaProbeRunning{false};
+
+// True when the control is the classic Win32 password edit. Cheap and
+// synchronous (no UI Automation), so it is safe on the recording-start path. It
+// takes the focus window instead of re-querying it: the probe answers this from
+// the very same synchronous snapshot it uses as its cross-check anchor, so the
+// two cannot disagree.
+inline bool IsWin32PasswordEditWindow(HWND window) {
+    if (!window) return false;
+    wchar_t className[64] = {};
+    GetClassNameW(window, className, 64);
+    if (_wcsicmp(className, L"Edit") != 0) return false;
+    return (GetWindowLongW(window, GWL_STYLE) & ES_PASSWORD) != 0;
+}
+
+// Answers of the sensitive-focus probe. Only kSensitiveProbeSafe lets the shared
+// recognition history keep the transcript; every other code is "unknown" and is
+// treated as sensitive (see MustSkipHistoryForFocus). The unknown codes are
+// carried into the log so a missing history entry stays diagnosable.
+inline constexpr int kSensitiveProbeSensitive = 1;
+inline constexpr int kSensitiveProbeSafe = 2;
+inline constexpr int kSensitiveProbeUnknownNotStarted = 0;
+inline constexpr int kSensitiveProbeUnknownNoProbe = 10;
+inline constexpr int kSensitiveProbeUnknownProbeBusy = 11;
+inline constexpr int kSensitiveProbeUnknownUiaUnavailable = 12;
+inline constexpr int kSensitiveProbeUnknownNoFocusedElement = 13;
+inline constexpr int kSensitiveProbeUnknownNoHandle = 14;
+inline constexpr int kSensitiveProbeUnknownFocusMoved = 15;
+inline constexpr int kSensitiveProbeUnknownNoStartFocus = 16;
+inline constexpr int kSensitiveProbeUnknownPasswordQuery = 17;
+
+// Focus identity of the moment recording starts, readable synchronously: the
+// foreground window and the control it reports as focused. It must be captured
+// BEFORE the focused-field read (which can wait for its UI Automation timeout),
+// because the probe is asynchronous and has to prove that the element it
+// inspects still belongs to the window that had the focus back then.
+struct SensitiveFocusAnchor {
+    HWND foreground = nullptr;
+    HWND focus = nullptr;
+};
+
+inline SensitiveFocusAnchor CaptureSensitiveFocusAnchor() {
+    SensitiveFocusAnchor anchor;
+    anchor.foreground = GetForegroundWindow();
+    if (!anchor.foreground) return anchor;
+    GUITHREADINFO guiInfo = {};
+    guiInfo.cbSize = sizeof(guiInfo);
+    if (GetGUIThreadInfo(GetWindowThreadProcessId(anchor.foreground, nullptr), &guiInfo)) {
+        anchor.focus = guiInfo.hwndFocus;
+    }
+    return anchor;
+}
+
+// True when an element's window still belongs to the window that was focused
+// when recording started. HWND level only: a switch between two elements inside
+// one window (a browser password field and a normal field share the render
+// widget) cannot be distinguished here. That residual gap is exactly why the
+// probe is started before the focused-field read — this is a cross-check, not a
+// start-of-recording element snapshot.
+inline bool MatchesSensitiveFocusAnchor(HWND elementWindow,
+                                        const SensitiveFocusAnchor& anchor) {
+    // Without both halves of the anchor there is nothing to compare against, so
+    // the asynchronous query can never be accepted as Safe.
+    if (!elementWindow || !anchor.foreground || !anchor.focus) return false;
+    if (elementWindow == anchor.foreground || elementWindow == anchor.focus) return true;
+    const HWND elementRoot = GetAncestor(elementWindow, GA_ROOT);
+    return elementRoot != nullptr && elementRoot == GetAncestor(anchor.foreground, GA_ROOT);
+}
+
+// Pure mapping of the synchronous recording-start snapshot. kSensitiveProbeUnknownNotStarted
+// is the only answer that means "now run the UI Automation worker"; every other
+// value is final.
+inline int InitialSensitiveProbeAnswer(bool hasForegroundWindow,
+                                       bool hasFocusedControl,
+                                       bool win32PasswordEdit) {
+    // The classic Win32 password edit answers without UI Automation and cannot
+    // move to another control unnoticed, so it needs no cross-check.
+    if (win32PasswordEdit) return kSensitiveProbeSensitive;
+    if (!hasForegroundWindow) return kSensitiveProbeUnknownNoFocusedElement;
+    // A window that reports no focused control gives the cross-check nothing to
+    // compare with, so an asynchronous "not a password" answer must not be
+    // trusted as Safe.
+    if (!hasFocusedControl) return kSensitiveProbeUnknownNoStartFocus;
+    return kSensitiveProbeUnknownNotStarted;
+}
+
+// Pure mapping of the UI Automation result into a probe answer:
+//   - an explicit password hit is always Sensitive (it is a password control even
+//     if it is no longer inside the anchored window);
+//   - a failed or undecidable property read is Unknown, never Safe;
+//   - "not a password" becomes Safe only for an element that still belongs to the
+//     window that had the focus when recording started.
+inline int SensitiveProbeAnswerFromUia(int passwordState,
+                                       bool hasWindowHandle,
+                                       bool anchorMatched) {
+    if (passwordState == kPasswordQueryPassword) return kSensitiveProbeSensitive;
+    if (passwordState != kPasswordQueryNotPassword) return kSensitiveProbeUnknownPasswordQuery;
+    if (!hasWindowHandle) return kSensitiveProbeUnknownNoHandle;
+    return anchorMatched ? kSensitiveProbeSafe : kSensitiveProbeUnknownFocusMoved;
+}
+
+// Starts a detached UI Automation probe and returns a handle that settles to
+// Sensitive, Safe, or one of the unknown codes. Callers start it when recording
+// starts and read the handle when the transcript arrives, so the probe stays off
+// the recording latency path.
+//
+// It has its own single-flight flag (separate from the field reader) because it
+// runs before the focused-field read, and both guards are released by their own
+// worker thread.
+inline std::shared_ptr<std::atomic<int>> BeginSensitiveFocusProbe() {
+    auto state = std::make_shared<std::atomic<int>>(kSensitiveProbeUnknownNotStarted);
+    const SensitiveFocusAnchor anchor = CaptureSensitiveFocusAnchor();
+
+    const int initial = InitialSensitiveProbeAnswer(
+        anchor.foreground != nullptr, anchor.focus != nullptr,
+        IsWin32PasswordEditWindow(anchor.focus));
+    if (initial != kSensitiveProbeUnknownNotStarted) {
+        state->store(initial, std::memory_order_relaxed);
+        return state;
+    }
+    if (s_uiaProbeRunning.exchange(true)) {
+        state->store(kSensitiveProbeUnknownProbeBusy, std::memory_order_relaxed);
+        return state;
+    }
+
+    std::thread worker([state, anchor]() {
+        int answer = kSensitiveProbeUnknownUiaUnavailable;
+        if (SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED))) {
+            IUIAutomation* pAutomation = nullptr;
+            if (SUCCEEDED(CoCreateInstance(CLSID_CUIAutomation, nullptr,
+                                           CLSCTX_INPROC_SERVER, IID_IUIAutomation,
+                                           (void**)&pAutomation)) && pAutomation) {
+                IUIAutomationElement* pFocused = nullptr;
+                if (SUCCEEDED(pAutomation->GetFocusedElement(&pFocused)) && pFocused) {
+                    // The password property is read first: an explicit hit is
+                    // conclusive on its own and needs no window handle at all.
+                    const int passwordState = ReadPasswordQueryState(pFocused);
+                    bool hasWindowHandle = false;
+                    bool anchorMatched = false;
+                    if (passwordState == kPasswordQueryNotPassword) {
+                        UIA_HWND nativeWindow = nullptr;
+                        if (SUCCEEDED(pFocused->get_CurrentNativeWindowHandle(&nativeWindow)) &&
+                            nativeWindow != nullptr) {
+                            hasWindowHandle = true;
+                            anchorMatched = MatchesSensitiveFocusAnchor(
+                                reinterpret_cast<HWND>(nativeWindow), anchor);
+                        }
+                    }
+                    answer = SensitiveProbeAnswerFromUia(passwordState, hasWindowHandle,
+                                                         anchorMatched);
+                    pFocused->Release();
+                } else {
+                    answer = kSensitiveProbeUnknownNoFocusedElement;
+                }
+                pAutomation->Release();
+            }
+            CoUninitialize();
+        }
+        state->store(answer, std::memory_order_relaxed);
+        // Released by the worker when it really finishes, never by a caller that
+        // stopped waiting: a detached worker can still be reading after a
+        // timeout, and clearing the slot there allowed overlapping UIA threads.
+        s_uiaProbeRunning.store(false, std::memory_order_relaxed);
+    });
+    worker.detach();
+    return state;
+}
+
+// Reads a probe answer without waiting; a missing probe is "unknown".
+inline int SensitiveFocusAnswer(const std::shared_ptr<std::atomic<int>>& state) {
+    return state ? state->load(std::memory_order_relaxed) : kSensitiveProbeUnknownNoProbe;
+}
+
+// Stable name for the diagnostic log; never null.
+inline const char* SensitiveFocusAnswerName(int answer) {
+    switch (answer) {
+    case kSensitiveProbeSensitive: return "sensitive";
+    case kSensitiveProbeSafe: return "safe";
+    case kSensitiveProbeUnknownProbeBusy: return "unknown_probe_busy";
+    case kSensitiveProbeUnknownUiaUnavailable: return "unknown_uia_unavailable";
+    case kSensitiveProbeUnknownNoFocusedElement: return "unknown_no_focused_element";
+    case kSensitiveProbeUnknownNoHandle: return "unknown_no_handle";
+    case kSensitiveProbeUnknownFocusMoved: return "unknown_focus_moved";
+    case kSensitiveProbeUnknownNoProbe: return "unknown_no_probe";
+    case kSensitiveProbeUnknownNoStartFocus: return "unknown_no_start_focus";
+    case kSensitiveProbeUnknownPasswordQuery: return "unknown_password_query";
+    default: return "unknown_not_settled";
+    }
+}
+
+// Fail-closed mapping for the shared recognition history: only an explicit Safe
+// answer lets a transcript be recorded. An unverified focus — or no probe at all
+// — counts as sensitive, because leaving the transcript in an uploadable history
+// is the higher risk; the loss only affects later context enhancement, since the
+// transcript itself is still delivered to the focused window. The skip is logged
+// with reason=focus_unknown so missing history in terminals/games/odd toolkits
+// stays diagnosable.
+inline bool MustSkipHistoryForFocus(const std::shared_ptr<std::atomic<int>>& state) {
+    return SensitiveFocusAnswer(state) != kSensitiveProbeSafe;
+}
 
 inline InputContextResult GetInputFieldContext(size_t maxTextCharacters = 200) {
     InputContextResult result;
     HWND fgWnd = GetForegroundWindow();
     result.windowTitle = GetForegroundWindowTitle();
 
-    if (s_uiaThreadRunning.exchange(true)) {
+    if (s_uiaReadRunning.exchange(true)) {
         result.failReason = "UIA_BUSY";
         return result;
     }
@@ -492,18 +791,23 @@ inline InputContextResult GetInputFieldContext(size_t maxTextCharacters = 200) {
         InputContextResult r = ReadInputFieldTextUIA(wt, fgWnd, maxTextCharacters);
         CoUninitialize();
         promise->set_value(std::move(r));
+        // Released by the worker when it really finishes: a timed-out caller must
+        // not free the slot while this thread is still reading, which used to
+        // allow overlapping UI Automation threads.
+        s_uiaReadRunning.store(false, std::memory_order_relaxed);
     });
     worker.detach();
 
     if (future.wait_for(std::chrono::milliseconds(200)) == std::future_status::timeout) {
         result.timedOut = true;
         result.failReason = "TIMEOUT";
-        s_uiaThreadRunning = false;
         return result;
     }
 
     InputContextResult uiaResult = future.get();
-    s_uiaThreadRunning = false;
+    // Final privacy net: whatever a fallback layer produced, a password control
+    // must never yield text (see ReadInputFieldTextUIA for the containment).
+    if (uiaResult.isPassword) uiaResult.inputFieldText.clear();
     return uiaResult;
 }
 

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace qwen_audio_streaming {
 
@@ -17,6 +18,10 @@ struct Config {
     std::wstring vocabulary;
     // Optional focused input-field context sent in run-task.payload.input.
     std::wstring inputContextText;
+    // Earlier context turns (oldest first) emitted before the focused-field
+    // text. The provider keeps at most 5 turns; the assembler already applies
+    // that budget and caps every turn, so this is only a transport field.
+    std::vector<std::wstring> historyContextTurns;
     // Optional one-shot context refresh sent while the task is still running.
     bool enableContinueContext = false;
     // Audio 3 special-word filter, represented as newline-delimited lists.
@@ -76,8 +81,12 @@ private:
 // Pure protocol helpers are exposed so offline tests can validate the exact
 // JSON/frame contract without opening a network connection.
 std::string BuildRunTaskMessage(const Config& config, const std::string& taskId);
+// `historyTurns` (oldest first) must be repeated here: a continue-task replaces
+// the whole context, so a mid-recording focus change would otherwise drop the
+// conversation history.
 std::string BuildContinueTaskMessage(const std::string& taskId,
-                                     const std::wstring& contextText);
+                                     const std::wstring& contextText,
+                                     const std::vector<std::wstring>& historyTurns = {});
 std::string BuildFinishTaskMessage(const std::string& taskId);
 Event ParseServerEventMessage(const std::string& message);
 

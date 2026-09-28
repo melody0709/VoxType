@@ -81,7 +81,7 @@ Resource ID 对应计费方式，在控制台开通服务时选择：
 
 **限制：**
 - 每个应用最多 500 个词表
-- 每个词表最多 2000 个热词
+- 每个词表最多 5000 个热词
 - 每个热词少于 10 个字
 - 权重范围 1–10，默认 4
 - 不支持标点符号（换行和空格除外）
@@ -165,18 +165,18 @@ Resource ID 对应计费方式，在控制台开通服务时选择：
 
 ### 3.7 输入框上下文
 
-勾选 `Read input field context` 后，录音开始时自动读取当前输入框的已有文本，作为 ASR 上下文发送给服务端，提升识别准确率。
+勾选 `Use focused input field text as context` 后，录音开始时自动读取当前输入框的已有文本，作为 ASR 上下文发送给服务端，提升识别准确率。
 
 **工作原理：**
 1. 录音开始时，通过分层 Fallback 方案读取输入框文本
 2. 读取方式按优先级依次尝试：WM_GETTEXT（Edit 控件）→ UIA Value → TextPattern → TextPattern2 → 父元素遍历 → ElementFromPoint → MSAA
-3. 读取到的文本截取最后 200 字符，构建为 `corpus.context` 字段
+3. 读取到的文本截取最后 200 字符（尾部优先），构建为 `corpus.context` 字段
 4. 整个过程有 200ms 超时保护，不会阻塞录音启动
-5. 自动跳过密码框（`UIA_IsPasswordPropertyId` 检测）
+5. 密码框在**任何读取模式执行之前**就被跳过（`UIA_IsPasswordPropertyId`；传统 Win32 密码框直接由 `ES_PASSWORD` 判定，不经过 UI Automation）。明确 `TRUE` 的载荷会终止整条链路（父元素遍历 / 坐标点元素 / MSAA 一并停止）并清空文本，发送层再自查一次标记作为纵深防御。在该控件中开始的录音同时不会进入识别历史（见 §3.10）
 
 **上下文优先级：**
 - 输入框有文本时：只发送输入框文本（`includeHistory=false`），避免重复
-- 输入框无文本时：如果 `Use history as context` 也勾选了，用历史记录兜底
+- 输入框无文本时：如果 `Enable history context` 也勾选了，用历史记录兜底
 - 两个开关独立控制，互不依赖
 
 **兼容性：**
@@ -198,6 +198,13 @@ Resource ID 对应计费方式，在控制台开通服务时选择：
 
 **所有模式均支持热词和替换词。**
 
+**共用词表（`Reuse common vocabulary`）**：
+
+- 勾选后把顶部 `Vocabulary` 页的 `vocabulary.json` 作为**内联热词直传**发送，即 `corpus.context` 内的 `hotwords` 数组，格式为官方定义的 `{"word": "..."}`。
+- **权重只决定顺序，不发送权重字段**：官方《热词与上下文》（`6561/2604976`）明文"大模型没有类似小模型的权重概念"，内联 `hotwords` 也没有 `scale` / `weight` 字段。列表按权重降序排列后再截断——因为服务端是"**从前往后保留、从末尾截断**"，排序保证被裁掉的是权重最低的词。
+- 容量：双向流式（`bigmodel`，或未开二遍的 `bigmodel_async`）为 **100 tokens**，`bigmodel_nostream` / 开启二遍的 `bigmodel_async` 为 5000 词（词表文件自身上限 2000 条）。**客户端不按条数裁剪**——token 与词数不是一回事（官方：中文 1 字约 1~2 token，双向流式"建议 30–50 个短词以内"），任何固定条数都是猜测；只做**权重降序排序**，让服务端按其 token 限额"从前往后保留、末尾截断"。组装请求时写 `event=volc_inline_hotwords_prepared` 调试日志（早于连接尝试，不代表服务端已收到）。
+- 官方注明"热词直传优先级高于传热词表"。双向流式链路建议改用 `Hotwords ID` 走自学习平台词表（官方：双向流式下热词"有效但有限"，非流式/二遍"效果更优"）。
+
 ### 3.9 Extra Params
 
 点击 `Edit Params` 按钮打开编辑对话框，可输入额外的 `request` 级 JSON 参数。
@@ -216,19 +223,20 @@ VoxType 提供两种独立的上下文来源，由两个开关分别控制：
 
 | 开关 | 控制的上下文 | 说明 |
 |------|------------|------|
-| `Use history as context` | 历史识别结果 | 将最近 N 条识别结果作为对话上下文发送 |
-| `Read input field context` | 输入框文本 | 读取当前输入框末尾 200 字符作为上下文（详见 §3.7） |
+| `Enable history context`（高级对话框，含 `History turns` 1–20，默认 3） | 历史识别结果 | 将最近 N 条识别结果作为对话上下文发送 |
+| `Use focused input field text as context` | 输入框文本 | 读取当前输入框末尾 200 字符作为上下文（详见 §3.7） |
 
 **上下文优先级：**
 - 输入框有文本时：只发送输入框文本，不发历史记录（避免重复）
-- 输入框无文本时：如果 `Use history as context` 已勾选，用历史记录兜底
+- 输入框无文本时：如果 `Enable history context` 已勾选，用历史记录兜底
 - 窗口标题不再作为 context 发送（对 ASR 识别帮助极小）
 
 **历史记录上下文工作原理：**
-1. 每次识别完成后，结果被存入内存中的历史队列
-2. 下次录音时（输入框无文本时），历史结果被构建为 `corpus.context` 字段
-3. 格式为 `{"context_type":"dialog_ctx","context_data":[{"text":"..."}]}`
-4. 该 JSON 对象会被序列化为字符串（内层引号转义）后作为 `context` 的值
+1. 最终转写由 `DispatchAsrFinalText()` **只记录一次**进 `src/core/asr_history.*` 的全局环形缓冲，所有后端共用同一份；火山不再维护自己的队列。只收录"可用文本"，无语音占位与操作类报错不入库。
+2. **隐私**：录音开始时若焦点在密码控件、或焦点无法核实，该转写**不会**进入这份历史——历史可被上下文开关送上云端，所以过滤发生在**写入时**（`asr_context::ShouldRecordHistory`），跳过会记 `reason=sensitive_focus` / `reason=focus_unknown`。"先在密码框口述、之后才打开本开关"因此也不会把旧内容带出。
+3. 下次录音时（输入框无文本时），取最近 `History turns` 条，按**从新到旧**排列后构建为 `corpus.context` 字段。
+4. 格式为 `{"context_type":"dialog_ctx","context_data":[{"text":"..."}]}`
+5. 该 JSON 对象会被序列化为字符串（内层引号转义）后作为 `context` 的值
 
 **限制：**
 - 双向流式模式（`bigmodel` / `bigmodel_async`）：100 tokens

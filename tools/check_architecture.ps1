@@ -471,6 +471,58 @@ Record-Result -Name "Anti-bypass: no unknown layer directory under src/" `
     -Details "$($unknownLayers.Count) unknown layer dir(s)"
 foreach ($u in $unknownLayers) { Write-Host "    ! src/$u is not in the layer matrix - new layers must be declared in the plan first" -ForegroundColor Red }
 
+# 3.6.6 Privacy wiring: the shared recognition history is uploaded to the cloud
+# by every context consumer, so a transcript dictated into a password control
+# must be excluded WHEN IT IS WRITTEN. Filtering later (while preparing a
+# request) leaves the "dictated while the switch was off, switch turned on
+# later" path open, and the same history is read by more than one provider.
+$privacyMissing = @()
+$dispatcherPath = Join-Path $RepoRoot "src\asr\asr_dispatcher.cpp"
+$attemptPath = Join-Path $RepoRoot "src\app\asr_attempt_manager.cpp"
+if (Test-Path $dispatcherPath) {
+    $dispatcher = Read-Text -Path $dispatcherPath
+    if ($dispatcher -notmatch 'ShouldRecordHistory') { $privacyMissing += "asr_dispatcher.cpp does not gate the history write through ShouldRecordHistory" }
+    if ($dispatcher -notmatch 'MustSkipHistoryForFocus') { $privacyMissing += "asr_dispatcher.cpp does not apply the fail-closed focus mapping" }
+    if ($dispatcher -notmatch 'SensitiveFocusAnswerName') { $privacyMissing += "asr_dispatcher.cpp does not log which answer skipped the write" }
+} else {
+    $privacyMissing += "src/asr/asr_dispatcher.cpp missing"
+}
+# The probe's Safe answer must come from pure tri-state mappings: a failed UIA
+# password query or a missing start-of-recording focus control counts as unknown,
+# never as "not sensitive".
+$inputContextPath = Join-Path $RepoRoot "src\core\input_context.h"
+if (Test-Path $inputContextPath) {
+    $inputContext = Read-Text -Path $inputContextPath
+    if ($inputContext -notmatch 'PasswordQueryState') { $privacyMissing += "input_context.h has no tri-state password property read" }
+    if ($inputContext -notmatch 'SensitiveProbeAnswerFromUia') { $privacyMissing += "input_context.h maps UIA results without SensitiveProbeAnswerFromUia" }
+    if ($inputContext -notmatch 'InitialSensitiveProbeAnswer') { $privacyMissing += "input_context.h decides the start snapshot without InitialSensitiveProbeAnswer" }
+    if ($inputContext -notmatch 'kSensitiveProbeUnknownPasswordQuery') { $privacyMissing += "input_context.h does not treat a failed password read as unknown" }
+    if ($inputContext -notmatch 'kSensitiveProbeUnknownNoStartFocus') { $privacyMissing += "input_context.h does not treat a missing start focus as unknown" }
+} else {
+    $privacyMissing += "src/core/input_context.h missing"
+}
+if (Test-Path $attemptPath) {
+    $attempt = Read-Text -Path $attemptPath
+    if ($attempt -notmatch 'BeginSensitiveFocusProbe') {
+        $privacyMissing += "asr_attempt_manager.cpp does not start the sensitive-focus probe"
+    } else {
+        # Timing: the probe must be started before the focused-field read, because
+        # that read can wait for its UI Automation timeout and the probe must
+        # cross-check the focus it captured at recording start.
+        $probeIndex = $attempt.IndexOf('BeginSensitiveFocusProbe')
+        $fieldReadIndex = $attempt.IndexOf('qwenInputContextSnapshotCaptured = true')
+        if ($fieldReadIndex -ge 0 -and $fieldReadIndex -lt $probeIndex) {
+            $privacyMissing += "asr_attempt_manager.cpp starts the sensitive probe after the focused-field read"
+        }
+    }
+} else {
+    $privacyMissing += "src/app/asr_attempt_manager.cpp missing"
+}
+Record-Result -Name "Privacy: sendable history gated at write time" `
+    -Passed ($privacyMissing.Count -eq 0) `
+    -Details $(if ($privacyMissing.Count -eq 0) { "probe + write-time gate wired" } else { "$($privacyMissing.Count) missing wiring" })
+foreach ($p in $privacyMissing) { Write-Host "    ! $p" -ForegroundColor Red }
+
 # -----------------------------------------------------------------------------
 # 4. Stage gates (-Stage P1..P6). Turns each milestone DoD into a machine check.
 # -----------------------------------------------------------------------------

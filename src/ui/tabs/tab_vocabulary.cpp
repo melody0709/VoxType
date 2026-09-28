@@ -33,11 +33,11 @@ void TabVocabulary::UpdateStatusFromText(HWND parent, std::wstring_view text) {
         const size_t count = parsed->size();
         size_t superCount = 0;
         for (const auto& entry : *parsed) {
-            if (entry.weight >= 10) superCount++;
+            if (vocabulary_manager::IsSuperHotword(entry.weight)) superCount++;
         }
         std::wstring status = std::format(
-            L"Status: {} active entries ({} high priority). Synced across Qwen & Volcano Engine.",
-            count, superCount);
+            L"Status: {} entries, {} super hotword(s) of {} allowed. Synced across Qwen & Volcano Engine.",
+            count, superCount, vocabulary_manager::kQwenMaxSuperHotwords);
         SetWindowTextW(statusLabel, status.c_str());
     } else {
         std::wstring status = std::format(L"Status: Syntax error — {}", parsed.error());
@@ -90,7 +90,7 @@ void TabVocabulary::CreateControls(HWND parent) {
     AddVocabControl(statusLabel);
 
     HWND hintLabel = CreateHint(parent, S(30), footerY + S(24), S(788), S(UiStyle::LabelH),
-                                L"Supports JSON (\"word\": weight) or line format (word [weight]). Weights: 1–5 or 50 (default: 50).");
+                                L"JSON (\"word\": weight) or line format (word [weight]). Weights 1–5 (default 4) or 50 = super (max 50).");
     AddVocabControl(hintLabel);
 }
 

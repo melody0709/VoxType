@@ -423,6 +423,9 @@ public:
         cfg.vocabularyId = config_.qwenVocabularyId;
         cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(config_.qwenVocabulary);
         cfg.inputContextText = inputContextText_;
+        // Independent of the focused-field switch: the history turns were
+        // assembled from the history opt-in and must travel on their own.
+        cfg.historyContextTurns = config_.qwenContextHistoryTurns;
         cfg.keepDialect = config_.qwenKeepDialect;
         HiResTimer timer;
         const DWORD timeoutMs = ComputeCloudAsrRecordedRequestTimeoutMs(0.0, uploadPcm.size());

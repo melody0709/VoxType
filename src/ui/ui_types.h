@@ -124,9 +124,20 @@ constexpr int QwenInputContextY = 380;
 constexpr int QwenInputContextX = 188;
 constexpr int QwenInputContextW = 460;
 constexpr int QwenInputContextHintY = 410;
-constexpr int QwenAdvancedButtonY = 442;
+// Multi-turn history context: its own labelled row (checkbox + round budget),
+// mirroring the input-context row above it. The action row moves down by one
+// row + hint so the panel keeps the documented row order.
+constexpr int QwenHistoryContextY = 442;
+constexpr int QwenHistoryContextX = 188;
+constexpr int QwenHistoryContextW = 360;
+constexpr int QwenHistoryRoundsLabelX = 566;
+constexpr int QwenHistoryRoundsLabelW = 60;
+constexpr int QwenHistoryRoundsEditX = 632;
+constexpr int QwenHistoryRoundsEditW = 60;
+constexpr int QwenHistoryContextHintY = 476;
+constexpr int QwenAdvancedButtonY = 512;
 constexpr int QwenAdvancedBtnW = 140;
-constexpr int QwenAdvancedHintY = 482;
+constexpr int QwenAdvancedHintY = 552;
 constexpr int QwenTestBtnX = 340;
 constexpr int QwenTestBtnW = 160;
 // Tab 2 Volcano Engine panel: same compact grid, five rows plus one hint line.
@@ -369,6 +380,8 @@ constexpr int IDC_QWEN_SYSTEM_FILTER = 2136;
 constexpr int IDC_QWEN_VAD_MODEL = 2137;
 constexpr int IDC_QWEN_KEEP_DIALECT = 2138;
 constexpr int IDC_QWEN_DISFLUENCY_REMOVAL = 2139;
+constexpr int IDC_QWEN_HISTORY_CONTEXT = 2140;
+constexpr int IDC_QWEN_HISTORY_ROUNDS = 2141;
 constexpr int IDC_MIMO_API_KEY = 2090;
 constexpr int IDC_MIMO_SHOW_KEY = 2091;
 constexpr int IDC_MIMO_BASE_URL = 2092;

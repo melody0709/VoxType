@@ -19,6 +19,9 @@ struct Config {
     // Optional focused input-field context. It is serialized as an
     // input_text message before the current input_audio message.
     std::wstring inputContextText;
+    // Earlier context turns (oldest first) placed before the focused-field
+    // message; see qwen_audio_streaming::Config for the same contract.
+    std::vector<std::wstring> historyContextTurns;
     // Audio 3.1 only; omitted for 3.0, which does not accept the field.
     bool keepDialect = false;
 };

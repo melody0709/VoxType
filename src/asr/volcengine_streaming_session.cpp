@@ -1,7 +1,9 @@
 #include "volcengine_streaming_session.h"
 
 #include "asr_diagnostics.h"
+#include "asr_history.h"
 #include "asr_result.h"
+#include "asr_runtime_log.h"
 #include "asr_streaming_session_base.h"
 #include "cloud_asr_common.h"
 #include "engine_local.h"
@@ -39,8 +41,16 @@ constexpr size_t kVolcShortNoTextRetrySkipBytes = 3u * 32000u;
 constexpr DWORD kKeepaliveMs = 3500;
 constexpr DWORD kVolcOpenHardTimeouts[] = {3000, 3000, 5000, 6000};
 
-std::deque<std::wstring> g_volcRecognitionHistory;
-std::mutex g_volcRecognitionHistoryMutex;
+// The dialog context reads the shared recognition history (asr_history) rather
+// than a provider-private queue: the final transcript of every backend is
+// recorded once in DispatchAsrFinalText, so this session must not record again.
+
+// Inline hotwords and the dialog context share the `corpus.context` string: the
+// documented budget is 100 tokens for bidirectional streaming and 5000 words for
+// the non-streaming / second-pass path, with an oversized list truncated FROM
+// THE END. There is deliberately no client-side word cap here — tokens are not
+// words, so any fixed count would be guesswork; the weight ordering is what
+// guarantees the surviving prefix is the user's most important vocabulary.
 
 DWORD VolcOpenHardTimeoutForAttempt(int attemptIndex) {
     if (attemptIndex < 0) attemptIndex = 0;
@@ -216,18 +226,6 @@ private:
             Sleep((std::min)(static_cast<DWORD>(50), remaining));
         }
         return !abort_.load() && !sess.forceAbort.load();
-    }
-
-    void AddRecognitionHistory(const std::wstring& text) {
-        if (!IsUsableAsrTextForContext(text)) return;
-        std::lock_guard<std::mutex> lock(g_volcRecognitionHistoryMutex);
-        g_volcRecognitionHistory.push_back(text);
-        int maxHistory = config_.volcContextHistory;
-        if (maxHistory < 1) maxHistory = 5;
-        if (maxHistory > 20) maxHistory = 20;
-        while (static_cast<int>(g_volcRecognitionHistory.size()) > maxHistory) {
-            g_volcRecognitionHistory.pop_front();
-        }
     }
 
     VolcRetryResult RetryRecognitionOnce(const volc_asr::VolcConfig& vcfg,
@@ -423,6 +421,16 @@ private:
                 g_inputContextResult = input_context::GetInputFieldContext();
                 g_inputContextResult.elapsedMs = tCtx.ElapsedMs();
                 ctxInputText = g_inputContextResult.inputFieldText;
+                if (g_inputContextResult.isPassword) {
+                    // Defence in depth: the reader already clears the text and
+                    // aborts the chain on a password control, but this path must
+                    // never forward it either. Qwen's layer checks the same flag
+                    // through qwen_context::SanitizeText.
+                    ctxInputText.clear();
+                    asr_runtime_log::Write(
+                        "event=volc_input_context_skipped reason=password layer=%d",
+                        g_inputContextResult.successLayer);
+                }
                 hasInputText = !ctxInputText.empty();
             }
 
@@ -433,11 +441,44 @@ private:
 
             std::vector<std::wstring> history;
             if (!hasInputText && config_.volcEnableContext) {
-                std::lock_guard<std::mutex> lock(g_volcRecognitionHistoryMutex);
-                history.assign(g_volcRecognitionHistory.begin(), g_volcRecognitionHistory.end());
+                // The shared history is chronological; keep only the newest
+                // `volcContextHistory` rounds for this request.
+                const size_t rounds = static_cast<size_t>(
+                    (std::clamp)(config_.volcContextHistory, 1, 20));
+                history = asr_history::Snapshot();
+                if (history.size() > rounds) {
+                    history.erase(history.begin(),
+                                  history.end() - static_cast<std::ptrdiff_t>(rounds));
+                }
             }
 
             vcfg.contextJson = vocabulary_manager::BuildVolcengineContextJson(vocab, ctxInputText, history);
+            if (!vocab.empty()) {
+                // Every send is recorded (any mode). The bidirectional modes only
+                // allow 100 tokens and truncate from the end, so the weight
+                // ordering in the builder is what protects the important words;
+                // `boosting_table_id` remains the better path for those modes.
+                const bool bidirectionalStream = config_.volcMode == L"bigmodel" ||
+                    (config_.volcMode == L"bigmodel_async" && !config_.volcEnableNonstream);
+                // The first word of the (weight-ordered) payload is logged so the
+                // ordering can be verified against a real request instead of
+                // being taken on faith. "prepared", not "sent": this runs while
+                // the body is built, before OpenSession() transmits it, so a
+                // failed connect also lands here and it is not proof of delivery.
+                // Same "highest weight first, file order on ties" rule as the
+                // builder's std::stable_sort, so this is the word the provider
+                // sees at the head of the list.
+                size_t headIndex = 0;
+                for (size_t i = 1; i < vocab.size(); ++i) {
+                    if (vocab[i].weight > vocab[headIndex].weight) headIndex = i;
+                }
+                std::string head = WideToUtf8(vocab[headIndex].word);
+                if (head.size() > 48) head.resize(48);
+                asr_runtime_log::Write(
+                    "event=volc_inline_hotwords_prepared mode=%s entries=%zu bidirectional=%d ordering=weight_desc first_word=%s",
+                    WideToUtf8(config_.volcMode).c_str(), vocab.size(),
+                    bidirectionalStream ? 1 : 0, head.c_str());
+            }
         }
 
         // Open session with retries
@@ -823,7 +864,6 @@ private:
             finalText = L"ASR failed: VolcEngine timeout";
         }
 
-        AddRecognitionHistory(finalText);
         VolcDebugLog("=== TOTAL session: %llums ===", GetTickCount64() - tTotal0);
         g_cloudApiMs = static_cast<double>(GetTickCount64() - tTotal0) - recordingMs_.load();
         if (!abort_.load()) {
@@ -895,8 +935,7 @@ std::unique_ptr<IStreamingAsrSession> CreateVolcengineStreamingSession(
 }
 
 size_t VolcengineRecognitionHistorySize() {
-    std::lock_guard<std::mutex> lock(g_volcRecognitionHistoryMutex);
-    return g_volcRecognitionHistory.size();
+    return asr_history::Size();
 }
 
 void VolcengineResetForNewSession() {

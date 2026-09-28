@@ -20,6 +20,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 ## Command execution
 
 - `CMakeLists.txt` 与 `CMakePresets.json` 是唯一编译权威；`build.bat` 负责准备 MSVC、调用 CMake/Ninja 并安装运行载荷。
+- **`tools\asr_audio_replay.bat` 是唯一的云端后端实跑工具**（喂 WAV 走生产 session，用 `--backend <id> --show-text`）；`build.bat --test` 会**构建**它（不运行）。它必须只定义"没有任何已编译模块拥有"的全局量——`app_state` / `audio_capture` / `streaming_vad_trimmer` / `engine_local` / `asr_metrics` 拥有的符号在工具里重复定义会在链接期炸掉（2026-09-28 修复过一次）。`--context-rounds <n>` 会注入合成识别历史，用于在没有麦克风的情况下打通 dialog-context/多轮上下文链路。
 - On Windows, use  PowerShell 7: `pwsh` (or `rtk pwsh`); never use Windows PowerShell 5.1 (`powershell`) unless explicitly requested.
 
 
@@ -28,15 +29,15 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 ## 架构重构（2026-09 起，进行中）
 
 - **权威方案**：`.plan\refactor\cxx23-architecture-refactor-plan.md`（含分层契约、CMake 目标骨架、分阶段 Milestone 与退出判据）。
-- **机械守卫**：`tools\check_architecture.ps1`（当前 **17 项检查**，含 5 项防绕过）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
+- **机械守卫**：`tools\check_architecture.ps1`（当前 **18 项检查**，含 6 项防绕过，其中一项是"可发送历史必须在写入时按敏感控件过滤"的接线检查）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
 - **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。
   守卫脚本里的**基线常量**（`tools/check_architecture.ps1` 的 `$BASELINES`，**decrease-only**）：
   `GlobalsIncluders / GlobalsExterns / GlobalsCrossLayerHeader / MainLines / SettingsLines / LayerViolations`
   = `0 / 0 / 0 / 150 / 400 / 2`。
-  当前**实测值** = `0 / 0 / 0 / 148 / 377 / 1`（`globals.h` 彻底消除；`main.cpp` 148 行，余 2 行；
-  `settings.cpp` 377 行，余 23 行；跨层 include 违规 1 处，余 1 处）。
+  当前**实测值** = `0 / 0 / 0 / 148 / 387 / 1`（`globals.h` 彻底消除；`main.cpp` 148 行，余 2 行；
+  `settings.cpp` 387 行，余 13 行；跨层 include 违规 1 处，余 1 处）。
   基线自 P0（`847926b`）建立后从未调整过；`main.cpp` 由 150 行收缩至 148 行，故棘轮留有 2 行余量。
   **基线只降不升**：`main.cpp` / `settings.cpp` 的新代码应进入对应模块，而不是在这两个文件里增长。
 
@@ -86,6 +87,11 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **新增 batch 后端必须显式传入请求超时**（`ComputeCloudAsrRecordedRequestTimeoutMs()` 或 provider 自带超时）。batch 路径**没有**外层看门狗——`kStreamingWatchdogTimer` 只在流式分支设置；一旦某个 client 漏传超时，该 attempt 会永久挂起，回退永不触发（fallback 只在拿到最终文本后才评估），且 `g_activeAttempt` 一直被占用。唯一例外是本地解码：按设计文档要求不加杀死式 timeout。
 - **失败路径的 replay 必须先过预算门控**：replay 保持与主流程相同的实时节奏重发（burst 会上报服务端背压），所以重发长录音本身就要几十秒，而 `kCloudAsrPostStopRetryReserveMs` 只有 9000ms（可达窗口约音频 1.5 秒以内）。启动一个装不下的重试只会把 attempt 挂到外层看门狗 Abort，把 fallback 推迟一整个预留窗口并丢掉更精确的 provider 错误文案。统一用 `StreamingAsrSessionBase::ShouldStartFailureReplay()`（底层 `CloudAsrReplayFitsInBudget()`，`src/asr/cloud_asr_common.h`），并在 `StopInput()` 里记录 `stopTick_` 供其计算剩余预算。**空结果路径（final 为空但未失败）不要门控**——跳过它会把可疑的空 final 直接变成 `No speech detected` 而不给 fallback 机会。
 - 新 provider 如果有跨录音 session 的连接预热/复用句柄，先保留清晰生命周期，不要强行收进单次录音 session。
+- **热词（`vocabulary.json`）是全局共用词表**：`src/core/vocabulary_manager.*` 是唯一事实来源，同一份权重会下发到 Qwen 即时热词、火山 `corpus.context` 内联热词、LLM `【用户词表】` 与（预接线）Sherpa hotwords。**不要"顺手"改默认权重或某个 provider 的映射**——权重语义是 `1–5` 普通（默认 `4`）+ `50` 超级热词，`WeightToQwen()` 的输出必须恒在 `{1..5, 50}` 内（`qwen_audio_json::IsValidVocabulary` 会把它当不可重试的硬校验）。新增 provider 接入热词时加一条显式映射并在 `tests/asr_json_protocol_test.cpp` 补断言。
+- **上下文增强统一走公共层**：识别历史只在 `DispatchAsrFinalText()`（`src/asr/asr_dispatcher.cpp`）记录一次（`asr_history`），**provider 侧不得再各自记录**，否则会重复计数；轮次预算、逐轮截断（保尾部）与"最近 5 条消息"窗口（`asr_context::ClampTurns`）统一走 `src/asr/asr_context.*`。新增上下文消费者时复用这两个模块，不要另建私有队列。
+- **上下文开关必须彼此独立**：`qwen_history_context`（历史）与 `qwenEnableInputContext`（焦点字段）各自控制自己的装配与传输，**不得嵌套**——历史曾在焦点字段开关内部装配，导致新选项单独开启时静默失效；历史装配也不得依赖 `asrBackend`，否则 fallback 到 Qwen 的尝试会丢掉历史。字段轮有文本时要为它预留一个名额（provider 只保留最近 5 条上下文消息）。
+- **敏感录音必须在"写入历史"时排除，不能在"准备请求"时排除**：`asr_history` 是所有上下文消费者共享、可能被上传云端的数据。判定分两层：`input_context::MustSkipHistoryForFocus(probe)`（fail-closed：**只有明确 Safe 才允许记录**，Unknown 一律视为敏感）+ `asr_context::ShouldRecordHistory(usableText, sensitiveFocus)`。探测由 `input_context::BeginSensitiveFocusProbe()` 在**每次录音**、且**排在焦点字段读取之前**启动（异步，答案经 `Config::asrSensitiveProbe` 带到 transcript 时刻）。只在某个开关打开时才探测是**错的**：用户关着开关在密码框口述、之后打开开关就会把旧转写发出去。探测同步捕获录音开始时的焦点（`CaptureSensitiveFocusAnchor`）并在工作线程里核对元素所属窗口，核对不上就报 `unknown_focus_moved`；`Safe` 只能由**纯判定函数**产出，且必须满足：**录音开始时有焦点控件可供核对**（`InitialSensitiveProbeAnswer`，否则 `unknown_no_start_focus`）、**UIA 密码属性读到明确的布尔 false**（`PasswordQueryState` 三态，读取失败/非布尔值 → `unknown_password_query`）、**元素窗口句柄存在且落在锚点窗口内**（`SensitiveProbeAnswerFromUia`）。把这三处写成两态（失败当"不是密码"）就是把 fail-closed 反转回 fail-open。它**不是**"录音开始瞬间的焦点快照"，别这样写文档或注释；保证边界是 HWND 级——同一窗口内元素级切换（浏览器密码框→普通框共用渲染窗口句柄）不可区分，只能靠"探测启动足够早"压缩窗口期。跳过历史必须记日志：`reason=sensitive_focus` 或 `reason=focus_unknown`（带 `answer=`，便于诊断终端等窗口历史缺失）。`input_context` 读取链一旦发现密码控件必须立即终止并清空文本（不得继续走父元素/坐标点/MSAA），发送层（火山等）必须再自查一次 `isPassword`。
+- **密码属性有两条规则，不得互相套用**：**读取链**（取焦点字段文本）用 `PasswordPayloadIsTrue()`——只看载荷，明确 `TRUE` 即停止，**忽略 HRESULT**（`S_FALSE` + TRUE 载荷仍是密码信号，矛盾状态不能把它变回"继续读"），因为"未知即停止"会破坏普通字段取字；**敏感探测**用 `PasswordQueryState()`——只有 `S_OK` + 规范布尔值可判定，其余一律 Unknown（fail-closed）。把探测的严格规则套到读取链会丢字段上下文，把读取链的宽松规则套到探测会让未知变成 Safe。
 - Settings 模块化重构已全面落地强类型注册表与 Tab/Provider 分离架构，新增配置项按"强类型注册表三步规范"执行（见"开发约定"一节）；禁止绕过注册表私自硬编码读写。
 
 ## 不要轻易做的事

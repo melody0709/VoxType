@@ -238,17 +238,17 @@ std::wstring EscapeJsonStringW(std::wstring_view val) {
 
 } // namespace
 
-int WeightToScale10(int weight) {
-    return std::clamp(static_cast<int>(std::round(weight / 5.0)), 1, 10);
-}
-
-float WeightToVolcengineScale(int weight) {
-    const float raw = std::clamp(1.0f + (static_cast<float>(weight) / 50.0f) * 2.0f, 1.0f, 3.0f);
-    return std::round(raw * 10.0f) / 10.0f;
+bool IsSuperHotword(int weight) {
+    return weight >= kSuperHotwordWeight;
 }
 
 int WeightToQwen(int weight) {
-    if (weight >= 10) return 50;
+    // Qwen accepts only integers in [1, 5] or exactly 50; its client-side
+    // validator (qwen_audio_json::IsValidVocabulary) rejects anything else as a
+    // non-retryable invalid_vocabulary failure. Keep the mapping inside that
+    // space: 1-5 pass through, 6-49 saturate at 5, and only >= 50 becomes a
+    // super hotword.
+    if (IsSuperHotword(weight)) return kSuperHotwordWeight;
     return std::clamp(weight, 1, 5);
 }
 
@@ -331,7 +331,7 @@ std::expected<VocabularyList, std::wstring> ParseVocabularyJson(std::wstring_vie
             }
 
             SkipWs(cleaned, pos);
-            int weight = 50;
+            int weight = kOrdinaryWeightDefault;
             if (pos < cleaned.size() && cleaned[pos] == L'"') {
                 std::wstring weightStr;
                 if (!DecodeJsonStringW(cleaned, pos, weightStr)) {
@@ -363,7 +363,7 @@ std::expected<VocabularyList, std::wstring> ParseVocabularyJson(std::wstring_vie
             if (it != result.end()) {
                 it->weight = weight;
             } else {
-                if (result.size() >= 2000) {
+                if (result.size() >= kMaxVocabularyEntries) {
                     return std::unexpected(L"Vocabulary exceeds the maximum limit of 2000 entries");
                 }
                 result.push_back({ std::move(key), weight });
@@ -412,7 +412,7 @@ std::expected<VocabularyList, std::wstring> ParseVocabularyLines(std::wstring_vi
         }
 
         std::wstring word;
-        int weight = 50;
+        int weight = kOrdinaryWeightDefault;
 
         if (line.front() == L'"') {
             const size_t closeQuote = line.find(L'"', 1);
@@ -476,7 +476,7 @@ std::expected<VocabularyList, std::wstring> ParseVocabularyLines(std::wstring_vi
         if (it != result.end()) {
             it->weight = weight;
         } else {
-            if (result.size() >= 2000) {
+            if (result.size() >= kMaxVocabularyEntries) {
                 return std::unexpected(L"Vocabulary exceeds the maximum limit of 2000 entries");
             }
             result.push_back({ std::move(word), weight });
@@ -522,40 +522,54 @@ std::string FormatVocabularyJson(const VocabularyList& entries, bool pretty) {
 
 std::string TranspileToQwenJson(const VocabularyList& entries) {
     if (entries.empty()) return {};
+    // Order by weight before applying the provider caps: the 50 super slots and
+    // the 2000-entry ceiling must go to the user's most important words, not to
+    // whichever words happen to sit at the top of the file. std::stable_sort
+    // keeps the file order for equal weights.
+    std::vector<size_t> order(entries.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&entries](size_t left, size_t right) {
+        return entries[left].weight > entries[right].weight;
+    });
+    const size_t kept = std::min(order.size(), kMaxVocabularyEntries);
+
     std::string out = "{";
     size_t superCount = 0;
-    size_t count = 0;
-    for (const auto& entry : entries) {
-        if (count >= 2000) break;
+    for (size_t i = 0; i < kept; ++i) {
+        const VocabularyEntry& entry = entries[order[i]];
         int weight = WeightToQwen(entry.weight);
-        if (weight == 50) {
-            if (superCount < 50) {
+        if (weight == kSuperHotwordWeight) {
+            if (superCount < kQwenMaxSuperHotwords) {
                 ++superCount;
             } else {
                 weight = 5;
             }
         }
-        if (count > 0) out += ",";
+        if (i > 0) out += ",";
         out += "\"" + WideToUtf8(EscapeJsonStringW(entry.word)) + "\":" + std::to_string(weight);
-        ++count;
     }
     out += "}";
     return out;
 }
 
-std::string TranspileToVolcengineHotwordsJson(const VocabularyList& entries) {
-    if (entries.empty()) return "[]";
-    std::string out = "[";
-    size_t count = 0;
-    for (const auto& entry : entries) {
-        if (count > 0) out += ",";
-        const float scale = WeightToVolcengineScale(entry.weight);
-        char scaleBuf[32];
-        snprintf(scaleBuf, sizeof(scaleBuf), "%.1f", scale);
-        out += "{\"word\":\"" + WideToUtf8(EscapeJsonStringW(entry.word)) + "\",\"scale\":" + scaleBuf + "}";
-        ++count;
+std::wstring BuildVocabularyWordList(const VocabularyList& entries,
+                                     size_t maxCharacters) {
+    if (entries.empty() || maxCharacters == 0) return L"";
+    std::vector<size_t> order(entries.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&entries](size_t left, size_t right) {
+        return entries[left].weight > entries[right].weight;
+    });
+
+    std::wstring out;
+    for (size_t index : order) {
+        const std::wstring& word = entries[index].word;
+        if (word.empty()) continue;
+        const size_t separator = out.empty() ? 0 : 1; // one separating space
+        if (out.size() + separator + word.size() > maxCharacters) break;
+        if (separator != 0) out.push_back(L' ');
+        out += word;
     }
-    out += "]";
     return out;
 }
 
@@ -576,13 +590,23 @@ std::wstring BuildVolcengineContextJson(
     bool needComma = false;
 
     if (hasHotwords) {
+        std::vector<size_t> order(entries.size());
+        for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+        std::stable_sort(order.begin(), order.end(), [&entries](size_t left, size_t right) {
+            return entries[left].weight > entries[right].weight;
+        });
+        const size_t kept = (std::min)(order.size(), kMaxVocabularyEntries);
+
+        // The documented inline format is `{"word": "..."}` only: the provider
+        // states plainly that the big model has "no weight concept like the small
+        // model has" (热词与上下文, 6561/2604976), and `scale` appears nowhere in
+        // its API reference. The weight therefore only decides the ORDER here,
+        // which matters because the server keeps the front of the list and
+        // truncates the tail when the token budget is exceeded.
         json += L"\"hotwords\":[";
-        for (size_t i = 0; i < entries.size(); ++i) {
+        for (size_t i = 0; i < kept; ++i) {
             if (i > 0) json += L",";
-            const float scale = WeightToVolcengineScale(entries[i].weight);
-            wchar_t scaleBuf[32];
-            swprintf_s(scaleBuf, L"%.1f", scale);
-            json += L"{\"word\":\"" + EscapeJsonStringW(entries[i].word) + L"\",\"scale\":" + scaleBuf + L"}";
+            json += L"{\"word\":\"" + EscapeJsonStringW(entries[order[i]].word) + L"\"}";
         }
         json += L"]";
         needComma = true;
@@ -590,16 +614,16 @@ std::wstring BuildVolcengineContextJson(
 
     if (hasInput || hasHistory) {
         if (needComma) json += L",";
+        // The provider documents context_data as newest-first; `history` arrives
+        // in chronological order, and the focused input field text is the
+        // current turn, so it stays at the head.
         json += L"\"context_type\":\"dialog_ctx\",\"context_data\":[";
-        int idx = 0;
         if (hasInput) {
             json += L"{\"text\":\"" + EscapeJsonStringW(inputFieldText) + L"\"}";
-            idx++;
         }
-        for (const auto& item : history) {
-            if (idx > 0) json += L",";
-            json += L"{\"text\":\"" + EscapeJsonStringW(item) + L"\"}";
-            idx++;
+        for (size_t i = history.size(); i-- > 0;) {
+            if (hasInput || i + 1 != history.size()) json += L",";
+            json += L"{\"text\":\"" + EscapeJsonStringW(history[i]) + L"\"}";
         }
         json += L"]";
     }
@@ -635,7 +659,7 @@ bool EnsureVocabularyFileTemplate(const std::wstring& path) {
     }
     const std::wstring templateJson =
         L"{\r\n"
-        L"  \"// 说明\": \"支持人名、专有名词、公司术语。权重可选 1-5 或 50（50 为强制优先，最多 50 项；总计最多 2000 项）\",\r\n"
+        L"  \"// 说明\": \"支持人名、专有名词、公司术语。权重 1-5（推荐 4）为普通热词，50 为超级热词（最多 50 项；总计最多 2000 项）\",\r\n"
         L"  \"VoxType\": 50,\r\n"
         L"  \"音素\": 4,\r\n"
         L"  \"Kubernetes\": 4\r\n"

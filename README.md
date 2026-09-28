@@ -140,6 +140,7 @@ the packager re-extracts and hashes each result before publishing it.
 
 **Vocabulary tab**
 - Universal custom vocabulary shared across Qwen and Volcano Engine
+- Weights: `1–5` (default `4`) for ordinary terms, `50` for a super hotword (at most 50 of them, 2000 entries overall). Entries are always sent highest-weight first, so the most important words survive the provider caps instead of whichever words happen to sit at the top of the file
 - `Edit in External Editor` — Opens `vocabulary.json` in default text editor
 - `Reload from File` — Reloads vocabulary from file
 - `Format JSON` — Formats and indents the JSON text
@@ -155,6 +156,8 @@ the packager re-extracts and hashes each result before publishing it.
   - `Use focused input field text as context` — Reads current input field text as ASR context (UIA/MSAA/WM_GETTEXT layered fallback, input field priority, history fallback)
   - `Reuse common vocabulary (vocabulary.json)` — Sends the shared Vocabulary tab word list with the request
 - **Qwen ASR (DashScope)**: `API Key` (DPAPI encrypted) + model profile dropdown + profile-specific Endpoint + `Language` + `Chunk ms` + Audio 3 vocabulary/punctuation/VAD options + `Test Connection`
+  - `Use focused input field text as ASR context` — Reads the focused input field as ASR context (same layered UIA/MSAA/WM_GETTEXT reader as Volcano Engine, tail-first truncation to the provider's 400-character budget)
+  - `History ctx` → `Use recent recognition results` + `Rounds` (1–5, default 3) — Adds recent final transcripts to `input.context`; when neither the field nor the history has text, the vocabulary is sent as a domain word list. Off by default, because it forwards earlier transcripts. A recording that began in a password control never enters that history: the sensitive-focus probe is fail-closed, so an unverifiable focus is logged (`focus_unknown`) and skipped rather than uploaded later
   - New installs default to `qwen-audio-3.1-asr-flash-streaming`; existing configurations preserve their selected model.
   - Audio 3 defaults use the configured Beijing Workspace domain; no region selector is exposed.
   - The Audio 3 duplex profiles (`qwen-audio-3.1-asr-flash-streaming`, `qwen-audio-3.1-asr-flash-message`) show live partial text while recording; `qwen-audio-3.1-asr-flash` / `qwen-audio-3.0-asr-flash` are intentionally final-only because they submit the complete WAV after release.

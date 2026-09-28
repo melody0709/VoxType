@@ -19,10 +19,12 @@ inline std::wstring SanitizeText(const InputContextResult& result,
     if (result.inputFieldText.size() <= maxCharacters) {
         return result.inputFieldText;
     }
-    // The provider documents truncating excess text from the end, so retain
-    // the first maxCharacters rather than silently changing the context to a
-    // suffix.
-    return input_context::TakeFirstN(result.inputFieldText, maxCharacters);
+    // Tail-first is deliberate and uniform across every context turn: the text
+    // closest to the caret carries the most signal for a dictation tool, and
+    // truncating here means the provider never has to drop the words that
+    // matter.  (The provider's own rule truncates from the end, which would
+    // remove exactly this part of the text.)
+    return input_context::TakeLastN(result.inputFieldText, maxCharacters);
 }
 
 inline std::wstring CaptureInputFieldText(InputContextResult* diagnostics = nullptr) {
