@@ -10,6 +10,7 @@
 #include "ui_types.h"
 #include "ui_utils.h"
 #include "asr_probe_service.h"
+#include "qwen_audio_profile.h"
 #include "vocabulary_manager.h"
 
 #include <windowsx.h>
@@ -152,7 +153,14 @@ void ProviderQwen::CreateControls(HWND parent) {
     ApplyUiFont(qwenVocabId); ApplyUiFont(qwenVocabulary); ApplyUiFont(qwenSemantic);
     ApplyUiFont(qwenSilence); ApplyUiFont(qwenMulti); ApplyUiFont(qwenHeartbeat);
     ApplyUiFont(qwenNoiseEnable); ApplyUiFont(qwenNoise); ApplyUiFont(qwenContinue);
+    HWND qwenVadModel = CreateWindowExW(0, L"EDIT", nullptr, WS_CHILD | ES_AUTOHSCROLL, 0, 0, 0, 0, parent,
+                                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_VAD_MODEL)), GetParentInstance(parent), nullptr);
+    HWND qwenKeepDialect = CreateWindowW(L"BUTTON", nullptr, WS_CHILD | BS_AUTOCHECKBOX, 0, 0, 0, 0, parent,
+                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_KEEP_DIALECT)), GetParentInstance(parent), nullptr);
     ApplyUiFont(qwenSpecialReplace); ApplyUiFont(qwenSpecialEmpty); ApplyUiFont(qwenSystemFilter);
+    HWND qwenDisfluency = CreateWindowW(L"BUTTON", nullptr, WS_CHILD | BS_AUTOCHECKBOX, 0, 0, 0, 0, parent,
+                                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_DISFLUENCY_REMOVAL)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(qwenVadModel); ApplyUiFont(qwenKeepDialect); ApplyUiFont(qwenDisfluency);
 
     HWND btnTest = CreateButton(parent, IDC_QWEN_TEST, S(UiStyle::QwenTestBtnX), S(UiStyle::QwenAdvancedButtonY), S(UiStyle::QwenTestBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
     AddQwenControl(btnTest);
@@ -206,6 +214,9 @@ void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     HWND qwenModelCombo = GetDlgItem(parent, IDC_QWEN_MODEL);
     if (qwenModelCombo) {
         ComboBox_ResetContent(qwenModelCombo);
+        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.1-asr-flash-streaming");
+        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.1-asr-flash-message");
+        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.1-asr-flash");
         ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.0-asr-flash-streaming");
         ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.0-asr-flash");
         ComboBox_AddString(qwenModelCombo, L"qwen3-asr-flash-realtime");
@@ -247,6 +258,9 @@ void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_SPECIAL_REPLACE), cfg.qwenSpecialWordReplaceList.c_str());
     SetWindowTextW(GetDlgItem(parent, IDC_QWEN_SPECIAL_EMPTY), cfg.qwenSpecialWordEmptyList.c_str());
     Button_SetCheck(GetDlgItem(parent, IDC_QWEN_SYSTEM_FILTER), cfg.qwenSystemReservedFilter ? BST_CHECKED : BST_UNCHECKED);
+    SetWindowTextW(GetDlgItem(parent, IDC_QWEN_VAD_MODEL), cfg.qwenVadModel.c_str());
+    Button_SetCheck(GetDlgItem(parent, IDC_QWEN_KEEP_DIALECT), cfg.qwenKeepDialect ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(parent, IDC_QWEN_DISFLUENCY_REMOVAL), cfg.qwenDisfluencyRemovalEnabled ? BST_CHECKED : BST_UNCHECKED);
 
     ApplyQwenModelProfile(parent, cfg.qwenModel, false, m_profileState, m_languageHintsHint);
 }
@@ -299,6 +313,12 @@ void ProviderQwen::SaveControls(HWND parent, Config& cfg) {
     cfg.qwenSpecialWordReplaceList = QwenControlText(parent, IDC_QWEN_SPECIAL_REPLACE);
     cfg.qwenSpecialWordEmptyList = QwenControlText(parent, IDC_QWEN_SPECIAL_EMPTY);
     cfg.qwenSystemReservedFilter = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
+
+    cfg.qwenVadModel = QwenControlText(parent, IDC_QWEN_VAD_MODEL, 64);
+    if (cfg.qwenVadModel != L"near_meeting_16k") cfg.qwenVadModel = L"far_field_meeting_16k";
+    cfg.qwenKeepDialect = Button_GetCheck(GetDlgItem(parent, IDC_QWEN_KEEP_DIALECT)) == BST_CHECKED;
+    cfg.qwenDisfluencyRemovalEnabled =
+        Button_GetCheck(GetDlgItem(parent, IDC_QWEN_DISFLUENCY_REMOVAL)) == BST_CHECKED;
 }
 
 bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
@@ -389,7 +409,11 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
                 }
             }
         }
-        if (!ValidateQwenHints(QwenControlText(parent, IDC_QWEN_LANGUAGE_HINTS, 1024), err)) {
+        // Models that reject language_hints have their Hints input disabled, so
+        // validating it would block Test Connection with an error the user can
+        // no longer fix from this page.
+        if (qwen_audio_profile::SupportsLanguageHints(selectedModel) &&
+            !ValidateQwenHints(QwenControlText(parent, IDC_QWEN_LANGUAGE_HINTS, 1024), err)) {
             SetStatus(parent, err);
             MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
             return true;

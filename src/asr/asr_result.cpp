@@ -116,7 +116,7 @@ bool ShouldRunLlmRefine(const Config& config, const std::wstring& text) {
 std::wstring AsrBackendDisplayName(const Config& config) {
     if (config.asrBackend == L"qwen") {
         const std::wstring model = config.qwenModel.empty()
-            ? L"qwen-audio-3.0-asr-flash-streaming"
+            ? L"qwen-audio-3.1-asr-flash-streaming"
             : config.qwenModel;
         return L"Qwen ASR / " + model;
     }

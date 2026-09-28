@@ -94,7 +94,9 @@ struct Config {
     std::wstring qwenBaseUrl = kQwenBeijingRealtimeBaseUrl;
     std::wstring qwenHttpBaseUrl = kQwenBeijingHttpBaseUrl;
     std::wstring qwenAudioStreamingBaseUrl = kQwenBeijingAudioStreamingBaseUrl;
-    std::wstring qwenModel = L"qwen-audio-3.0-asr-flash-streaming";
+    // Fresh installs start on the Audio 3.1 streaming generation. Existing
+    // config files keep their selected model (NormalizePersistedProfile).
+    std::wstring qwenModel = L"qwen-audio-3.1-asr-flash-streaming";
     std::wstring qwenTransport = L"audio_streaming";
     std::wstring qwenLanguage;
     int qwenChunkMs = 100;
@@ -111,6 +113,16 @@ struct Config {
     std::wstring qwenSpecialWordReplaceList;
     std::wstring qwenSpecialWordEmptyList;
     bool qwenSystemReservedFilter = false;
+    // Audio 3.1 streaming only. The default mirrors the provider default so a
+    // 3.0 recording keeps its previous microphone posture.
+    std::wstring qwenVadModel = L"far_field_meeting_16k";
+    // Audio 3.1 only (streaming + HTTP batch). false transcribes dialects into
+    // standard Mandarin, which is the provider default as well.
+    bool qwenKeepDialect = false;
+    // qwen-audio-3.1-asr-flash-message only: filters filler words and polishes
+    // the transcript. Off by default so the model never rewrites user wording
+    // unless the user opts in.
+    bool qwenDisfluencyRemovalEnabled = false;
     bool qwenEnableInputContext = false;
     std::wstring qwenInputContextSnapshot;
     bool qwenInputContextSnapshotCaptured = false;

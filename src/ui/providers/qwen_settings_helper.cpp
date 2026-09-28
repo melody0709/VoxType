@@ -12,6 +12,7 @@
 #include "asr_probe_service.h"
 #include "qwen_special_word_filter.h"
 #include "vocabulary_manager.h"
+#include "qwen_audio_profile.h"
 
 #include <windowsx.h>
 #include <winhttp.h>
@@ -19,11 +20,11 @@
 namespace ui_provider {
 
 bool IsQwenAudioHttpModel(const std::wstring& model) {
-    return model == L"qwen-audio-3.0-asr-flash";
+    return qwen_audio_profile::IsHttpModel(model);
 }
 
 bool IsQwenAudioStreamingModel(const std::wstring& model) {
-    return model == L"qwen-audio-3.0-asr-flash-streaming";
+    return qwen_audio_profile::IsStreamingModel(model);
 }
 
 std::wstring QwenModelFromControl(HWND hwnd) {
@@ -65,6 +66,11 @@ std::wstring NormalizeQwenLanguageHints(const std::wstring& raw) {
 
 void UpdateQwenLanguageEffectiveHint(HWND hwnd, HWND hintControl) {
     if (!hintControl) return;
+    if (!qwen_audio_profile::SupportsLanguageHints(QwenModelFromControl(hwnd))) {
+        SetWindowTextW(hintControl,
+            L"Not used by this model: qwen-audio-3.1-asr-flash-message rejects language_hints.");
+        return;
+    }
     const std::wstring hints = NormalizeQwenLanguageHints(
         QwenControlText(hwnd, IDC_QWEN_LANGUAGE_HINTS, 1024));
     const std::wstring fallback = QwenLanguageCodeFromIndex(
@@ -149,6 +155,12 @@ bool ValidateQwenEndpoint(const std::wstring& raw,
 
 bool ValidateQwenAdvancedData(QwenAdvancedDialogData& data, std::wstring& error) {
     if (!vocabulary_manager::ValidateVocabulary(data.vocabulary, &error)) return false;
+    if (!data.vadModel.empty() &&
+        data.vadModel != L"far_field_meeting_16k" &&
+        data.vadModel != L"near_meeting_16k") {
+        error = L"VAD model must be far_field_meeting_16k or near_meeting_16k.";
+        return false;
+    }
     if (!data.streaming) return true;
     qwen_special_word_filter::Config specialFilter;
     if (!qwen_special_word_filter::Normalize(
@@ -187,13 +199,24 @@ void ApplyQwenModelProfile(HWND hwnd, const std::wstring& model, bool forceUpdat
         }
     }
     SetWindowTextW(GetDlgItem(hwnd, IDC_QWEN_BASE_URL), urlToSet.c_str());
+    // qwen-audio-3.1-asr-flash-message rejects language_hints: the Language and
+    // Hints inputs must not pretend to take effect for it.
+    const BOOL hintsUsed = qwen_audio_profile::SupportsLanguageHints(model) ? TRUE : FALSE;
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_LANGUAGE), hintsUsed);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_LANGUAGE_HINTS), hintsUsed);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_LANGUAGE_HINTS_RESET), hintsUsed);
     ShowQwenSubControls(hwnd);
     UpdateQwenLanguageEffectiveHint(hwnd, hintControl);
 }
 
 void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintControl) {
     QwenAdvancedDialogData data;
-    data.streaming = IsQwenAudioStreamingModel(QwenModelFromControl(hwnd));
+    const std::wstring model = QwenModelFromControl(hwnd);
+    data.streaming = IsQwenAudioStreamingModel(model);
+    // keep_dialect covers the whole 3.1 generation; vad_model is then further
+    // gated to the streaming model inside the dialog.
+    data.audio31 = qwen_audio_profile::SupportsKeepDialect(model);
+    data.message = qwen_audio_profile::IsMessageModel(model);
     data.vocabularyId = QwenControlText(hwnd, IDC_QWEN_VOCABULARY_ID, 512);
     data.vocabulary = QwenControlText(hwnd, IDC_QWEN_VOCABULARY);
     data.semanticPunctuation = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED;
@@ -206,6 +229,11 @@ void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintContr
     data.specialReplace = QwenControlText(hwnd, IDC_QWEN_SPECIAL_REPLACE);
     data.specialEmpty = QwenControlText(hwnd, IDC_QWEN_SPECIAL_EMPTY);
     data.systemReservedFilter = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
+    data.vadModel = QwenControlText(hwnd, IDC_QWEN_VAD_MODEL, 64);
+    if (data.vadModel.empty()) data.vadModel = L"far_field_meeting_16k";
+    data.keepDialect = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_KEEP_DIALECT)) == BST_CHECKED;
+    data.disfluencyRemoval =
+        Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL)) == BST_CHECKED;
 
     if (!ShowQwenAdvancedDialog(hwnd, data)) return;
 
@@ -226,6 +254,11 @@ void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintContr
     SetWindowTextW(GetDlgItem(hwnd, IDC_QWEN_SPECIAL_EMPTY), data.specialEmpty.c_str());
     Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER),
                     data.systemReservedFilter ? BST_CHECKED : BST_UNCHECKED);
+    SetWindowTextW(GetDlgItem(hwnd, IDC_QWEN_VAD_MODEL), data.vadModel.c_str());
+    Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_KEEP_DIALECT),
+                    data.keepDialect ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL),
+                    data.disfluencyRemoval ? BST_CHECKED : BST_UNCHECKED);
     ApplyQwenModelProfile(hwnd, QwenModelFromControl(hwnd), false, state, hintControl);
     SetStatus(hwnd, L"Qwen advanced settings updated. Click Save to apply.");
 }

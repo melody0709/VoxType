@@ -431,11 +431,45 @@ int wmain() {
         CHECK(loaded.modelId == L"foo", "loaded value deserialized");
         CHECK(loaded.configVersion == 110, "postload hook executed on loaded config");
     }
-    // 27) 全量 96 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 27) Audio 3.1 新增配置项的持久化往返（真实注册表：键名、布尔字面量格式与回读）
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 96, "registry total entry count is 96");
+
+        Config on;
+        on.qwenVadModel = L"near_meeting_16k";
+        on.qwenKeepDialect = true;
+        on.qwenDisfluencyRemovalEnabled = true;
+        const std::string json = reg.SaveJson(on);
+        CHECK(json.find("\"qwen_vad_model\": \"near_meeting_16k\"") != std::string::npos,
+              "qwen_vad_model persists as a string");
+        CHECK(json.find("\"qwen_keep_dialect\": true") != std::string::npos,
+              "qwen_keep_dialect persists as a literal boolean");
+        CHECK(json.find("\"qwen_disfluency_removal\": true") != std::string::npos,
+              "qwen_disfluency_removal persists as a literal boolean");
+
+        Config onLoaded;
+        reg.LoadJson(onLoaded, json);
+        CHECK(onLoaded.qwenVadModel == L"near_meeting_16k" &&
+                  onLoaded.qwenKeepDialect == true &&
+                  onLoaded.qwenDisfluencyRemovalEnabled == true,
+              "Audio 3.1 settings survive a save/load round-trip");
+
+        Config off;
+        off.qwenVadModel = L"far_field_meeting_16k";
+        const std::string offJson = reg.SaveJson(off);
+        Config offLoaded;
+        reg.LoadJson(offLoaded, offJson);
+        CHECK(offLoaded.qwenVadModel == L"far_field_meeting_16k" &&
+                  offLoaded.qwenKeepDialect == false &&
+                  offLoaded.qwenDisfluencyRemovalEnabled == false,
+              "Audio 3.1 settings round-trip as their defaults");
+    }
+    // 28) 全量 99 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    {
+        config_registry::InitializeRegistry();
+        const auto& reg = config_registry::Registry::Instance();
+        CHECK(reg.GetEntries().size() == 99, "registry total entry count is 99");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -739,7 +773,7 @@ int wmain() {
         CHECK(vocabulary_manager::WeightToQwen(2) == 2, "vocab qwen weight 2 -> 2");
 
         // 2. Validation
-        CHECK(vocabulary_manager::IsValidTerm(L"何启煊"), "vocab valid chinese term");
+        CHECK(vocabulary_manager::IsValidTerm(L"张启明"), "vocab valid chinese term");
         CHECK(vocabulary_manager::IsValidTerm(L"VoxType"), "vocab valid english single word");
         CHECK(vocabulary_manager::IsValidTerm(L"Artificial Intelligence In Speech"), "vocab valid 4 english words");
         CHECK(!vocabulary_manager::IsValidTerm(L""), "vocab reject empty term");
@@ -752,16 +786,16 @@ int wmain() {
             L"  // 单行注释\n"
             L"  \"// 伪注释键\": \"说明内容\",\n"
             L"  /* 块注释 */\n"
-            L"  \"何启煊\": 50,\n"
-            L"  \"何燮煊\": \"25\",\n"
+            L"  \"张启明\": 50,\n"
+            L"  \"张启星\": \"25\",\n"
             L"  \"VoxType\": 10\n"
             L"}\n";
         auto parsedRes = vocabulary_manager::ParseVocabularyJson(sampleJson);
         CHECK(parsedRes.has_value(), "vocab parse json success");
         if (parsedRes) {
             CHECK(parsedRes->size() == 3, "vocab parse json count 3");
-            CHECK((*parsedRes)[0].word == L"何启煊" && (*parsedRes)[0].weight == 50, "vocab entry 1 match");
-            CHECK((*parsedRes)[1].word == L"何燮煊" && (*parsedRes)[1].weight == 25, "vocab entry 2 match");
+            CHECK((*parsedRes)[0].word == L"张启明" && (*parsedRes)[0].weight == 50, "vocab entry 1 match");
+            CHECK((*parsedRes)[1].word == L"张启星" && (*parsedRes)[1].weight == 25, "vocab entry 2 match");
             CHECK((*parsedRes)[2].word == L"VoxType" && (*parsedRes)[2].weight == 10, "vocab entry 3 match");
         }
 
@@ -769,15 +803,15 @@ int wmain() {
         const wchar_t* lineText =
             L"# Line comment\n"
             L"// Another comment\n"
-            L"\"何悦滢\" : 50\n"
-            L"李协煊 20\n"
+            L"\"李悦宁\" : 50\n"
+            L"王协宁 20\n"
             L"Claude\n";
         auto parsedLines = vocabulary_manager::ParseVocabularyLines(lineText);
         CHECK(parsedLines.has_value(), "vocab parse lines success");
         if (parsedLines) {
             CHECK(parsedLines->size() == 3, "vocab parse lines count 3");
-            CHECK((*parsedLines)[0].word == L"何悦滢" && (*parsedLines)[0].weight == 50, "line entry 1");
-            CHECK((*parsedLines)[1].word == L"李协煊" && (*parsedLines)[1].weight == 20, "line entry 2");
+            CHECK((*parsedLines)[0].word == L"李悦宁" && (*parsedLines)[0].weight == 50, "line entry 1");
+            CHECK((*parsedLines)[1].word == L"王协宁" && (*parsedLines)[1].weight == 20, "line entry 2");
             CHECK((*parsedLines)[2].word == L"Claude" && (*parsedLines)[2].weight == 50, "line entry 3 default weight");
         }
 
@@ -809,8 +843,8 @@ int wmain() {
 
         // 6. Transpilation to Volcengine hotwords & context
         vocabulary_manager::VocabularyList volcEntries = {
-            { L"何启煊", 50 },
-            { L"何燮煊", 25 }
+            { L"张启明", 50 },
+            { L"张启星", 25 }
         };
         std::string volcHotwords = vocabulary_manager::TranspileToVolcengineHotwordsJson(volcEntries);
         CHECK(volcHotwords.find("\"scale\":3.0") != std::string::npos, "volc hotwords scale 3.0");
@@ -840,29 +874,29 @@ int wmain() {
         DeleteFileW(testFilePath.c_str());
 
         // 9. Edge cases: Rejecting unclosed JSON, missing values, lone surrogates
-        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"何启煊\": 50").has_value(),
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"张启明\": 50").has_value(),
               "vocab reject unclosed json missing brace");
-        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"何启煊\": }").has_value(),
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"张启明\": }").has_value(),
               "vocab reject json missing value");
-        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"何启煊\": true}").has_value(),
+        CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"张启明\": true}").has_value(),
               "vocab reject json bool value");
         CHECK(!vocabulary_manager::ParseVocabularyJson(L"{\"\\ude00\": 50}").has_value(),
               "vocab reject lone low surrogate key");
 
         // 10. Line parsing delimiter stripping & float weight tolerance
         const wchar_t* complexLines =
-            L"何启煊 : 50\n"
-            L"何燮煊: 40\n"
-            L"何悦滢 = 30\n"
-            L"李协煊, 20\n"
+            L"张启明 : 50\n"
+            L"张启星: 40\n"
+            L"李悦宁 = 30\n"
+            L"王协宁, 20\n"
             L"SherpaTerm : 3.0\n";
         auto parsedComplex = vocabulary_manager::ParseVocabularyLines(complexLines);
         CHECK(parsedComplex.has_value(), "vocab complex lines parse ok");
         if (parsedComplex && parsedComplex->size() == 5) {
-            CHECK((*parsedComplex)[0].word == L"何启煊" && (*parsedComplex)[0].weight == 50, "line strip colon space");
-            CHECK((*parsedComplex)[1].word == L"何燮煊" && (*parsedComplex)[1].weight == 40, "line strip colon direct");
-            CHECK((*parsedComplex)[2].word == L"何悦滢" && (*parsedComplex)[2].weight == 30, "line strip equals");
-            CHECK((*parsedComplex)[3].word == L"李协煊" && (*parsedComplex)[3].weight == 20, "line strip comma");
+            CHECK((*parsedComplex)[0].word == L"张启明" && (*parsedComplex)[0].weight == 50, "line strip colon space");
+            CHECK((*parsedComplex)[1].word == L"张启星" && (*parsedComplex)[1].weight == 40, "line strip colon direct");
+            CHECK((*parsedComplex)[2].word == L"李悦宁" && (*parsedComplex)[2].weight == 30, "line strip equals");
+            CHECK((*parsedComplex)[3].word == L"王协宁" && (*parsedComplex)[3].weight == 20, "line strip comma");
             CHECK((*parsedComplex)[4].word == L"SherpaTerm" && (*parsedComplex)[4].weight == 3, "line float weight parsed");
         }
 
@@ -876,11 +910,11 @@ int wmain() {
 
         const std::wstring section = vocabulary_manager::BuildLlmVocabularySection({
             { L"gittag", 10 },
-            { L"何启煊", 50 },
+            { L"张启明", 50 },
             { L"Conmmand Code", 25 },
         });
         CHECK(section.find(L"【用户词表】") == 0, "llm vocab section opens with its heading");
-        CHECK(section.find(L"何启煊, Conmmand Code, gittag") != std::wstring::npos,
+        CHECK(section.find(L"张启明, Conmmand Code, gittag") != std::wstring::npos,
               "llm vocab entries are listed highest weight first");
         CHECK(section.find(L"不得改动其拼写、大小写或写法") != std::wstring::npos,
               "llm vocab section protects spelling without replacing it");
@@ -940,14 +974,20 @@ int wmain() {
         {
             Config cfg;
             cfg.asrBackend = L"qwen";
+            cfg.qwenModel = L"qwen-audio-3.1-asr-flash-streaming";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.1-asr-flash-streaming", "qwen 3.1 flash streaming");
+            cfg.qwenModel = L"qwen-audio-3.1-asr-flash";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.1-asr-flash", "qwen 3.1 audio flash");
             cfg.qwenModel = L"qwen-audio-3.0-asr-flash-streaming";
             CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.0-asr-flash-streaming", "qwen flash streaming");
             cfg.qwenModel = L"qwen-audio-3.0-asr-flash";
             CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.0-asr-flash", "qwen audio flash");
+            cfg.qwenModel = L"qwen-audio-3.1-asr-flash-message";
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.1-asr-flash-message", "qwen 3.1 message");
             cfg.qwenModel = L"qwen3-asr-flash-realtime";
             CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen3-asr-flash-realtime", "qwen realtime");
             cfg.qwenModel = L"";
-            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.0-asr-flash-streaming", "qwen empty default");
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.1-asr-flash-streaming", "qwen empty default");
             cfg.qwenModel = L"qwen-audio-turbo";
             CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-turbo", "qwen custom model");
         }

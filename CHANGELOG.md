@@ -2,6 +2,21 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.11.3 (2026-09-28)
+
+### Features & Integrations
+
+- **Official Qwen-Audio-3.1 ASR models integrated.**
+  - Added full support for Alibaba Cloud's next-generation speech recognition models via Model Studio (Bailian) and DashScope:
+    - `qwen-audio-3.1-asr-flash-streaming`: Real-time bidirectional streaming recognition via WebSocket with low latency, native speech polishing (removes filler words and stuttering), multi-dialect support, and ancient poetry/classical Chinese prosody tuning. **Now the default for fresh installs**; existing configurations keep their selected model.
+    - `qwen-audio-3.1-asr-flash-message`: Same `/api-ws/v1/inference` duplex protocol as streaming with a smaller parameter set — it rejects `language_hints` / `semantic_punctuation_enabled` / `multi_threshold_mode_enabled` / `special_word_filter` and adds an opt-in `disfluency_removal_enabled` polish switch plus `intermediate_result_enabled`. VoxType pins intermediate results on so the HUD keeps streaming partials; polish stays off by default so the model never rewrites wording unasked.
+    - `qwen-audio-3.1-asr-flash`: High-performance HTTP batch audio recognition with 0.8 RMB / 1M input tokens pricing.
+  - Previous `qwen-audio-3.0-asr-flash-streaming`, `qwen-audio-3.0-asr-flash`, and legacy `qwen3-asr-flash-realtime` models are fully preserved with backward compatibility.
+  - Refactored model dispatching in `qwen_audio_profile.h` using family predicates (`IsStreamingModel`, `IsHttpModel`, `IsSupportedModel`), eliminating fragile hardcoded single-model string comparisons across attempt manager, session controllers, probe services, and diagnostics.
+  - Added 3.1 options directly to the Qwen Settings model dropdown and connectivity probe tests.
+  - Added the two Audio 3.1-only request fields, gated by model generation so 3.0 requests stay unchanged: `vad_model` (3.1 streaming only; switches between near-field `near_meeting_16k` and the default far-field `far_field_meeting_16k`) and `keep_dialect` (whole 3.1 generation; keeps dialect wording instead of transcribing it into Mandarin). Both are configurable in Qwen Advanced settings and pinned by protocol regression tests.
+  - Documented live API parameters, pricing, and integration plan in `.plan/feat/QWEN_AUDIO_3_1_ASR_INTEGRATION_PLAN.md` and unified specification `doc/qwen/Qwen-Audio-3.x-ASR.md`.
+
 ## v0.11.2 (2026-09-25)
 
 ### Improvements

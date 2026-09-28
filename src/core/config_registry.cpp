@@ -323,6 +323,9 @@ void InitializeRegistry() {
     reg.Register({"qwen_special_word_replace", &Config::qwenSpecialWordReplaceList});
     reg.Register({"qwen_special_word_empty", &Config::qwenSpecialWordEmptyList});
     reg.Register({"qwen_system_reserved_filter", &Config::qwenSystemReservedFilter, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"qwen_vad_model", &Config::qwenVadModel});
+    reg.Register({"qwen_keep_dialect", &Config::qwenKeepDialect, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"qwen_disfluency_removal", &Config::qwenDisfluencyRemovalEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"mimo_api_key", &Config::mimoApiKey, CryptoPolicy::Dpapi});
     reg.Register({"mimo_base_url", &Config::mimoBaseUrl});
     reg.Register({"mimo_model", &Config::mimoModel});

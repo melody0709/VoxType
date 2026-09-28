@@ -339,6 +339,50 @@ int main() {
                "known model repairs mismatched transport");
     }
     {
+        std::wstring model = L"qwen-audio-3.1-asr-flash-streaming";
+        std::wstring transport = L"legacy_realtime";
+        qwen_audio_profile::NormalizePersistedProfile(model, transport, true, true);
+        Expect(transport == qwen_audio_profile::kStreamingTransport,
+               "3.1 streaming model repairs mismatched transport");
+        Expect(qwen_audio_profile::IsStreamingModel(model), "3.1 streaming is streaming model");
+    }
+    {
+        std::wstring model = L"qwen-audio-3.1-asr-flash";
+        std::wstring transport = L"legacy_realtime";
+        qwen_audio_profile::NormalizePersistedProfile(model, transport, true, true);
+        Expect(transport == qwen_audio_profile::kHttpTransport,
+               "3.1 http model repairs mismatched transport");
+        Expect(qwen_audio_profile::IsHttpModel(model), "3.1 http is http model");
+        Expect(qwen_audio_profile::IsSupportedModel(model), "3.1 http is supported model");
+    }
+    {
+        Expect(qwen_audio_profile::IsStreamingModel(L"qwen-audio-3.1-asr-flash-message") &&
+                   qwen_audio_profile::IsMessageModel(L"qwen-audio-3.1-asr-flash-message") &&
+                   !qwen_audio_profile::IsStreamingModel31(L"qwen-audio-3.1-asr-flash-message"),
+               "3.1 message shares the streaming transport but is its own generation");
+        Expect(qwen_audio_profile::SupportsVadModel(L"qwen-audio-3.1-asr-flash-streaming") &&
+                   qwen_audio_profile::SupportsVadModel(L"qwen-audio-3.1-asr-flash-message") &&
+                   !qwen_audio_profile::SupportsVadModel(L"qwen-audio-3.1-asr-flash") &&
+                   !qwen_audio_profile::SupportsVadModel(L"qwen-audio-3.0-asr-flash-streaming"),
+               "vad_model is gated to the 3.1 duplex generation");
+        Expect(qwen_audio_profile::SupportsKeepDialect(L"qwen-audio-3.1-asr-flash-streaming") &&
+                   qwen_audio_profile::SupportsKeepDialect(L"qwen-audio-3.1-asr-flash-message") &&
+                   qwen_audio_profile::SupportsKeepDialect(L"qwen-audio-3.1-asr-flash") &&
+                   !qwen_audio_profile::SupportsKeepDialect(L"qwen-audio-3.0-asr-flash") &&
+                   !qwen_audio_profile::SupportsKeepDialect(L"qwen-audio-3.0-asr-flash-streaming"),
+               "keep_dialect is gated to the whole 3.1 generation");
+        Expect(!qwen_audio_profile::SupportsLanguageHints(L"qwen-audio-3.1-asr-flash-message") &&
+                   !qwen_audio_profile::SupportsSemanticPunctuation(L"qwen-audio-3.1-asr-flash-message") &&
+                   !qwen_audio_profile::SupportsSpecialWordFilter(L"qwen-audio-3.1-asr-flash-message") &&
+                   qwen_audio_profile::SupportsLanguageHints(L"qwen-audio-3.1-asr-flash-streaming"),
+               "3.1 message rejects the hints / punctuation / word-filter family");
+        Expect(qwen_audio_profile::SupportsDisfluencyRemoval(L"qwen-audio-3.1-asr-flash-message") &&
+                   !qwen_audio_profile::SupportsDisfluencyRemoval(L"qwen-audio-3.1-asr-flash-streaming") &&
+                   qwen_audio_profile::SupportsIntermediateResult(L"qwen-audio-3.1-asr-flash-message") &&
+                   !qwen_audio_profile::SupportsIntermediateResult(L"qwen-audio-3.0-asr-flash-streaming"),
+               "disfluency removal and intermediate results are message-only");
+    }
+    {
         std::wstring model = L"future-qwen-model";
         std::wstring transport = L"audio_http";
         qwen_audio_profile::NormalizePersistedProfile(model, transport, true, true);
@@ -543,6 +587,67 @@ int main() {
         Expect(withFilterTask.find("special_word_filter") != std::string::npos &&
                    qwen_audio_json::IsValidValue(Utf8ToWide(withFilterTask)),
                "Audio 3 streaming run-task includes a valid special-word filter");
+
+        // Audio 3.1 adds two run-task fields (vad_model, keep_dialect). They
+        // must stay absent on 3.0, whose request schema rejects them.
+        qwen_audio_streaming::Config stream31;
+        stream31.model = L"qwen-audio-3.1-asr-flash-streaming";
+        stream31.vadModel = L"near_meeting_16k";
+        stream31.keepDialect = true;
+        const std::string runTask31 = qwen_audio_streaming::BuildRunTaskMessage(stream31, "task-31");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(runTask31)) &&
+                   runTask31.find("\"vad_model\":\"near_meeting_16k\"") != std::string::npos &&
+                   runTask31.find("\"keep_dialect\":true") != std::string::npos,
+               "3.1 streaming run-task carries vad_model and keep_dialect");
+        Expect(runTask.find("vad_model") == std::string::npos &&
+                   runTask.find("keep_dialect") == std::string::npos,
+               "3.0 streaming run-task omits the 3.1-only fields");
+
+        qwen_audio_http::Config http31;
+        http31.model = L"qwen-audio-3.1-asr-flash";
+        http31.keepDialect = true;
+        const std::string http31Json = qwen_audio_http::BuildRequestJsonForTest(http31, "AQID");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(http31Json)) &&
+                   http31Json.find("\"keep_dialect\":true") != std::string::npos,
+               "3.1 HTTP request carries keep_dialect");
+        qwen_audio_http::Config http30;
+        http30.model = L"qwen-audio-3.0-asr-flash";
+        Expect(qwen_audio_http::BuildRequestJsonForTest(http30, "AQID").find("keep_dialect") ==
+                   std::string::npos,
+               "3.0 HTTP request omits keep_dialect");
+
+        // 3.1 message speaks the same run-task protocol with a different field
+        // set: it drops the hints / punctuation / word-filter family and adds
+        // disfluency_removal_enabled plus intermediate_result_enabled.
+        qwen_audio_streaming::Config msg;
+        msg.model = L"qwen-audio-3.1-asr-flash-message";
+        msg.languageHints = L"zh";
+        msg.semanticPunctuation = true;
+        msg.multiThresholdMode = true;
+        msg.specialWordReplaceList = L"敏感";
+        msg.vadModel = L"near_meeting_16k";
+        msg.keepDialect = true;
+        msg.disfluencyRemovalEnabled = true;
+        const std::string msgTask = qwen_audio_streaming::BuildRunTaskMessage(msg, "task-msg");
+        Expect(qwen_audio_json::IsValidValue(Utf8ToWide(msgTask)) &&
+                   msgTask.find("\"disfluency_removal_enabled\":true") != std::string::npos &&
+                   msgTask.find("\"intermediate_result_enabled\":true") != std::string::npos &&
+                   msgTask.find("\"vad_model\":\"near_meeting_16k\"") != std::string::npos &&
+                   msgTask.find("\"keep_dialect\":true") != std::string::npos &&
+                   msgTask.find("\"max_sentence_silence\"") != std::string::npos,
+               "3.1 message run-task carries its own field set");
+        Expect(msgTask.find("language_hints") == std::string::npos &&
+                   msgTask.find("semantic_punctuation_enabled") == std::string::npos &&
+                   msgTask.find("multi_threshold_mode_enabled") == std::string::npos &&
+                   msgTask.find("special_word_filter") == std::string::npos,
+               "3.1 message run-task omits the fields its schema rejects");
+
+        qwen_audio_streaming::Config msgOff;
+        msgOff.model = L"qwen-audio-3.1-asr-flash-message";
+        const std::string msgOffTask = qwen_audio_streaming::BuildRunTaskMessage(msgOff, "task-msg-off");
+        Expect(msgOffTask.find("\"disfluency_removal_enabled\":false") != std::string::npos &&
+                   msgOffTask.find("\"intermediate_result_enabled\":true") != std::string::npos,
+               "3.1 message keeps polish off by default but always streams partials");
 
         const auto started = qwen_audio_streaming::ParseServerEventMessage(
             R"({"header":{"event":"task-started"},"payload":{}})");

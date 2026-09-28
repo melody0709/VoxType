@@ -11,7 +11,7 @@ struct Config {
     uint64_t attemptId = 0;
     std::wstring apiKey;
     std::wstring baseUrl;
-    std::wstring model = L"qwen-audio-3.0-asr-flash-streaming";
+    std::wstring model = L"qwen-audio-3.1-asr-flash-streaming";
     std::wstring languageHints;
     std::wstring vocabularyId;
     std::wstring vocabulary;
@@ -29,6 +29,15 @@ struct Config {
     bool heartbeat = false;
     bool speechNoiseThresholdEnabled = false;
     float speechNoiseThreshold = 0.0f;
+    // Audio 3.1 streaming only (near_meeting_16k / far_field_meeting_16k).
+    // The sender omits it for 3.0, which does not accept the field.
+    std::wstring vadModel = L"far_field_meeting_16k";
+    // Audio 3.1 streaming only; omitted for 3.0.
+    bool keepDialect = false;
+    // qwen-audio-3.1-asr-flash-message only; omitted for every other model.
+    // Stays off by default so the model never rewrites user wording unless the
+    // user opts in.
+    bool disfluencyRemovalEnabled = false;
 };
 
 struct Event {

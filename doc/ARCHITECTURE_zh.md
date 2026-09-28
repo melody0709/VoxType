@@ -87,8 +87,9 @@ flowchart LR
 | `src/asr/baidu_asr.h` | 百度智能云 ASR 模块（header-only） |
 | `src/asr/volcengine_asr.h` | 火山引擎（豆包）ASR 模块（header-only，WebSocket） |
 | `src/asr/qwen_asr.h` / `src/asr/qwen_asr.cpp` | Qwen ASR realtime WebSocket 客户端 |
-| `src/asr/qwen_audio_http.*` | Qwen Audio 3 `qwen-audio-3.0-asr-flash` HTTP/WAV batch 客户端 |
-| `src/asr/qwen_audio_streaming.*` / `src/asr/qwen_audio_streaming_session.*` | Qwen Audio 3 streaming `run-task`、二进制 PCM、partial/final 与任务生命周期 |
+| `src/asr/qwen_audio_http.*` | Qwen Audio 3.x `qwen-audio-3.{0,1}-asr-flash` HTTP/WAV batch 客户端 |
+| `src/asr/qwen_audio_streaming.*` / `src/asr/qwen_audio_streaming_session.*` | Qwen Audio 3.x streaming `run-task`、二进制 PCM、partial/final 与任务生命周期（3.1 追加 `vad_model`/`keep_dialect`） |
+| `src/core/qwen_audio_profile.h` | Qwen Audio 族系谓词（含 message）与全部字段门控（`SupportsVadModel` / `SupportsKeepDialect` / `SupportsDisfluencyRemoval` / `SupportsIntermediateResult` / `SupportsLanguageHints` 等） |
 | `src/asr/qwen_free_streaming_session.h` / `src/asr/qwen_free_streaming_session.cpp` | 千问 IME Free 流式 session：本地 PCM、可重放 final、bundled LLM 后处理和（当前禁用的）选区改写实验安全校验 |
 | `src/asr/qwen_free_proto_asr.h` / `src/asr/qwen_free_proto_asr.cpp` | 千问 IME Free ASR WebSocket 协议：UTDID/WSG query、长度前缀 PCM/JSON 帧、partial/final 解析和连接诊断 |
 | `src/asr/qwen_free_proto_llm.h` / `src/asr/qwen_free_proto_llm.cpp` | 千问 IME Free `VoiceInputWrite` / `VoiceInputRewrite` HTTP 协议及响应校验 |
@@ -258,7 +259,7 @@ DLL/模型和 Portable 配置错误地按工具 exe 所在目录解析。
 
 - **百度智能云** 通过 `BaiduAsrSession` 走 batch-style REST 流程。
 - **火山引擎** 保留已验证的 WebSocket 协议实现于 `src/asr/volcengine_asr.h`；`main.cpp` 只在外围编排 replay retry、watchdog 和 HUD 分发。
-- **Qwen ASR** 按 Model profile 路由：旧 `qwen3-asr-flash-realtime` 继续通过 `src/asr/qwen_asr.h/.cpp` 使用原 Realtime WebSocket；`qwen-audio-3.0-asr-flash` 由 `qwen_audio_http.*` 走整段 WAV/Base64 HTTP batch；`qwen-audio-3.0-asr-flash-streaming` 由 `qwen_audio_streaming.*` 和 `qwen_audio_streaming_session.*` 使用北京 Workspace 的 `run-task`/二进制 PCM/`finish-task` WebSocket。三者共享 API Key、录音、VAD、session、fallback 和结果分发，但不混用协议消息。Audio 3 streaming 的接收线程累计 sentence final 与当前 partial，松开后只等待 `task-finished`，超时或协议错误进入统一 fallback。
+- **Qwen ASR** 按 Model profile 路由：旧 `qwen3-asr-flash-realtime` 继续通过 `src/asr/qwen_asr.h/.cpp` 使用原 Realtime WebSocket；Audio 3 HTTP 代次（`qwen-audio-3.0-asr-flash`、`qwen-audio-3.1-asr-flash`）由 `qwen_audio_http.*` 走整段 WAV/Base64 HTTP batch；Audio 3 双工形态（`qwen-audio-3.0-asr-flash-streaming`、`qwen-audio-3.1-asr-flash-streaming`、`qwen-audio-3.1-asr-flash-message`）共用 `qwen_audio_streaming.*` 与 `qwen_audio_streaming_session.*`，走北京 Workspace 的 `run-task`/二进制 PCM/`finish-task` WebSocket——message 只差参数集，因此 `src/core/qwen_audio_profile.h` 同时持有族系谓词（`IsHttpModel`、`IsStreamingModel`、`IsMessageModel`、`IsSupportedModel`）与**全部字段门控**：3.1 代次的 `SupportsVadModel` / `SupportsKeepDialect`，message 独有的 `SupportsDisfluencyRemoval` / `SupportsIntermediateResult`，以及用于屏蔽 message 非法字段的 `SupportsLanguageHints` / `SupportsSemanticPunctuation` / `SupportsSpecialWordFilter`。各 profile 共享 API Key、录音、VAD、session、fallback 和结果分发，但不混用协议消息。Audio 3 streaming 的接收线程累计 sentence final 与当前 partial，松开后只等待 `task-finished`，超时或协议错误进入统一 fallback。
 - Audio 3 streaming 同时复用 `PendingPcmBuffer`、有界 `CloudAsrReplayBuffer`、自适应 final timeout、主 watchdog 和 stale-attempt guard。传输断开允许在松键后进行一次 replay；服务端 `task-failed` 视为请求拒绝，不盲目重放；replay 或 pending buffer 达到上限时保持录音边界并报告明确错误。
 - 公共录音层会把运行中的 WASAPI 和 `waveIn` 设备/驱动错误通过带 generation 的主窗口消息上报。UI 线程会使当前 attempt 失效、停止并释放设备、终止活动 provider session、取消 watchdog，并显示设备错误；不完整 PCM 不会进入 fallback，也不会作为文本粘贴。上一段录音遗留的错误消息会被 generation guard 丢弃。
 - **千问 IME Free** 通过 `src/asr/qwen_free_proto_*` 和 `src/asr/qwen_free_streaming_session.cpp` 接入本机千问 IME 的逆向协议。VoxType 自己采集 WASAPI PCM，获取本机 UTDID，并只对 SHA-256 指纹匹配的兼容 `unet.dll` 调用版本相关 WSG FFI；原生鉴权不可用时会在联网前失败并进入统一 fallback。连接成功后发送 `0xf00` PCM commit 和最终 stop 帧，并可选调用 `VoiceInputWrite` HTTP 后处理。该后端绕过本地 VAD，保留完整 PCM 交给服务端分段；`Punctuate` 与 `Correct` 是 bundled 响应的兼容开关，不是独立请求；`Rewrite selection` 目前仅保留为禁用的实验协议路径，配置加载/保存会强制关闭，待兼容字段与原版同场景请求/响应完成对照后再重新评审。

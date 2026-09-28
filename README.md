@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.11.2</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.11.3</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -31,7 +31,7 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 - **Real-time HUD** — Bottom floating capsule window during recording, 5 volume bars responding to sound
 - **Dual VAD Options** — Silero VAD (lightweight) / FireRed VAD (high precision F1 97.57), intelligently skips silence
 - **LLM Correction (Optional)** — Supports DeepSeek / OpenRouter / SiliconFlow and other providers, one-click configuration
-- **Cloud ASR (Optional)** — Supports Volcano Engine (Doubao), Baidu Cloud, Qwen ASR (legacy `qwen3-asr-flash-realtime`, Audio 3 HTTP `qwen-audio-3.0-asr-flash`, and Audio 3 streaming `qwen-audio-3.0-asr-flash-streaming`), Xiaomi MiMo ASR (`mimo-v2.5-asr`), experimental Doubao IME ASR, and reverse-engineered Qianwen IME (`qwen_free`, requires local Qianwen IME install) as alternative backends, with optional fallback ASR
+- **Cloud ASR (Optional)** — Supports Volcano Engine (Doubao), Baidu Cloud, Qwen ASR (flagship Audio 3.1 `qwen-audio-3.1-asr-flash-streaming`, `qwen-audio-3.1-asr-flash-message` & `qwen-audio-3.1-asr-flash`, Audio 3.0 streaming/HTTP, and legacy `qwen3-asr-flash-realtime`), Xiaomi MiMo ASR (`mimo-v2.5-asr`), experimental Doubao IME ASR, and reverse-engineered Qianwen IME (`qwen_free`, requires local Qianwen IME install) as alternative backends, with optional fallback ASR
 
 ## Quick Start
 
@@ -155,9 +155,10 @@ the packager re-extracts and hashes each result before publishing it.
   - `Use focused input field text as context` — Reads current input field text as ASR context (UIA/MSAA/WM_GETTEXT layered fallback, input field priority, history fallback)
   - `Reuse common vocabulary (vocabulary.json)` — Sends the shared Vocabulary tab word list with the request
 - **Qwen ASR (DashScope)**: `API Key` (DPAPI encrypted) + model profile dropdown + profile-specific Endpoint + `Language` + `Chunk ms` + Audio 3 vocabulary/punctuation/VAD options + `Test Connection`
-  - New installs default to `qwen-audio-3.0-asr-flash-streaming`; existing configurations preserve their selected model.
+  - New installs default to `qwen-audio-3.1-asr-flash-streaming`; existing configurations preserve their selected model.
   - Audio 3 defaults use the configured Beijing Workspace domain; no region selector is exposed.
-  - `qwen-audio-3.0-asr-flash-streaming` shows live partial text while recording; `qwen-audio-3.0-asr-flash` is intentionally final-only because it submits the complete WAV after release.
+  - The Audio 3 duplex profiles (`qwen-audio-3.1-asr-flash-streaming`, `qwen-audio-3.1-asr-flash-message`) show live partial text while recording; `qwen-audio-3.1-asr-flash` / `qwen-audio-3.0-asr-flash` are intentionally final-only because they submit the complete WAV after release.
+  - Generation-gated parameters live in [Advanced...]: `VAD model` (near/far-field) and `Keep dialect` for the 3.1 profiles, `Filler-word removal / polish` only for `qwen-audio-3.1-asr-flash-message`. Controls disable themselves for models that reject the field.
   - Turn detection is fixed to Manual for push-to-talk usage; Server VAD settings are intentionally hidden
 - **MiMo ASR (Xiaomi)**: `API Key` (DPAPI encrypted) + `Base URL` + `Model` + `Language` + `Test Connection`
   - Default Base URL: `https://token-plan-ams.xiaomimimo.com/v1`

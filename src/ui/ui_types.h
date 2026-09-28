@@ -157,7 +157,7 @@ constexpr int MimoPresetComboW = 150;
 constexpr int MimoUrlEditGap = 10;
 constexpr int MimoUrlEditW = 420;
 constexpr int QwenAdvancedDialogW = 720;
-constexpr int QwenAdvancedDialogH = 752;
+constexpr int QwenAdvancedDialogH = 860;
 // QwenAdvancedDialogH is the outer window height. Reserve room for the
 // caption/frame before validating client-area controls.
 constexpr int QwenAdvancedDialogNonClientReserveH = 48;
@@ -171,7 +171,7 @@ constexpr int QwenAdvancedDialogVocabIdHintY = 92;
 constexpr int QwenAdvancedDialogVocabJsonLabelY = 146;
 constexpr int QwenAdvancedDialogVocabJsonHintY = 146;
 constexpr int QwenAdvancedDialogStreamingGroupY = 210;
-constexpr int QwenAdvancedDialogStreamingGroupH = 430;
+constexpr int QwenAdvancedDialogStreamingGroupH = 534;
 constexpr int QwenAdvancedDialogStreamingRow1Y = 242;
 constexpr int QwenAdvancedDialogStreamingHint1Y = 276;
 constexpr int QwenAdvancedDialogStreamingRow2Y = 328;
@@ -180,10 +180,15 @@ constexpr int QwenAdvancedDialogNoiseY = 414;
 constexpr int QwenAdvancedDialogNoiseHintY = 448;
 constexpr int QwenAdvancedDialogContinueY = 484;
 constexpr int QwenAdvancedDialogContinueHintY = 512;
-constexpr int QwenAdvancedDialogSpecialLabelY = 562;
-constexpr int QwenAdvancedDialogSpecialY = 590;
+// Audio 3.1 streaming generation only: near/far-field VAD model plus dialect
+// retention. The row stays disabled for 3.0, which rejects both fields.
+constexpr int QwenAdvancedDialogDialectY = 566;
+// Audio 3.1 message generation only: native disfluency removal.
+constexpr int QwenAdvancedDialogMessageY = 612;
+constexpr int QwenAdvancedDialogSpecialLabelY = 666;
+constexpr int QwenAdvancedDialogSpecialY = 694;
 constexpr int QwenAdvancedDialogSpecialH = 42;
-constexpr int QwenAdvancedDialogFooterY = 654;
+constexpr int QwenAdvancedDialogFooterY = 758;
 constexpr int InputDlgW = 440;
 constexpr int InputDlgH = 190;
 constexpr int InputDlgEditW = 390;
@@ -361,6 +366,9 @@ constexpr int IDC_QWEN_CONTINUE_CONTEXT = 2133;
 constexpr int IDC_QWEN_SPECIAL_REPLACE = 2134;
 constexpr int IDC_QWEN_SPECIAL_EMPTY = 2135;
 constexpr int IDC_QWEN_SYSTEM_FILTER = 2136;
+constexpr int IDC_QWEN_VAD_MODEL = 2137;
+constexpr int IDC_QWEN_KEEP_DIALECT = 2138;
+constexpr int IDC_QWEN_DISFLUENCY_REMOVAL = 2139;
 constexpr int IDC_MIMO_API_KEY = 2090;
 constexpr int IDC_MIMO_SHOW_KEY = 2091;
 constexpr int IDC_MIMO_BASE_URL = 2092;

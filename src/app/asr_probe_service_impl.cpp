@@ -10,6 +10,7 @@
 #include "qwen_asr.h"
 #include "qwen_audio_http.h"
 #include "qwen_audio_streaming.h"
+#include "qwen_audio_profile.h"
 #include "mimo_asr.h"
 #include "mai_transcribe.h"
 #include "doubao_ime_asr.h"
@@ -76,7 +77,7 @@ public:
 
             if (req.provider == L"qwen") {
                 const std::wstring& model = req.configSnapshot.qwenModel;
-                if (model == L"qwen-audio-3.0-asr-flash") {
+                if (qwen_audio_profile::IsHttpModel(model)) {
                     qwen_audio_http::Config cfg;
                     cfg.apiKey = req.configSnapshot.qwenApiKey;
                     cfg.baseUrl = req.configSnapshot.qwenHttpBaseUrl;
@@ -84,13 +85,14 @@ public:
                     cfg.languageHints = req.configSnapshot.qwenLanguageHints;
                     cfg.vocabularyId = req.configSnapshot.qwenVocabularyId;
                     cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(req.configSnapshot.qwenVocabulary);
+                    cfg.keepDialect = req.configSnapshot.qwenKeepDialect;
                     auto res = qwen_audio_http::TestConnection(cfg);
                     pr.ok = res.ok;
                     pr.message = std::move(res.message);
                     callback(pr);
                     return;
                 }
-                if (model == L"qwen-audio-3.0-asr-flash-streaming") {
+                if (qwen_audio_profile::IsStreamingModel(model)) {
                     qwen_audio_streaming::Config cfg;
                     cfg.apiKey = req.configSnapshot.qwenApiKey;
                     cfg.baseUrl = req.configSnapshot.qwenAudioStreamingBaseUrl;
@@ -107,6 +109,9 @@ public:
                     cfg.specialWordReplaceList = req.configSnapshot.qwenSpecialWordReplaceList;
                     cfg.specialWordEmptyList = req.configSnapshot.qwenSpecialWordEmptyList;
                     cfg.systemReservedFilter = req.configSnapshot.qwenSystemReservedFilter;
+                    cfg.vadModel = req.configSnapshot.qwenVadModel;
+                    cfg.keepDialect = req.configSnapshot.qwenKeepDialect;
+                    cfg.disfluencyRemovalEnabled = req.configSnapshot.qwenDisfluencyRemovalEnabled;
                     auto res = qwen_audio_streaming::TestConnection(cfg);
                     pr.ok = res.ok;
                     pr.message = std::move(res.message);

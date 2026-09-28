@@ -13,6 +13,7 @@
 #include "mimo_asr.h"
 #include "qwen_asr.h"
 #include "qwen_audio_http.h"
+#include "qwen_audio_profile.h"
 #include "qwen_context.h"
 #include "utils.h"
 #include "vocabulary_manager.h"
@@ -422,6 +423,7 @@ public:
         cfg.vocabularyId = config_.qwenVocabularyId;
         cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(config_.qwenVocabulary);
         cfg.inputContextText = inputContextText_;
+        cfg.keepDialect = config_.qwenKeepDialect;
         HiResTimer timer;
         const DWORD timeoutMs = ComputeCloudAsrRecordedRequestTimeoutMs(0.0, uploadPcm.size());
         qwen_audio_http::Result r;
@@ -696,7 +698,7 @@ std::unique_ptr<IAsrSession> CreateBatchAsrSession(
         return std::make_unique<BaiduAsrSession>(config, localEngine);
     }
     if (config.asrBackend == L"qwen") {
-        if (config.qwenModel == L"qwen-audio-3.0-asr-flash") {
+        if (qwen_audio_profile::IsHttpModel(config.qwenModel)) {
             return std::make_unique<QwenAudioAsrSession>(config, localEngine);
         }
         return std::make_unique<QwenAsrSession>(config, localEngine);

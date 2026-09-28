@@ -54,7 +54,7 @@ void SetLastPcmBytes(size_t bytes) {
 
 bool IsStreamingCloudBackend(const Config& config) {
     if (config.asrBackend == L"qwen" &&
-        config.qwenModel == L"qwen-audio-3.0-asr-flash") {
+        qwen_audio_profile::IsHttpModel(config.qwenModel)) {
         return false;
     }
     return config.asrBackend == L"qwen" || config.asrBackend == L"volcengine" ||
@@ -197,7 +197,7 @@ static void CaptureOneShotStreamingFinal(std::wstring text,
 static std::unique_ptr<IStreamingAsrSession> CreateStreamingSessionForOneShot(
     const Config& config) {
     if (config.asrBackend == L"qwen") {
-        if (config.qwenModel == L"qwen-audio-3.0-asr-flash-streaming") {
+        if (qwen_audio_profile::IsStreamingModel(config.qwenModel)) {
             return CreateQwenAudioStreamingSession(config, g_mainWindow, nullptr, nullptr);
         }
         return CreateQwenStreamingSession(config, g_mainWindow, nullptr, nullptr);
@@ -461,8 +461,8 @@ uint64_t BeginAsrAttempt(const Config& config, SelectionContext selection) {
     Config attemptConfig = config;
     attemptConfig.asrAttemptId = attemptId;
     if (config.asrBackend == L"qwen" && config.qwenEnableInputContext &&
-        (config.qwenModel == qwen_audio_profile::kHttpModel ||
-         config.qwenModel == qwen_audio_profile::kStreamingModel)) {
+        (qwen_audio_profile::IsHttpModel(config.qwenModel) ||
+         qwen_audio_profile::IsStreamingModel(config.qwenModel))) {
         attemptConfig.qwenInputContextSnapshotCaptured = true;
         {
             std::lock_guard<std::mutex> lk(g_inputContextMutex);

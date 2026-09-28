@@ -216,6 +216,17 @@ void LoadConfig(Config& config) {
         config.qwenTransport,
         hasPersistedQwenModel,
         hasPersistedQwenTransport);
+    // The two Audio 3.1 fields are only meaningful for the generation that
+    // accepts them; a hand-edited config file must not leak them into a 3.0
+    // request. The model is final at this point.
+    config.qwenVadModel = (config.qwenVadModel == L"near_meeting_16k")
+        ? L"near_meeting_16k"
+        : L"far_field_meeting_16k";
+    config.qwenKeepDialect =
+        config.qwenKeepDialect && qwen_audio_profile::SupportsKeepDialect(config.qwenModel);
+    config.qwenDisfluencyRemovalEnabled =
+        config.qwenDisfluencyRemovalEnabled &&
+        qwen_audio_profile::SupportsDisfluencyRemoval(config.qwenModel);
     config.qwenChunkMs = std::clamp(config.qwenChunkMs, 20, 1000);
     if (config.mimoBaseUrl.empty()) config.mimoBaseUrl = L"https://api.xiaomimimo.com/v1";
     if (config.mimoModel.empty()) config.mimoModel = L"mimo-v2.5-asr";

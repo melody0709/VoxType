@@ -6,6 +6,7 @@
 
 #include "asr_runtime_log.h"
 #include "qwen_audio_json.h"
+#include "qwen_audio_profile.h"
 #include "qwen_context.h"
 #include "qwen_special_word_filter.h"
 #include "utils.h"
@@ -151,7 +152,8 @@ std::string TaskId() {
 std::string BuildRunTaskMessageImpl(const Config& cfg, const std::string& taskId) {
     std::string json = "{\"header\":{\"action\":\"run-task\",\"task_id\":\"" + taskId + "\",\"streaming\":\"duplex\"},\"payload\":{\"task_group\":\"audio\",\"task\":\"asr\",\"function\":\"recognition\",\"model\":\"" + EscapeJson(cfg.model) + "\",\"parameters\":{\"format\":\"pcm\",\"sample_rate\":16000";
     const auto hints = SplitHints(cfg.languageHints);
-    if (!hints.empty()) {
+    // qwen-audio-3.1-asr-flash-message rejects language_hints entirely.
+    if (!hints.empty() && qwen_audio_profile::SupportsLanguageHints(cfg.model)) {
         json += ",\"language_hints\":[";
         for (size_t i = 0; i < hints.size(); ++i) {
             if (i) json += ',';
@@ -163,14 +165,36 @@ std::string BuildRunTaskMessageImpl(const Config& cfg, const std::string& taskId
     if (qwen_audio_json::HasValidVocabulary(cfg.vocabulary)) {
         json += ",\"vocabulary\":" + WideToUtf8(Trim(cfg.vocabulary));
     }
-    json += ",\"semantic_punctuation_enabled\":" + std::string(cfg.semanticPunctuation ? "true" : "false");
+    // Field order is kept byte-identical for the streaming generation; the
+    // message model simply skips the two fields it does not accept.
+    if (qwen_audio_profile::SupportsSemanticPunctuation(cfg.model)) {
+        json += ",\"semantic_punctuation_enabled\":" + std::string(cfg.semanticPunctuation ? "true" : "false");
+    }
     json += ",\"max_sentence_silence\":" + std::to_string(std::clamp(cfg.maxSentenceSilenceMs, 200, 6000));
-    json += ",\"multi_threshold_mode_enabled\":" + std::string(cfg.multiThresholdMode && !cfg.semanticPunctuation ? "true" : "false");
+    if (qwen_audio_profile::SupportsSemanticPunctuation(cfg.model)) {
+        json += ",\"multi_threshold_mode_enabled\":" + std::string(cfg.multiThresholdMode && !cfg.semanticPunctuation ? "true" : "false");
+    }
     if (cfg.heartbeat) json += ",\"heartbeat\":true";
     if (cfg.speechNoiseThresholdEnabled) json += ",\"speech_noise_threshold\":" + std::to_string(std::clamp(cfg.speechNoiseThreshold, -1.0f, 1.0f));
+    if (qwen_audio_profile::SupportsVadModel(cfg.model)) {
+        json += ",\"vad_model\":\"" + EscapeJson(cfg.vadModel) + "\"";
+    }
+    if (qwen_audio_profile::SupportsKeepDialect(cfg.model)) {
+        json += ",\"keep_dialect\":" + std::string(cfg.keepDialect ? "true" : "false");
+    }
+    if (qwen_audio_profile::SupportsDisfluencyRemoval(cfg.model)) {
+        json += ",\"disfluency_removal_enabled\":" + std::string(cfg.disfluencyRemovalEnabled ? "true" : "false");
+    }
+    if (qwen_audio_profile::SupportsIntermediateResult(cfg.model)) {
+        // The HUD streams partial text while the key is held, so the documented
+        // default (final sentences only) is deliberately overridden here.
+        json += ",\"intermediate_result_enabled\":true";
+    }
     qwen_special_word_filter::Config specialFilter;
     std::wstring filterError;
-    if (qwen_special_word_filter::Normalize(
+    // 3.1 message has no special_word_filter field.
+    if (qwen_audio_profile::SupportsSpecialWordFilter(cfg.model) &&
+        qwen_special_word_filter::Normalize(
             cfg.specialWordReplaceList,
             cfg.specialWordEmptyList,
             cfg.systemReservedFilter,

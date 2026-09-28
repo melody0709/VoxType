@@ -77,6 +77,16 @@ struct QwenAdvancedDialogData {
     std::wstring specialReplace;
     std::wstring specialEmpty;
     bool systemReservedFilter = false;
+    // Audio 3.1 only. The dialog keeps both controls disabled for earlier
+    // models because the server rejects the two fields there.
+    bool audio31 = false;
+    std::wstring vadModel;
+    bool keepDialect = false;
+    // qwen-audio-3.1-asr-flash-message only. The dialog disables the semantic
+    // punctuation / multi-threshold / special-word family for it, and enables
+    // the disfluency-removal switch instead.
+    bool message = false;
+    bool disfluencyRemoval = false;
 };
 
 using QwenAdvancedValidator = bool (*)(QwenAdvancedDialogData& data, std::wstring& error);

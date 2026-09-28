@@ -8,6 +8,7 @@
 #include "cloud_asr_common.h"
 #include "cloud_http_common.h"
 #include "qwen_audio_json.h"
+#include "qwen_audio_profile.h"
 #include "qwen_context.h"
 #include "utils.h"
 
@@ -174,6 +175,9 @@ std::string BuildRequestImpl(const Config& cfg, const std::string& audio) {
     if (!Trim(cfg.vocabularyId).empty()) json += ",\"vocabulary_id\":\"" + JsonEscape(cfg.vocabularyId) + "\"";
     if (qwen_audio_json::HasValidVocabulary(cfg.vocabulary)) {
         json += ",\"vocabulary\":" + WideToUtf8(Trim(cfg.vocabulary));
+    }
+    if (qwen_audio_profile::SupportsKeepDialect(cfg.model)) {
+        json += ",\"keep_dialect\":" + std::string(cfg.keepDialect ? "true" : "false");
     }
     json += "}}}";
     return json;

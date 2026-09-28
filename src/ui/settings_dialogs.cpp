@@ -74,6 +74,10 @@ struct QwenAdvancedControls {
     HWND continueContext = nullptr;
     HWND systemFilter = nullptr;
     HWND continueHint = nullptr;
+    HWND vadModelLabel = nullptr;
+    HWND vadModel = nullptr;
+    HWND keepDialect = nullptr;
+    HWND disfluencyRemoval = nullptr;
     HWND specialReplaceLabel = nullptr;
     HWND specialReplace = nullptr;
     HWND specialEmptyLabel = nullptr;
@@ -114,6 +118,12 @@ void LayoutQwenAdvancedDlg(HWND hwnd, const QwenAdvancedControls& c) {
     if (c.continueContext) MoveWindow(c.continueContext, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogContinueY), S(250), S(UiStyle::CheckH), TRUE);
     if (c.systemFilter) MoveWindow(c.systemFilter, S(430), S(UiStyle::QwenAdvancedDialogContinueY), S(230), S(UiStyle::CheckH), TRUE);
     if (c.continueHint) MoveWindow(c.continueHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogContinueHintY), S(500), S(UiStyle::QwenHint2LineH), TRUE);
+
+    if (c.vadModelLabel) MoveWindow(c.vadModelLabel, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(120), S(UiStyle::LabelH), TRUE);
+    if (c.vadModel) MoveWindow(c.vadModel, S(300), S(UiStyle::QwenAdvancedDialogDialectY), S(170), S(UiStyle::ComboH), TRUE);
+    if (c.keepDialect) MoveWindow(c.keepDialect, S(480), S(UiStyle::QwenAdvancedDialogDialectY), S(190), S(UiStyle::CheckH), TRUE);
+
+    if (c.disfluencyRemoval) MoveWindow(c.disfluencyRemoval, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogMessageY), S(330), S(UiStyle::CheckH), TRUE);
 
     if (c.specialReplaceLabel) MoveWindow(c.specialReplaceLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogSpecialLabelY), S(245), S(UiStyle::LabelH), TRUE);
     if (c.specialReplace) MoveWindow(c.specialReplace, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogSpecialY), S(240), S(UiStyle::QwenAdvancedDialogSpecialH), TRUE);
@@ -172,20 +182,30 @@ void RunModalDialogLoop(HWND dlg, HWND parent) {
     }
 }
 
-void UpdateQwenAdvancedDialogState(HWND hwnd, bool streaming) {
+void UpdateQwenAdvancedDialogState(HWND hwnd, const QwenAdvancedDialogData& data) {
+    const bool streaming = data.streaming;
     const bool semantic = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED;
     const bool noiseEnabled = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SPEECH_NOISE_ENABLE)) == BST_CHECKED;
-    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION), streaming ? TRUE : FALSE);
+    // qwen-audio-3.1-asr-flash-message rejects language_hints,
+    // semantic_punctuation_enabled, multi_threshold_mode_enabled and
+    // special_word_filter, so their controls stay off for that model.
+    const bool legacyStreamingFields = streaming && !data.message;
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION), legacyStreamingFields ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hwnd, IDC_QWEN_MAX_SENTENCE_SILENCE), streaming ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_MULTI_THRESHOLD), streaming && !semantic ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_MULTI_THRESHOLD), (legacyStreamingFields && !semantic) ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hwnd, IDC_QWEN_HEARTBEAT), streaming ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SPEECH_NOISE_ENABLE), streaming ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SPEECH_NOISE_THRESHOLD),
-                 streaming && noiseEnabled ? TRUE : FALSE);
+                 (streaming && noiseEnabled) ? TRUE : FALSE);
     EnableWindow(GetDlgItem(hwnd, IDC_QWEN_CONTINUE_CONTEXT), streaming ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SPECIAL_REPLACE), streaming ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SPECIAL_EMPTY), streaming ? TRUE : FALSE);
-    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER), streaming ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SPECIAL_REPLACE), legacyStreamingFields ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SPECIAL_EMPTY), legacyStreamingFields ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER), legacyStreamingFields ? TRUE : FALSE);
+    // Both fields exist only on the Audio 3.1 generation: vad_model on
+    // 3.1 streaming and 3.1 message, keep_dialect on the whole generation.
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_VAD_MODEL), (streaming && data.audio31) ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_KEEP_DIALECT), data.audio31 ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL), data.message ? TRUE : FALSE);
 }
 
 bool ReadQwenAdvancedDialog(HWND hwnd, QwenAdvancedDialogData& data, std::wstring& error, QwenAdvancedValidator validator) {
@@ -201,6 +221,14 @@ bool ReadQwenAdvancedDialog(HWND hwnd, QwenAdvancedDialogData& data, std::wstrin
     data.specialReplace = QwenControlText(hwnd, IDC_QWEN_SPECIAL_REPLACE);
     data.specialEmpty = QwenControlText(hwnd, IDC_QWEN_SPECIAL_EMPTY);
     data.systemReservedFilter = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SYSTEM_FILTER)) == BST_CHECKED;
+    // The combo is a drop-down list, so index 1 is the only alternative to the
+    // provider default.
+    data.vadModel = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_QWEN_VAD_MODEL)) == 1
+        ? L"near_meeting_16k"
+        : L"far_field_meeting_16k";
+    data.keepDialect = Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_KEEP_DIALECT)) == BST_CHECKED;
+    data.disfluencyRemoval =
+        Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL)) == BST_CHECKED;
 
     const int silenceMs = _wtoi(data.maxSentenceSilence.c_str());
     if (data.streaming && (silenceMs < 200 || silenceMs > 6000)) {
@@ -318,6 +346,21 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                    S(500), S(UiStyle::QwenHint2LineH),
                    L"Audio 3 only. Requires focused-field context.\nReads once in the worker thread; no polling.");
 
+        state->controls.vadModelLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft),
+                    S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(120), S(UiStyle::LabelH), L"VAD model");
+        state->controls.vadModel = CreateCombo(hwnd, IDC_QWEN_VAD_MODEL,
+                    S(300), S(UiStyle::QwenAdvancedDialogDialectY), S(170), S(UiStyle::ComboH));
+        // The provider default stays first so an untouched 3.1 recording keeps
+        // the documented far-field behavior.
+        ComboBox_AddString(state->controls.vadModel, L"far_field_meeting_16k");
+        ComboBox_AddString(state->controls.vadModel, L"near_meeting_16k");
+        state->controls.keepDialect = CreateCheckBox(hwnd, IDC_QWEN_KEEP_DIALECT,
+                    S(480), S(UiStyle::QwenAdvancedDialogDialectY), S(190), S(UiStyle::CheckH),
+                    L"Keep dialect (3.1)");
+        state->controls.disfluencyRemoval = CreateCheckBox(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL,
+                    S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogMessageY),
+                    S(330), S(UiStyle::CheckH), L"Filler-word removal / polish (3.1 message)");
+
         state->controls.specialReplaceLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogSpecialLabelY),
                     S(245), S(UiStyle::LabelH), L"Replace words (*) — one per line:");
         state->controls.specialReplace = CreateWindowExW(
@@ -361,7 +404,12 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             SetWindowTextW(state->controls.specialReplace, data->specialReplace.c_str());
             SetWindowTextW(state->controls.specialEmpty, data->specialEmpty.c_str());
             Button_SetCheck(state->controls.systemFilter, data->systemReservedFilter ? BST_CHECKED : BST_UNCHECKED);
-            UpdateQwenAdvancedDialogState(hwnd, data->streaming);
+            ComboBox_SetCurSel(state->controls.vadModel,
+                               data->vadModel == L"near_meeting_16k" ? 1 : 0);
+            Button_SetCheck(state->controls.keepDialect, data->keepDialect ? BST_CHECKED : BST_UNCHECKED);
+            Button_SetCheck(state->controls.disfluencyRemoval,
+                            data->disfluencyRemoval ? BST_CHECKED : BST_UNCHECKED);
+            UpdateQwenAdvancedDialogState(hwnd, *data);
         }
         SetFocus(state->controls.vocabId);
         return 0;
@@ -393,7 +441,7 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 if (Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION)) == BST_CHECKED) {
                     Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_MULTI_THRESHOLD), BST_UNCHECKED);
                 }
-                UpdateQwenAdvancedDialogState(hwnd, data->streaming);
+                UpdateQwenAdvancedDialogState(hwnd, *data);
                 return 0;
             }
             break;
@@ -402,13 +450,13 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                 if (Button_GetCheck(GetDlgItem(hwnd, IDC_QWEN_MULTI_THRESHOLD)) == BST_CHECKED) {
                     Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION), BST_UNCHECKED);
                 }
-                UpdateQwenAdvancedDialogState(hwnd, data->streaming);
+                UpdateQwenAdvancedDialogState(hwnd, *data);
                 return 0;
             }
             break;
         case IDC_QWEN_SPEECH_NOISE_ENABLE:
             if (HIWORD(wParam) == BN_CLICKED && data) {
-                UpdateQwenAdvancedDialogState(hwnd, data->streaming);
+                UpdateQwenAdvancedDialogState(hwnd, *data);
                 return 0;
             }
             break;

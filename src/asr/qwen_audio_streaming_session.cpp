@@ -64,6 +64,9 @@ qwen_audio_streaming::Config BuildConfig(const Config& c) {
     out.heartbeat = c.qwenHeartbeat;
     out.speechNoiseThresholdEnabled = c.qwenSpeechNoiseThresholdEnabled;
     out.speechNoiseThreshold = c.qwenSpeechNoiseThreshold;
+    out.vadModel = c.qwenVadModel;
+    out.keepDialect = c.qwenKeepDialect;
+    out.disfluencyRemovalEnabled = c.qwenDisfluencyRemovalEnabled;
     return out;
 }
 

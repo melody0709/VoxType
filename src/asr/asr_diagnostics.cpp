@@ -27,8 +27,8 @@ std::wstring TransportName(const Config& config) {
     if (config.asrBackend == L"local") return L"local_offline";
     if (config.asrBackend == L"baidu") return L"batch_http_pcm";
     if (config.asrBackend == L"qwen") {
-        if (config.qwenModel == qwen_audio_profile::kHttpModel) return L"audio_http";
-        if (config.qwenModel == qwen_audio_profile::kStreamingModel) {
+        if (qwen_audio_profile::IsHttpModel(config.qwenModel)) return L"audio_http";
+        if (qwen_audio_profile::IsStreamingModel(config.qwenModel)) {
             return L"audio_streaming_websocket";
         }
         return L"realtime_websocket";

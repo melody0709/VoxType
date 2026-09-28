@@ -2,6 +2,21 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.3 (2026-09-28)
+
+### 新增功能与模型整合
+
+- **官方通义千问 Qwen-Audio-3.1 语音识别模型深度整合。**
+  - 全面支持阿里云百炼（Model Studio）与 DashScope 平台推出的下一代端到端语音大模型：
+    - `qwen-audio-3.1-asr-flash-streaming`：基于 WebSocket 双向低时延流式识别，原生具备口语化语气词/叠词润色过滤、多方言可控输出以及文言古诗词韵律调优。**已设为全新安装的默认模型**；已有配置保持用户所选模型不变。
+    - `qwen-audio-3.1-asr-flash-message`：与 streaming 共用 `/api-ws/v1/inference` 双工协议，参数集更小——拒绝 `language_hints` / `semantic_punctuation_enabled` / `multi_threshold_mode_enabled` / `special_word_filter`，新增可选的 `disfluency_removal_enabled` 润色开关与 `intermediate_result_enabled`。VoxType 固定开启中间结果以保证录音期间 HUD 持续显示 partial；润色默认关闭，避免模型在用户未授权时改写措辞。
+    - `qwen-audio-3.1-asr-flash`：高并发非流式 HTTP 录制识别，输入资费仅 0.8 元/百万 tokens（1小时音频约 0.072 元）。
+  - **完全向后兼容**：保留既有 `qwen-audio-3.0-asr-flash-streaming`、`qwen-audio-3.0-asr-flash` 及兼容模式 `qwen3-asr-flash-realtime`。
+  - **分发路由重构**：在 `qwen_audio_profile.h` 抽象了模型族系谓词（`IsStreamingModel`、`IsHttpModel`、`IsSupportedModel`），消除了此前在 AttemptManager、录音控制器、会话工厂、连通探测与诊断日志中分散的硬编码单一字符串比对。
+  - **设置界面与探测联动**：Qwen 设置面板模型下拉菜单直接可选 3.1 模型，并支持一键 Test Connection 连通性测试。
+  - **3.1 专属参数接入**：新增 `vad_model`（仅 3.1 流式，可在近场 `near_meeting_16k` 与默认远场 `far_field_meeting_16k` 之间切换）与 `keep_dialect`（3.1 全代次，保留方言表达而非转写为普通话）。两者在 Qwen 高级设置中可调，并按模型代次门控发送——3.0 请求保持原样，协议层已加入回归测试。
+  - **一手文档沉淀**：通过本地 CDP 调试通道直连百炼控制台实地取证，归档调研报告于 `.plan/feat/QWEN_AUDIO_3_1_ASR_INTEGRATION_PLAN.md` 并整合成技术规范 `doc/qwen/Qwen-Audio-3.x-ASR.md`。
+
 ## v0.11.2 (2026-09-25)
 
 ### 功能改进

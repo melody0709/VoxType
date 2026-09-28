@@ -14,6 +14,7 @@
 #include "doubao_ime_streaming_session.h"
 #include "qwen_streaming_session.h"
 #include "qwen_audio_streaming_session.h"
+#include "qwen_audio_profile.h"
 #include "qwen_free_streaming_session.h"
 #include "volcengine_streaming_session.h"
 #include "volcengine_asr.h"
@@ -445,7 +446,7 @@ void StartRecordingSession() {
     const Config attemptConfig = ActiveAsrAttemptConfig();
 
     if (attemptConfig.asrBackend == L"qwen" && IsStreamingCloudBackend(attemptConfig)) {
-        auto session = (attemptConfig.qwenModel == L"qwen-audio-3.0-asr-flash-streaming")
+        auto session = (qwen_audio_profile::IsStreamingModel(attemptConfig.qwenModel))
             ? CreateQwenAudioStreamingSession(attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr())
             : CreateQwenStreamingSession(attemptConfig, g_mainWindow, RefineWithLlmAsync, GetLastRawAsrTextPtr());
         const std::wstring listeningText = L"Listening... " + AsrBackendDisplayName(attemptConfig);

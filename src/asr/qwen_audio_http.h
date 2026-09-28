@@ -12,13 +12,15 @@ namespace qwen_audio_http {
 struct Config {
     std::wstring apiKey;
     std::wstring baseUrl;
-    std::wstring model = L"qwen-audio-3.0-asr-flash";
+    std::wstring model = L"qwen-audio-3.1-asr-flash";
     std::wstring languageHints;
     std::wstring vocabularyId;
     std::wstring vocabulary;
     // Optional focused input-field context. It is serialized as an
     // input_text message before the current input_audio message.
     std::wstring inputContextText;
+    // Audio 3.1 only; omitted for 3.0, which does not accept the field.
+    bool keepDialect = false;
 };
 
 // Pure request helpers used by offline protocol tests. They do not perform
