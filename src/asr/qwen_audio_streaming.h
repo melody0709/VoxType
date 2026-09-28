@@ -42,8 +42,9 @@ struct Config {
     // The 3.0 sender omits it.
     bool keepDialect = false;
     // qwen-audio-3.1-asr-flash-message only; omitted for every other model.
-    // Stays off by default so the model never rewrites user wording unless the
-    // user opts in.
+    // Transport-level fallback only: production requests always copy this from
+    // Config::qwenDisfluencyRemovalEnabled (on by default). The struct keeps a
+    // conservative false so an unpopulated request never enables polish.
     bool disfluencyRemovalEnabled = false;
 };
 

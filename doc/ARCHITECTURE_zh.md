@@ -394,7 +394,7 @@ Portable 包通过 `<app-root>\portable.flag` 识别，并继续使用解压目�
 - `asr_backend`：当前 ASR 后端（`local`、`baidu`、`volcengine`、`qwen`、`mimo`、`doubao_ime` 或 `qwen_free`）。
 - `fallback_asr_backend`：可选串行 fallback（`none`、`local`、`baidu`、`qwen`、`mimo`、`doubao_ime` 或 `qwen_free`），必须与 `asr_backend` 不同；火山引擎不是 fallback target。
 - `diagnostic_audio_mode`：全部 ASR provider/stage 共用的录音诊断策略（`off`、`failures` 或 `all`），默认 `off`。
-- `qwen_*`：Qwen ASR 的三种 profile、北京 Audio 3 HTTP/WSS 地址、语言提示、词汇 JSON、语义标点、句间静音、多阈值、heartbeat、噪声阈值和 chunk 配置。旧 realtime 的 turn detection 仍固定 Manual，不再持久化。
+- `qwen_*`：Qwen ASR 的三种 profile、北京 Audio 3 HTTP/WSS 地址、语言提示、词汇 JSON、语义标点、句间静音、多阈值、heartbeat、噪声阈值和 chunk 配置。上下文增强是三个相互独立的开关——`qwen_enable_input_context`（焦点输入框）、`qwen_history_context` 与 `qwen_history_context_rounds`（来自 `src/core/asr_history.*` 的最近最终转写，1–5 轮，默认开启），以及火山引擎对应项 `volc_enable_input_context` / `volc_enable_context` + `volc_context_history` / `volc_reuse_vocabulary`。焦点字段快照仅在运行时存在，不持久化。旧 realtime 的 turn detection 仍固定 Manual，不再持久化。
 - `qwen_free_*`：千问 IME Free 启用状态、bundled `VoiceInputWrite` 后处理开关、实验性选区改写、本地协议诊断和可选 shell 目录覆盖。UTDID 通常自动获取，不放入普通示例配置。
 - `mimo_*`：MiMo ASR API key、OpenAI-compatible Base URL、模型和语言（`auto`、`zh`、`en`）；`mimo_api_key` 使用 DPAPI 加密。
 - `doubao_ime_*`：实验性 Doubao IME device id、cdid 和 DPAPI 加密 token；程序可自动注册，也可从 Settings 重置。

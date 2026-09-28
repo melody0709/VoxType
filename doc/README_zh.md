@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.11.5</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.11.6</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -145,7 +145,7 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
   - 新安装默认模型：`qwen-audio-3.1-asr-flash-message`；已有配置保持原模型
   - Audio 3 默认使用已配置的北京 Workspace 域名，不提供地域选择项
   - Audio 3 双工档位（`qwen-audio-3.1-asr-flash-streaming`、`qwen-audio-3.1-asr-flash-message`）在录音期间显示 partial；`qwen-audio-3.1-asr-flash` / `qwen-audio-3.0-asr-flash` 松开后提交完整 WAV，只返回 final
-  - 按代次门控的参数集中在 `[Advanced...]`：3.1 档位可见 `VAD model`（近/远场）与 `Keep dialect`，`Filler-word removal / polish` 仅对 `qwen-audio-3.1-asr-flash-message` 开放；不匹配的模型上控件自动禁用
+  - 按代次门控的参数集中在 `[Advanced...]`：3.1 档位可见 `VAD model`（近/远场）与 `Keep dialect`，`Filler-word removal / polish` 仅对 `qwen-audio-3.1-asr-flash-message` 开放；`Keep dialect` 与 `Filler-word removal / polish` 出厂默认开启。不匹配的模型上控件自动禁用
   - Turn detection 固定为 Manual，匹配按住说话/松开上屏的输入法场景；Server VAD 设置已隐藏
 - **MiMo ASR (Xiaomi)**：`API Key`（DPAPI 加密）+ `Base URL` + `Model` + `Language` + `Test Connection`
   - 默认 Base URL：`https://token-plan-ams.xiaomimimo.com/v1`

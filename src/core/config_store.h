@@ -111,10 +111,11 @@ struct Config {
     bool qwenSemanticPunctuation = false;
     int qwenMaxSentenceSilenceMs = 1300;
     bool qwenMultiThresholdMode = false;
-    bool qwenHeartbeat = false;
+    // On by default so the duplex connection stays warm between recordings.
+    bool qwenHeartbeat = true;
     bool qwenSpeechNoiseThresholdEnabled = false;
     float qwenSpeechNoiseThreshold = 0.0f;
-    bool qwenEnableContinueContext = false;
+    bool qwenEnableContinueContext = true;
     std::wstring qwenSpecialWordReplaceList;
     std::wstring qwenSpecialWordEmptyList;
     bool qwenSystemReservedFilter = false;
@@ -123,21 +124,20 @@ struct Config {
     // previous microphone posture.
     std::wstring qwenVadModel = L"far_field_meeting_16k";
     // The whole Audio 3.1 generation (streaming + message + HTTP batch):
-    // SupportsKeepDialect(). false transcribes dialects into standard Mandarin,
-    // which is the provider default as well.
-    bool qwenKeepDialect = false;
+    // SupportsKeepDialect(). On by default so dialect speech keeps its original
+    // wording; turning it off transcribes dialects into standard Mandarin.
+    bool qwenKeepDialect = true;
     // qwen-audio-3.1-asr-flash-message only: filters filler words and polishes
-    // the transcript. Off by default so the model never rewrites user wording
-    // unless the user opts in.
-    bool qwenDisfluencyRemovalEnabled = false;
-    bool qwenEnableInputContext = false;
+    // the transcript. On by default; turning it off keeps the raw wording.
+    bool qwenDisfluencyRemovalEnabled = true;
+    bool qwenEnableInputContext = true;
     std::wstring qwenInputContextSnapshot;
     bool qwenInputContextSnapshotCaptured = false;
-    // Opt-in multi-turn context enhancement: recent recognition results (and the
+    // Multi-turn context enhancement: recent recognition results (and the
     // vocabulary as a domain word list when nothing else is available) are sent
-    // as extra user turns. Off by default because it forwards previous
-    // transcripts to the cloud, exactly like volcEnableContext.
-    bool qwenHistoryContext = false;
+    // as extra user turns. On by default; turning it off stops forwarding
+    // previous transcripts to the cloud (the volcEnableContext posture).
+    bool qwenHistoryContext = true;
     int qwenHistoryContextRounds = 3;
     // Runtime only (never persisted): the sensitive-control probe started before
     // the focused-field read of this recording

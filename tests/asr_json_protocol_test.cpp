@@ -460,13 +460,23 @@ int wmain() {
 
         Config off;
         off.qwenVadModel = L"far_field_meeting_16k";
+        off.qwenKeepDialect = false;
+        off.qwenDisfluencyRemovalEnabled = false;
         const std::string offJson = reg.SaveJson(off);
         Config offLoaded;
         reg.LoadJson(offLoaded, offJson);
         CHECK(offLoaded.qwenVadModel == L"far_field_meeting_16k" &&
                   offLoaded.qwenKeepDialect == false &&
                   offLoaded.qwenDisfluencyRemovalEnabled == false,
-              "Audio 3.1 settings round-trip as their defaults");
+              "Audio 3.1 settings round-trip when explicitly disabled");
+    }
+    // 27b) 出厂默认：Qwen 上下文/保活/方言/润色开关默认开启
+    {
+        const Config defaults;
+        CHECK(defaults.qwenEnableInputContext && defaults.qwenHistoryContext &&
+                  defaults.qwenEnableContinueContext && defaults.qwenHeartbeat &&
+                  defaults.qwenKeepDialect && defaults.qwenDisfluencyRemovalEnabled,
+              "Qwen context, heartbeat, dialect and polish switches default to on");
     }
     // 28) 全量 101 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
     {

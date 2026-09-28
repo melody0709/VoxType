@@ -83,7 +83,7 @@ message 的 `result-generated` 示例额外出现 `sentence_begin` 与 `stash` �
 
 > **VoxType 对 message 的处理**：按 `qwen_audio_profile` 的谓词自动裁剪上表"不支持"的字段，
 > 并**固定发送 `intermediate_result_enabled: true`**（录音期间 HUD 需要 partial 上屏，官方默认只回句末结果）。
-> `disfluency_removal_enabled` 默认关闭，由用户在 Qwen 高级设置中显式开启——避免模型在用户未授权时改写措辞。
+> `disfluency_removal_enabled` 出厂默认开启（配置项 `qwen_disfluency_removal`），用户可在 Qwen 高级设置中关闭——关闭后模型不再改写用户措辞。
 
 ---
 
@@ -307,7 +307,7 @@ Client                                                  Server (DashScope)
 - **轮数上限**：最多支持 **5 轮**对话。
 - **字符长度限制**：每轮文本最多 **400 字符**。若超出 400 字符，官方系统会自动截断尾部超出部分，不会直接返回错误。
 - **生效机制**：上下文增强不仅提供语义主题背景，同时也会自动提取前文中的关键词作为软性热词加权。
-- **本仓库实现**：`input.context` / `input.messages` 由 `src/asr/asr_context.*` 装配为 `[最近 N 轮识别结果…, 焦点输入框文本]`（旧→新，每轮按尾部截到 400 字符），N 由 `qwen_history_context_rounds`（1–5，默认 3）控制、总开关为 `qwen_history_context`（默认关闭）。**注意 5 条消息的上限**：焦点字段非空时它自己占掉一条，实际发出的历史轮最多 4 条（`asr_context::kMaxContextTurns` 保证"字段轮优先 + 只保留最近 5 条"）。输入框与历史都没有文本时改用词表作为领域词表兜底。历史轮来自 `src/core/asr_history.*` 的全局环形缓冲，每条最终转写在 `DispatchAsrFinalText()` 里只记录一次；`continue-task` 刷新只替换字段轮，保留历史轮。
+- **本仓库实现**：`input.context` / `input.messages` 由 `src/asr/asr_context.*` 装配为 `[最近 N 轮识别结果…, 焦点输入框文本]`（旧→新，每轮按尾部截到 400 字符），N 由 `qwen_history_context_rounds`（1–5，默认 3）控制、总开关为 `qwen_history_context`（默认开启）。**注意 5 条消息的上限**：焦点字段非空时它自己占掉一条，实际发出的历史轮最多 4 条（`asr_context::kMaxContextTurns` 保证"字段轮优先 + 只保留最近 5 条"）。输入框与历史都没有文本时改用词表作为领域词表兜底。历史轮来自 `src/core/asr_history.*` 的全局环形缓冲，每条最终转写在 `DispatchAsrFinalText()` 里只记录一次；`continue-task` 刷新只替换字段轮，保留历史轮。
 
 ---
 
@@ -354,11 +354,11 @@ Client                                                  Server (DashScope)
 | 参数 | 作用域 | 判定函数 | 配置项 / 默认 |
 | :--- | :--- | :--- | :--- |
 | `vad_model` | 3.1 streaming 与 3.1 message 的 run-task | `SupportsVadModel()` | `qwen_vad_model`（默认 `far_field_meeting_16k`） |
-| `keep_dialect` | 3.1 streaming / 3.1 message / 3.1 HTTP | `SupportsKeepDialect()` | `qwen_keep_dialect`（默认 `false`） |
+| `keep_dialect` | 3.1 streaming / 3.1 message / 3.1 HTTP | `SupportsKeepDialect()` | `qwen_keep_dialect`（默认 `true`） |
 | `language_hints` | 除 message 外的全部模型 | `SupportsLanguageHints()` | 面板 "Hints" 输入框 |
 | `semantic_punctuation_enabled`、`multi_threshold_mode_enabled` | 除 message 外的全部流式模型 | `SupportsSemanticPunctuation()` | `qwen_semantic_punctuation` / `qwen_multi_threshold` |
 | `special_word_filter` | 除 message 外的全部流式模型 | `SupportsSpecialWordFilter()` | `qwen_special_word_replace` 等 |
-| `disfluency_removal_enabled` | **仅 message** | `SupportsDisfluencyRemoval()` | `qwen_disfluency_removal`（默认 `false`） |
+| `disfluency_removal_enabled` | **仅 message** | `SupportsDisfluencyRemoval()` | `qwen_disfluency_removal`（默认 `true`） |
 | `intermediate_result_enabled` | **仅 message** | `SupportsIntermediateResult()` | 无配置项，固定发送 `true` |
 
 - 所有字段都在 `qwen_audio_streaming.cpp` / `qwen_audio_http.cpp` 的请求构造处按模型追加；Test Connection 探针复用同一构造函数，因此探针与生产请求的字段集永远一致。

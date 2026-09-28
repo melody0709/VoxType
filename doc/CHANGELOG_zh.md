@@ -2,6 +2,15 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.6 (2026-09-28)
+
+### 模型与配置
+
+- **千问上下文 / 保活 / 方言 / 润色开关默认开启。**
+  - `qwen_enable_input_context`、`qwen_history_context`、`qwen_enable_continue_context`、`qwen_heartbeat`、`qwen_keep_dialect`、`qwen_disfluency_removal` 出厂即为开启状态：全新安装（或配置文件中缺失这些键）即默认启用焦点字段上下文、多轮历史、心跳保活、一次性上下文刷新、方言保留与 message 模型润色。
+  - 已显式持久化的值优先，不会被动改写：现有 `config.json` 中保存为 `false` 的项保持 `false`。若要采用新默认值，可在 Qwen 面板重新保存，或删除对应键。
+  - `tests/asr_json_protocol_test.cpp` 新增六项默认值断言；Audio 3.1 往返用例改为显式关闭 `qwen_keep_dialect` / `qwen_disfluency_removal`，不再依赖默认值。
+
 ## v0.11.5 (2026-09-28)
 
 ### 界面与布局优化

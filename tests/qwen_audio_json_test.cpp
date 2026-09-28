@@ -761,7 +761,7 @@ int main() {
         const std::string msgOffTask = qwen_audio_streaming::BuildRunTaskMessage(msgOff, "task-msg-off");
         Expect(msgOffTask.find("\"disfluency_removal_enabled\":false") != std::string::npos &&
                    msgOffTask.find("\"intermediate_result_enabled\":true") != std::string::npos,
-               "3.1 message keeps polish off by default but always streams partials");
+               "3.1 message keeps polish off unless the request opts in, and always streams partials");
 
         const auto started = qwen_audio_streaming::ParseServerEventMessage(
             R"({"header":{"event":"task-started"},"payload":{}})");

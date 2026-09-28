@@ -2,6 +2,15 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.11.6 (2026-09-28)
+
+### Models & Configuration
+
+- **Qwen context, heartbeat, dialect and polish switches now default to on.**
+  - `qwen_enable_input_context`, `qwen_history_context`, `qwen_enable_continue_context`, `qwen_heartbeat`, `qwen_keep_dialect`, and `qwen_disfluency_removal` now ship enabled: a fresh install (or a config file missing these keys) enables focused-field context, multi-turn history, heartbeat keep-alive, the one-shot context refresh, dialect preservation, and message-model polish out of the box.
+  - Explicitly persisted values keep winning: an existing `config.json` that stores `false` is not rewritten. To adopt the new defaults, re-save the Qwen panel or delete the affected keys.
+  - `tests/asr_json_protocol_test.cpp` pins the six defaults, and the Audio 3.1 round-trip case now disables `qwen_keep_dialect` / `qwen_disfluency_removal` explicitly instead of relying on the defaults.
+
 ## v0.11.5 (2026-09-28)
 
 ### UI & Layout
