@@ -34,7 +34,7 @@ C:\Program Files\QianwenIME
 当前开发电脑使用的是：
 
 ```text
-D:\GITHUB_melody0709\VoxType\third_party\qwen_free_runtime
+third_party\qwen_free_runtime
 ```
 
 这个开发路径不能写死后分发给其他用户。每台电脑都必须保存自己的实际路径。

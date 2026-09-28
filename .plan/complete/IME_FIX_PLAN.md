@@ -219,6 +219,6 @@ target_link_libraries(VoxType
 
 ## 参考
 
-- 原设计文档 `Voice_LLM_ASR_Input.md` 第48-53行已规划此方案
+- 原设计文档（`.plan/complete/` 目录下的早期 ASR 输入法设计稿）第 48-53 行已规划此方案
 - `OPTIMIZATION_PLAN.md` 第80行列为后续任务
 - `ARCHITECTURE.md` 第200-213行记录了未来改进方向

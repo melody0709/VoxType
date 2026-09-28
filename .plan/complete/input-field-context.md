@@ -679,8 +679,8 @@ src/settings.cpp — Settings UI 控件
 - 限制: 800 tokens, 20 轮
 
 ### zencrop_ocr SmartDetector（本地）
-- SmartDetector 头文件：`D:\GITHUB_melody0709\zencrop_ocr\src\SmartDetector.h`
-- SmartDetector 实现：`D:\GITHUB_melody0709\zencrop_ocr\src\SmartDetector.cpp`
+- SmartDetector 头文件：`D:\<repo>\zencrop_ocr\src\SmartDetector.h`
+- SmartDetector 实现：`D:\<repo>\zencrop_ocr\src\SmartDetector.cpp`
 
 **已借鉴的关键技术**：
 1. **EnsureAccessibilityTree**：发送 `WM_GETOBJECT(0, 0xFFFFFFFC)` 触发 Chrome/Electron

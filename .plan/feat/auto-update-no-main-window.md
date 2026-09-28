@@ -2,7 +2,7 @@
 
 状态：方案研究（未实施）
 日期：2026-09-17
-参考实现：`D:\GITHUB_melody0709\stock_new`（Rust / Slint，Minisign 签名清单 + MSI 自动更新）
+参考实现：`D:\<repo>\stock_new`（Rust / Slint，Minisign 签名清单 + MSI 自动更新）
 本轮范围：信任模型选型、无主界面下的更新交互与生命周期设计、模块与文件划分、发版流水线改造、分阶段实施与验收标准。
 
 ---

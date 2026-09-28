@@ -1,6 +1,6 @@
 # 火山引擎 ASR (volcengine\_asr.h) 优化计划
 
-基于 [volcengine\_asr.h](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/volcengine_asr.h) 与[官方大模型流式语音识别 API 文档](https://www.volcengine.com/docs/6561/1354869)的对比分析。
+基于 [volcengine\_asr.h](file:///d:/#<repo>/<repo>/src/volcengine_asr.h) 与[官方大模型流式语音识别 API 文档](https://www.volcengine.com/docs/6561/1354869)的对比分析。
 
 ## 已完成
 
@@ -92,7 +92,7 @@ bool volcEnableDdc = false;
 std::wstring volcExtraParams;
 ```
 
-**状态**：已合入 [globals.h](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/globals.h)
+**状态**：已合入 [globals.h](file:///d:/#<repo>/<repo>/src/globals.h)
 
 #### 2. volcengine\_asr.h — VolcConfig 增加字段 ✅
 
@@ -106,7 +106,7 @@ struct VolcConfig {
 };
 ```
 
-**状态**：已合入 [volcengine\_asr.h](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/volcengine_asr.h)
+**状态**：已合入 [volcengine\_asr.h](file:///d:/#<repo>/<repo>/src/volcengine_asr.h)
 
 #### 3. volcengine\_asr.h — OpenSession 初始化 JSON 增加参数 ✅
 
@@ -124,7 +124,7 @@ requestJson += ",\"enable_ddc\":" + std::string(cfg.enableDdc ? "true" : "false"
 
 Extra Params 合并逻辑：在构建完基础 JSON 后，解析 `cfg.extraParams`，将其中的 key-value 对合并到 request 对象中（Extra Params 中的 key 覆盖基础设置的同名 key）。
 
-**状态**：已合入 [volcengine\_asr.h](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/volcengine_asr.h)
+**状态**：已合入 [volcengine\_asr.h](file:///d:/#<repo>/<repo>/src/volcengine_asr.h)
 
 #### 4. engine.cpp — LoadConfig / SaveConfig 增加字段 ✅
 
@@ -148,7 +148,7 @@ g_config.volcExtraParams = Utf8ToWide(ExtractJsonString(json, "volc_extra_params
 - `ExtractJsonBool` 增加对 `"1"` / `"0"` 的支持
 - `LoadConfig` 改用 `ExtractJsonBool` 读取这两个字段
 
-**状态**：已合入 [engine.cpp](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/engine.cpp)
+**状态**：已合入 [engine.cpp](file:///d:/#<repo>/<repo>/src/engine.cpp)
 
 #### 5. settings.cpp — 创建 UI 控件 ✅
 
@@ -177,7 +177,7 @@ CreateLabel(..., L"Extra Params", ...);
 CreateButton(..., IDC_VOLC_EXTRA_PARAMS, ..., L"Edit Params");
 ```
 
-**状态**：已合入 [settings.cpp](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/settings.cpp)
+**状态**：已合入 [settings.cpp](file:///d:/#<repo>/<repo>/src/settings.cpp)
 
 #### 6. settings.cpp — 加载/保存/事件处理 ✅
 
@@ -206,7 +206,7 @@ CreateButton(..., IDC_VOLC_EXTRA_PARAMS, ..., L"Edit Params");
 - **Extra Params 对话框** (`IDC_VOLC_EXTRA_PARAMS`)：
   弹出 `VoxTypeVolcExtraDlg` 窗口，支持多行 JSON 编辑，提供 Hotwords / Context 预设模板，OK 后保存到 `g_config.volcExtraParams`。
 
-**状态**：已合入 [settings.cpp](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/settings.cpp)
+**状态**：已合入 [settings.cpp](file:///d:/#<repo>/<repo>/src/settings.cpp)
 
 #### 7. main.cpp — 构建 VolcConfig 时读取新字段 ✅
 
@@ -222,7 +222,7 @@ vcfg.enableDdc = config.volcEnableDdc;
 vcfg.extraParams = config.volcExtraParams;
 ```
 
-**状态**：已合入 [main.cpp](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp)
+**状态**：已合入 [main.cpp](file:///d:/#<repo>/<repo>/src/main.cpp)
 
 ## P2：小修复与优化
 

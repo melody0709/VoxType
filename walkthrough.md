@@ -98,5 +98,5 @@ ALL PASS
 Running HUD pagination regression tests...
 hud_pagination_test: PASS
 Build Success
-Runnable: D:\GITHUB_melody0709\VoxType\build\run\x64-release\VoxType.exe
+Runnable: build\run\x64-release\VoxType.exe
 ```

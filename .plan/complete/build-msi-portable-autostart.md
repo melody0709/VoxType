@@ -52,11 +52,11 @@
 
 已审阅的参考实现包括：
 
-- D:\GITHUB_melody0709\zencrop_ocr_pxipin\build.bat
-- D:\GITHUB_melody0709\zencrop_ocr_pxipin\cmake\ZenCropRuntime.cmake
-- D:\GITHUB_melody0709\zencrop_ocr_pxipin\scripts\package_zencrop.ps1
-- D:\GITHUB_melody0709\zencrop_ocr_pxipin\packaging\windows\UPGRADE_CONTRACT.md
-- D:\GITHUB_melody0709\zencrop_ocr_pxipin\src\core\StartupRegistration.cpp
+- D:\<repo>\zencrop_ocr_pxipin\build.bat
+- D:\<repo>\zencrop_ocr_pxipin\cmake\ZenCropRuntime.cmake
+- D:\<repo>\zencrop_ocr_pxipin\scripts\package_zencrop.ps1
+- D:\<repo>\zencrop_ocr_pxipin\packaging\windows\UPGRADE_CONTRACT.md
+- D:\<repo>\zencrop_ocr_pxipin\src\core\StartupRegistration.cpp
 
 需要吸收的不是其全部复杂度，而是以下不可省略的边界：
 

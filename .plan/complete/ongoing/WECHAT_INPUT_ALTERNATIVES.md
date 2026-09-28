@@ -14,7 +14,7 @@
 
 ## 当前实现分析
 
-代码位于 [settings.cpp:126-171](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/settings.cpp#L126-L171)：
+代码位于 [settings.cpp:126-171](file:///d:/#<repo>/<repo>/src/settings.cpp#L126-L171)：
 
 ```
 PasteTextImeAware(text)
@@ -136,7 +136,7 @@ VoxTypeIme.dll (TSF TIP, 加载在目标进程中)
 
 **原理**：当前 `forceUnicodeInput` 模式已实现此方案。`SendInput` + `KEYEVENTF_UNICODE` 在 OS 级别生成键盘事件，比 `PostMessage WM_CHAR` 更"真实"，且不需要知道目标窗口句柄。
 
-**当前代码**（[settings.cpp:63-76](file:///d:/#GITHUB_melody0709/Voice_LLM_ASR_Input/src/settings.cpp#L63-L76)）：
+**当前代码**（[settings.cpp:63-76](file:///d:/#<repo>/<repo>/src/settings.cpp#L63-L76)）：
 ```cpp
 void SendUnicodeText(const std::wstring& text) {
     for (wchar_t ch : text) {

@@ -17,7 +17,7 @@
 
 ### ✅ B1. 火山引擎线程在退出时不会被停止
 
-**严重程度**: 中 | **文件**: [src/main.cpp](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp)
+**严重程度**: 中 | **文件**: [src/main.cpp](src/main.cpp)
 
 **问题描述**:
 
@@ -31,8 +31,8 @@
 
 **涉及代码**:
 
-- [main.cpp:513-519](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L513-L519) — `WM_DESTROY` 处理
-- [main.cpp:302-326](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L302-L326) — volcano 线程 while 循环
+- [main.cpp:513-519](src/main.cpp#L513-L519) — `WM_DESTROY` 处理
+- [main.cpp:302-326](src/main.cpp#L302-L326) — volcano 线程 while 循环
 
 **修复建议**:
 
@@ -46,7 +46,7 @@ if (g_volcThread.joinable()) g_volcThread.join();
 
 ### ✅ B2. 百度 ASR Token 缓存存在多线程数据竞争
 
-**严重程度**: 高 | **文件**: [src/baidu_asr.h](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/baidu_asr.h)
+**严重程度**: 高 | **文件**: [src/baidu_asr.h](src/baidu_asr.h)
 
 **问题描述**:
 
@@ -63,7 +63,7 @@ static ULONGLONG     s_tokenExpiresAt = 0; // L150
 
 **涉及代码**:
 
-- [baidu_asr.h:148-189](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/baidu_asr.h#L148-L189) — `GetAccessToken`
+- [baidu_asr.h:148-189](src/baidu_asr.h#L148-L189) — `GetAccessToken`
 
 **修复建议**:
 
@@ -78,7 +78,7 @@ static std::mutex s_tokenMutex;
 
 ### ✅ B3. `VolcDebugLog` 日志文件多线程不安全
 
-**严重程度**: 低 | **文件**: [src/volcengine_asr.h](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/volcengine_asr.h)
+**严重程度**: 低 | **文件**: [src/volcengine_asr.h](src/volcengine_asr.h)
 
 **问题描述**:
 
@@ -89,7 +89,7 @@ static std::mutex s_tokenMutex;
 
 **涉及代码**:
 
-- [volcengine_asr.h:21-39](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/volcengine_asr.h#L21-L39) — `VolcDebugLog`
+- [volcengine_asr.h:21-39](src/volcengine_asr.h#L21-L39) — `VolcDebugLog`
 
 **修复建议**:
 
@@ -101,9 +101,9 @@ static std::mutex s_tokenMutex;
 
 ### ✅ D1. `g_volcAudioCs` 未在退出时删除（资源泄漏）
 
-**严重程度**: 低 | **文件**: [src/main.cpp](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp)
+**严重程度**: 低 | **文件**: [src/main.cpp](src/main.cpp)
 
-`InitializeCriticalSection(&g_volcAudioCs)` 在 [L565](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L565) 调用，但 `DeleteCriticalSection(&g_volcAudioCs)` 从未被调用。对比 `g_audioLock` 在 [L586](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L586) 初始化、[L636](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L636) 删除 —— `g_volcAudioCs` 遗漏了。
+`InitializeCriticalSection(&g_volcAudioCs)` 在 [L565](src/main.cpp#L565) 调用，但 `DeleteCriticalSection(&g_volcAudioCs)` 从未被调用。对比 `g_audioLock` 在 [L586](src/main.cpp#L586) 初始化、[L636](src/main.cpp#L636) 删除 —— `g_volcAudioCs` 遗漏了。
 
 **修复**: 在 `wWinMain` 返回前（L636）和单实例早退路径（L591）两处都添加 `DeleteCriticalSection(&g_volcAudioCs)`。
 
@@ -111,7 +111,7 @@ static std::mutex s_tokenMutex;
 
 ### ✅ D2. SSL 证书验证被全局禁用（安全隐患）
 
-**严重程度**: 中 | **文件**: [src/llm_refine.h](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/llm_refine.h) / [src/baidu_asr.h](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/baidu_asr.h)
+**严重程度**: 中 | **文件**: [src/llm_refine.h](src/llm_refine.h) / [src/baidu_asr.h](src/baidu_asr.h)
 
 LLM 纠错和百度 ASR 的 HTTPS 连接设置了（共 4 个 flag）：
 
@@ -126,8 +126,8 @@ SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE
 
 **涉及代码**:
 
-- [llm_refine.h:298-303](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/llm_refine.h#L298-L303)
-- [baidu_asr.h:105-110](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/baidu_asr.h#L105-L110)
+- [llm_refine.h:298-303](src/llm_refine.h#L298-L303)
+- [baidu_asr.h:105-110](src/baidu_asr.h#L105-L110)
 
 **修复建议**: 至少对正式 API 服务保留系统默认证书验证。若确实需要（如内网自签名），做成可配置选项。
 
@@ -141,10 +141,10 @@ SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE
 
 | 文件 | 函数 |
 |------|------|
-| [engine.cpp:22-66](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/engine.cpp#L22-L66) | `WideToUtf8`, `Utf8ToWide`, `EscapeJson`, `Trim` |
-| [llm_refine.h:70-108](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/llm_refine.h#L70-L108) | `WideToUtf8`, `Utf8ToWide`, `EscapeJson`, `Trim` |
-| [baidu_asr.h:24-38](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/baidu_asr.h#L24-L38) | `WideToUtf8`, `Utf8ToWide` |
-| [volcengine_asr.h:126-142](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/volcengine_asr.h#L126-L142) | `WideToUtf8`, `Utf8ToWide` |
+| [engine.cpp:22-66](src/engine.cpp#L22-L66) | `WideToUtf8`, `Utf8ToWide`, `EscapeJson`, `Trim` |
+| [llm_refine.h:70-108](src/llm_refine.h#L70-L108) | `WideToUtf8`, `Utf8ToWide`, `EscapeJson`, `Trim` |
+| [baidu_asr.h:24-38](src/baidu_asr.h#L24-L38) | `WideToUtf8`, `Utf8ToWide` |
+| [volcengine_asr.h:126-142](src/volcengine_asr.h#L126-L142) | `WideToUtf8`, `Utf8ToWide` |
 
 共 4 份实现，修改一处需要同步多处。
 
@@ -154,7 +154,7 @@ SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE
 
 ### ➖ D4. `g_volcKeepAlive` 设置后永不重置
 
-**严重程度**: 低 | **文件**: [src/main.cpp:269](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L269)
+**严重程度**: 低 | **文件**: [src/main.cpp:269](src/main.cpp#L269)
 
 首次火山引擎连接成功后 `g_volcKeepAlive = true`，之后永不回 `false`。
 
@@ -170,9 +170,9 @@ SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE
 
 ### ✅ D5. `AsrEngine::lock` 是 public 成员（封装不当）
 
-**严重程度**: 低 | **文件**: [src/engine.h:57](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/engine.h#L57)
+**严重程度**: 低 | **文件**: [src/engine.h:57](src/engine.h#L57)
 
-`std::mutex lock` 声明为 public，`PreloadAsrEngine` 在 [engine.cpp:765](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/engine.cpp#L765) 直接 `g_asrEngine.lock.lock()`。
+`std::mutex lock` 声明为 public，`PreloadAsrEngine` 在 [engine.cpp:765](src/engine.cpp#L765) 直接 `g_asrEngine.lock.lock()`。
 
 **修复建议**: 改为 private + `Lock()`/`Unlock()` 方法，或将 `PreloadAsrEngine` 声明为 friend。
 
@@ -182,7 +182,7 @@ SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE
 
 ### ✅ O1. 托盘菜单冗余 flag
 
-**文件**: [src/main.cpp:408](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/main.cpp#L408)
+**文件**: [src/main.cpp:408](src/main.cpp#L408)
 
 ```cpp
 AppendMenuW(menu, MF_STRING | MF_GRAYED | MF_DISABLED, ID_TRAY_VERSION, APP_VERSION_WSTR);
@@ -194,7 +194,7 @@ AppendMenuW(menu, MF_STRING | MF_GRAYED | MF_DISABLED, ID_TRAY_VERSION, APP_VERS
 
 ### ✅ O2. `HotkeyEditWndProc::WM_PAINT` 每次创建/销毁 brush
 
-**文件**: [src/hotkey.cpp:289](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/hotkey.cpp#L289)
+**文件**: [src/hotkey.cpp:289](src/hotkey.cpp#L289)
 
 ```cpp
 HBRUSH bg = CreateSolidBrush(RGB(255, 255, 255));
@@ -208,7 +208,7 @@ DeleteObject(bg);
 
 ### ✅ O3. PositionHud 每次创建新 region
 
-**文件**: [src/hud.cpp:105](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/hud.cpp#L105)
+**文件**: [src/hud.cpp:105](src/hud.cpp#L105)
 
 `CreateRoundRectRgn` 失败时未释放 region；且每次 `PositionHud` 都创建新 region，旧 region 被 `SetWindowRgn` 接管（由系统管理，不会泄漏）。但若频繁调用可能有性能损耗。当前 `PositionHud` 调用频率低（窗口创建、DPI/文字变化），实际影响可忽略。
 
@@ -218,7 +218,7 @@ DeleteObject(bg);
 
 ### ✅ O4. `RunModelDownloader` 用 `WaitForSingleObject(INFINITE)` 阻塞 UI 线程
 
-**文件**: [src/engine.cpp:162](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/engine.cpp#L162)
+**文件**: [src/engine.cpp:162](src/engine.cpp#L162)
 
 ```cpp
 WaitForSingleObject(pi.hProcess, INFINITE);
@@ -265,11 +265,11 @@ B1, B2, B3, D1, D2, D3, D5, O1, O2, O3, O4, N1, N2
 
 ### ✅ N1. WM_APP + 20 handler 读 `g_config.modelId` 而非线程捕获的值
 
-**严重程度**: 低 | **文件**: [src/settings.cpp](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/settings.cpp)
+**严重程度**: 低 | **文件**: [src/settings.cpp](src/settings.cpp)
 
 **问题描述**:
 
-[engine.cpp:122](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/engine.cpp#L122) 下载线程捕获了启动时的 `modelId`，但 [settings.cpp:1635](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/settings.cpp#L1635) handler 读的是 `g_config.modelId`：
+[engine.cpp:122](src/engine.cpp#L122) 下载线程捕获了启动时的 `modelId`，但 [settings.cpp:1635](src/settings.cpp#L1635) handler 读的是 `g_config.modelId`：
 
 ```cpp
 std::wstring newDir = DefaultModelDir(g_config.modelId);  // 可能不等于下载时的 modelId
@@ -283,11 +283,11 @@ std::wstring newDir = DefaultModelDir(g_config.modelId);  // 可能不等于下�
 
 ### ✅ N2. firered_vad.h 路径转换非 UTF-8 安全
 
-**严重程度**: 低 | **文件**: [src/firered_vad.h](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/firered_vad.h)
+**严重程度**: 低 | **文件**: [src/firered_vad.h](src/firered_vad.h)
 
 **问题描述**:
 
-[firered_vad.h:115](file:///d:/%23GITHUB_melody0709/Voice_LLM_ASR_Input/src/firered_vad.h#L115) 将 `std::string` 转 `std::wstring` 使用逐字节拷贝：
+[firered_vad.h:115](src/firered_vad.h#L115) 将 `std::string` 转 `std::wstring` 使用逐字节拷贝：
 
 ```cpp
 std::wstring wpath(cfg.modelPath.begin(), cfg.modelPath.end());

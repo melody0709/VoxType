@@ -636,10 +636,9 @@ bool EnsureVocabularyFileTemplate(const std::wstring& path) {
     const std::wstring templateJson =
         L"{\r\n"
         L"  \"// 说明\": \"支持人名、专有名词、公司术语。权重可选 1-5 或 50（50 为强制优先，最多 50 项；总计最多 2000 项）\",\r\n"
-        L"  \"何启煊\": 50,\r\n"
-        L"  \"何燮煊\": 50,\r\n"
-        L"  \"何悦滢\": 50,\r\n"
-        L"  \"李协煊\": 50\r\n"
+        L"  \"VoxType\": 50,\r\n"
+        L"  \"音素\": 4,\r\n"
+        L"  \"Kubernetes\": 4\r\n"
         L"}\r\n";
     auto writeRes = WriteVocabularyFile(templateJson, target);
     return writeRes.has_value();
