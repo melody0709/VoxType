@@ -9,8 +9,8 @@
 通义千问在 VoxType 中支持三类技术形态：
 
 1. **官方 DashScope 云端 ASR（语音识别）**：
-   - **3.1 旗舰流式识别（新装默认 / 推荐首选）**：`qwen-audio-3.1-asr-flash-streaming`（低延迟、原生润色、多方言与古诗文韵律调优，支持 `vad_model` / `keep_dialect`）
-   - **3.1 输入法消息形态**：`qwen-audio-3.1-asr-flash-message`（与 streaming 共用同一 WebSocket 端点与事件协议、**同价** 6 / 4.5 元每百万 Token、RPM 更高 1200 vs 600；参数集更小：拒绝 `language_hints` 等；润色可开关，强化多人/噪声场景）
+   - **3.1 输入法消息形态（新装默认 / 推荐首选）**：`qwen-audio-3.1-asr-flash-message`（与 streaming 共用同一 WebSocket 端点与事件协议、**同价** 6 / 4.5 元每百万 Token、RPM 更高 1200 vs 600；参数集更小：拒绝 `language_hints` 等；润色可开关，强化多人/噪声场景）
+   - **3.1 旗舰流式识别**：`qwen-audio-3.1-asr-flash-streaming`（低延迟、原生润色、多方言与古诗文韵律调优，支持 `vad_model` / `keep_dialect`）
    - **3.1 批量非流式识别**：`qwen-audio-3.1-asr-flash`（HTTP 录制识别，高并发低单价）
    - **3.0 流式识别（向后兼容）**：`qwen-audio-3.0-asr-flash-streaming`（基于 WebSocket 双向协议）
    - **3.0 非流式批量识别**：`qwen-audio-3.0-asr-flash`（基于 HTTP REST POST）
@@ -49,6 +49,6 @@
 ## 4. 模型更新追踪清单
 
 - [ ] **ASR 新版本发布**：跟进阿里通义实验室是否推出 `Qwen-Audio-3.5` 或 `Qwen-Audio-4.0`。
-- [ ] **`qwen-audio-3.1-asr-flash-message` 档位复评**：它与 3.1 streaming **同价**（6 / 4.5 元每百万 Token），只作为可选档位的原因是参数集更窄（无 `language_hints` / `special_word_filter`）。若官方为其补齐这些字段、或证明其在噪声/多人场景显著更优，需重新评估是否提升为推荐档位。
+- [x] **`qwen-audio-3.1-asr-flash-message` 档位提升为默认**：它与 3.1 streaming 同价（6 / 4.5 元每百万 Token），RPM 更高（1200 vs 600），并原生支持可选的语气词/口语润色过滤（`disfluency_removal_enabled`）。在 v0.11.4 正式设为千问默认模型。
 - [ ] **端侧小模型 Qwen-Audio 开源**：关注 HuggingFace / ModelScope 上的端侧量化版本，评估本地端侧 ONNX / GGUF 推理可行性。
 - [ ] **LLM 纠错推荐模型升级**：随通义开源模型演进，评估更适合输入法低时延场景的 MoE 或轻量蒸馏版模型。

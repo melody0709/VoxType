@@ -12,7 +12,10 @@ namespace ui_provider {
 
 constexpr wchar_t kQwenDefaultBaseUrl[] =
     L"wss://llm-c6rtn7zy4nw0u39k.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime";
-constexpr wchar_t kQwenDefaultModel[] = L"qwen-audio-3.1-asr-flash-streaming";
+// The Qwen default model has a single source of truth: Config::qwenModel in
+// src/core/config_store.h, mirrored by the first entry of the model combo box in
+// provider_qwen.cpp (the drop-down falls back to index 0 when lookup fails).
+// Do not introduce a second default-model constant here.
 
 bool IsQwenAudioHttpModel(const std::wstring& model);
 bool IsQwenAudioStreamingModel(const std::wstring& model);

@@ -1235,7 +1235,7 @@ int wmain() {
             cfg.qwenModel = L"qwen3-asr-flash-realtime";
             CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen3-asr-flash-realtime", "qwen realtime");
             cfg.qwenModel = L"";
-            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.1-asr-flash-streaming", "qwen empty default");
+            CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-3.1-asr-flash-message", "qwen empty default");
             cfg.qwenModel = L"qwen-audio-turbo";
             CHECK(AsrBackendDisplayName(cfg) == L"Qwen ASR / qwen-audio-turbo", "qwen custom model");
         }

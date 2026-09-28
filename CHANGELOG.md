@@ -2,6 +2,25 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.11.4 (2026-09-28)
+
+### UI & Layout
+
+- **Refactored `Qwen ASR Advanced Settings` dialog layout with two-column grid.**
+  - Fixed horizontal label truncation. The group-box controls inherited the input-column origin of the labelled rows above (`X = 170`, still correct for `Vocabulary ID` / `Inline vocabulary`), which wasted 146 px on the left and clipped the long option strings on the right (`Filler-word removal / polish (3.1 messa` -> `(3.1 message)`, `Refresh context once before` -> `... before finish`, `Replace words (*) — one per` -> `... one per line:`). The group box is now a two-column grid, and the `Max silence (ms)` label was widened to 145 px so its tail is not clipped either.
+  - Fixed vertical compression of the sensitive-word multiline edit boxes (`Replace words` and `Delete words`): 42 design px (about 28 physical px at 96 DPI, one line of content) raised to 76 design px, restoring 3–4 visible lines plus a usable vertical scrollbar.
+  - Removed the alignment distortion: column 1 starts at `Col1X = 48` instead of letting the label sit on the group-box border line (`X = 24`), and column 2 starts at `Col2X = 412`; both columns keep the same 24 px inset from the frame (`ColPadX`), so the grid is centred.
+  - Expanded the dialog from 720×860 to 780×900 with a 732 px group box that contains every control and both footer buttons.
+  - Moved the dialog geometry into `src/ui/ui_types.h` (`QwenAdvancedDialog*`), so the layout and the checker read the same constants, and taught `scripts/validate_settings_layout.ps1` to assert per row at 96/144/192/288 DPI that the columns never overlap, never leave the group box, never push a label into the edit box below it, and never push a footer button past the dialog edge.
+
+### Models & Configuration
+
+- **Default Qwen ASR model updated to `qwen-audio-3.1-asr-flash-message`.**
+  - Updated fresh-install default and empty fallback model from `qwen-audio-3.1-asr-flash-streaming` to `qwen-audio-3.1-asr-flash-message`.
+  - Re-ordered Qwen settings model dropdown with `qwen-audio-3.1-asr-flash-message` as the top item.
+  - The model identifier now has a single literal in `src/core/qwen_audio_profile.h` (`kMessageModel31`); `Config::qwenModel`, the drop-down and the display-name fallback all reference it, and the unused `kQwenDefaultModel` constant is gone.
+  - Updated offline protocol assertions in `tests/asr_json_protocol_test.cpp` and technical documentation in `doc/qwen/Qwen-Audio-3.x-ASR.md` (§1.1 no longer claims message is not the default).
+
 ## v0.11.3 (2026-09-28)
 
 ### Features & Integrations

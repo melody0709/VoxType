@@ -234,12 +234,15 @@ void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     HWND qwenModelCombo = GetDlgItem(parent, IDC_QWEN_MODEL);
     if (qwenModelCombo) {
         ComboBox_ResetContent(qwenModelCombo);
-        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.1-asr-flash-streaming");
-        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.1-asr-flash-message");
-        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.1-asr-flash");
-        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.0-asr-flash-streaming");
-        ComboBox_AddString(qwenModelCombo, L"qwen-audio-3.0-asr-flash");
-        ComboBox_AddString(qwenModelCombo, L"qwen3-asr-flash-realtime");
+        // The first entry is the fresh-install default: it must stay in sync
+        // with Config::qwenModel and is the fallback used when the persisted
+        // model is not in this list (idx == CB_ERR below).
+        ComboBox_AddString(qwenModelCombo, qwen_audio_profile::kMessageModel31);
+        ComboBox_AddString(qwenModelCombo, qwen_audio_profile::kStreamingModel31);
+        ComboBox_AddString(qwenModelCombo, qwen_audio_profile::kHttpModel31);
+        ComboBox_AddString(qwenModelCombo, qwen_audio_profile::kStreamingModel);
+        ComboBox_AddString(qwenModelCombo, qwen_audio_profile::kHttpModel);
+        ComboBox_AddString(qwenModelCombo, qwen_audio_profile::kLegacyModel);
         int idx = ComboBox_FindStringExact(qwenModelCombo, -1, cfg.qwenModel.c_str());
         if (idx == CB_ERR) idx = 0;
         ComboBox_SetCurSel(qwenModelCombo, idx);

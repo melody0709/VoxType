@@ -93,46 +93,46 @@ struct QwenAdvancedDialogState {
 };
 
 void LayoutQwenAdvancedDlg(HWND hwnd, const QwenAdvancedControls& c) {
-    if (c.vocabIdLabel) MoveWindow(c.vocabIdLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabIdLabelY), S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::LabelH), TRUE);
+    if (c.vocabIdLabel) MoveWindow(c.vocabIdLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabIdLabelY), S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), TRUE);
     if (c.vocabId) MoveWindow(c.vocabId, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::EditH), TRUE);
     if (c.vocabIdHint) MoveWindow(c.vocabIdHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdHintY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH), TRUE);
 
-    if (c.vocabJsonLabel) MoveWindow(c.vocabJsonLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY), S(140), S(UiStyle::LabelH), TRUE);
+    if (c.vocabJsonLabel) MoveWindow(c.vocabJsonLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY), S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), TRUE);
     if (c.vocabJsonHint) MoveWindow(c.vocabJsonHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonHintY), S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH), TRUE);
 
-    if (c.streamingGroup) MoveWindow(c.streamingGroup, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogStreamingGroupY), S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::QwenAdvancedDialogStreamingGroupH), TRUE);
-    if (c.semantic) MoveWindow(c.semantic, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(220), S(UiStyle::CheckH), TRUE);
-    if (c.silenceLabel) MoveWindow(c.silenceLabel, S(420), S(UiStyle::QwenAdvancedDialogStreamingRow1Y) + S(4), S(105), S(UiStyle::LabelH), TRUE);
-    if (c.silence) MoveWindow(c.silence, S(530), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(100), S(UiStyle::EditH), TRUE);
-    if (c.streamingHint1) MoveWindow(c.streamingHint1, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingHint1Y), S(470), S(UiStyle::QwenHint2LineH), TRUE);
+    if (c.streamingGroup) MoveWindow(c.streamingGroup, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogStreamingGroupY), S(UiStyle::QwenAdvancedDialogGroupW), S(UiStyle::QwenAdvancedDialogStreamingGroupH), TRUE);
+    if (c.semantic) MoveWindow(c.semantic, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(UiStyle::QwenAdvancedDialogSemanticW), S(UiStyle::CheckH), TRUE);
+    if (c.silenceLabel) MoveWindow(c.silenceLabel, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogStreamingRow1Y) + S(4), S(UiStyle::QwenAdvancedDialogSilenceLabelW), S(UiStyle::LabelH), TRUE);
+    if (c.silence) MoveWindow(c.silence, S(UiStyle::QwenAdvancedDialogCol2X + UiStyle::QwenAdvancedDialogSilenceEditDx), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(UiStyle::QwenAdvancedDialogSilenceEditW), S(UiStyle::EditH), TRUE);
+    if (c.streamingHint1) MoveWindow(c.streamingHint1, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingHint1Y), S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH), TRUE);
 
-    if (c.multi) MoveWindow(c.multi, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingRow2Y), S(170), S(UiStyle::CheckH), TRUE);
-    if (c.heartbeat) MoveWindow(c.heartbeat, S(350), S(UiStyle::QwenAdvancedDialogStreamingRow2Y), S(150), S(UiStyle::CheckH), TRUE);
-    if (c.streamingHint2) MoveWindow(c.streamingHint2, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingHint2Y), S(470), S(UiStyle::QwenHint2LineH), TRUE);
+    if (c.multi) MoveWindow(c.multi, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingRow2Y), S(UiStyle::QwenAdvancedDialogMultiW), S(UiStyle::CheckH), TRUE);
+    if (c.heartbeat) MoveWindow(c.heartbeat, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogStreamingRow2Y), S(UiStyle::QwenAdvancedDialogHeartbeatW), S(UiStyle::CheckH), TRUE);
+    if (c.streamingHint2) MoveWindow(c.streamingHint2, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingHint2Y), S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH), TRUE);
 
-    if (c.noiseEnable) MoveWindow(c.noiseEnable, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogNoiseY), S(220), S(UiStyle::CheckH), TRUE);
-    if (c.noise) MoveWindow(c.noise, S(420), S(UiStyle::QwenAdvancedDialogNoiseY), S(100), S(UiStyle::EditH), TRUE);
-    if (c.noiseHintUnit) MoveWindow(c.noiseHintUnit, S(530), S(UiStyle::QwenAdvancedDialogNoiseY) + S(4), S(135), S(UiStyle::QwenHintH), TRUE);
-    if (c.noiseHint) MoveWindow(c.noiseHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogNoiseHintY), S(480), S(UiStyle::QwenHintH), TRUE);
+    if (c.noiseEnable) MoveWindow(c.noiseEnable, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogNoiseY), S(UiStyle::QwenAdvancedDialogNoiseEnableW), S(UiStyle::CheckH), TRUE);
+    if (c.noise) MoveWindow(c.noise, S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogNoiseEditDx), S(UiStyle::QwenAdvancedDialogNoiseY), S(UiStyle::QwenAdvancedDialogNoiseEditW), S(UiStyle::EditH), TRUE);
+    if (c.noiseHintUnit) MoveWindow(c.noiseHintUnit, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogNoiseY) + S(4), S(UiStyle::QwenAdvancedDialogNoiseUnitW), S(UiStyle::QwenHintH), TRUE);
+    if (c.noiseHint) MoveWindow(c.noiseHint, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogNoiseHintY), S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHintH), TRUE);
 
-    if (c.continueContext) MoveWindow(c.continueContext, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogContinueY), S(250), S(UiStyle::CheckH), TRUE);
-    if (c.systemFilter) MoveWindow(c.systemFilter, S(430), S(UiStyle::QwenAdvancedDialogContinueY), S(230), S(UiStyle::CheckH), TRUE);
-    if (c.continueHint) MoveWindow(c.continueHint, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogContinueHintY), S(500), S(UiStyle::QwenHint2LineH), TRUE);
+    if (c.continueContext) MoveWindow(c.continueContext, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogContinueY), S(UiStyle::QwenAdvancedDialogContinueW), S(UiStyle::CheckH), TRUE);
+    if (c.systemFilter) MoveWindow(c.systemFilter, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogContinueY), S(UiStyle::QwenAdvancedDialogSystemFilterW), S(UiStyle::CheckH), TRUE);
+    if (c.continueHint) MoveWindow(c.continueHint, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogContinueHintY), S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH), TRUE);
 
-    if (c.vadModelLabel) MoveWindow(c.vadModelLabel, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(120), S(UiStyle::LabelH), TRUE);
-    if (c.vadModel) MoveWindow(c.vadModel, S(300), S(UiStyle::QwenAdvancedDialogDialectY), S(170), S(UiStyle::ComboH), TRUE);
-    if (c.keepDialect) MoveWindow(c.keepDialect, S(480), S(UiStyle::QwenAdvancedDialogDialectY), S(190), S(UiStyle::CheckH), TRUE);
+    if (c.vadModelLabel) MoveWindow(c.vadModelLabel, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(UiStyle::QwenAdvancedDialogVadLabelW), S(UiStyle::LabelH), TRUE);
+    if (c.vadModel) MoveWindow(c.vadModel, S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogVadComboDx), S(UiStyle::QwenAdvancedDialogDialectY), S(UiStyle::QwenAdvancedDialogVadComboW), S(UiStyle::ComboH), TRUE);
+    if (c.keepDialect) MoveWindow(c.keepDialect, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogDialectY), S(UiStyle::QwenAdvancedDialogKeepDialectW), S(UiStyle::CheckH), TRUE);
 
-    if (c.disfluencyRemoval) MoveWindow(c.disfluencyRemoval, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogMessageY), S(330), S(UiStyle::CheckH), TRUE);
+    if (c.disfluencyRemoval) MoveWindow(c.disfluencyRemoval, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogMessageY), S(UiStyle::QwenAdvancedDialogDisfluencyW), S(UiStyle::CheckH), TRUE);
 
-    if (c.specialReplaceLabel) MoveWindow(c.specialReplaceLabel, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogSpecialLabelY), S(245), S(UiStyle::LabelH), TRUE);
-    if (c.specialReplace) MoveWindow(c.specialReplace, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogSpecialY), S(240), S(UiStyle::QwenAdvancedDialogSpecialH), TRUE);
+    if (c.specialReplaceLabel) MoveWindow(c.specialReplaceLabel, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogSpecialLabelY), S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH), TRUE);
+    if (c.specialReplace) MoveWindow(c.specialReplace, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogSpecialY), S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::QwenAdvancedDialogSpecialH), TRUE);
 
-    if (c.specialEmptyLabel) MoveWindow(c.specialEmptyLabel, S(430), S(UiStyle::QwenAdvancedDialogSpecialLabelY), S(250), S(UiStyle::LabelH), TRUE);
-    if (c.specialEmpty) MoveWindow(c.specialEmpty, S(430), S(UiStyle::QwenAdvancedDialogSpecialY), S(250), S(UiStyle::QwenAdvancedDialogSpecialH), TRUE);
+    if (c.specialEmptyLabel) MoveWindow(c.specialEmptyLabel, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogSpecialLabelY), S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH), TRUE);
+    if (c.specialEmpty) MoveWindow(c.specialEmpty, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogSpecialY), S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::QwenAdvancedDialogSpecialH), TRUE);
 
-    if (c.okButton) MoveWindow(c.okButton, S(500), S(UiStyle::QwenAdvancedDialogFooterY), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
-    if (c.cancelButton) MoveWindow(c.cancelButton, S(596), S(UiStyle::QwenAdvancedDialogFooterY), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
+    if (c.okButton) MoveWindow(c.okButton, S(UiStyle::QwenAdvancedDialogOkBtnX), S(UiStyle::QwenAdvancedDialogFooterY), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
+    if (c.cancelButton) MoveWindow(c.cancelButton, S(UiStyle::QwenAdvancedDialogCancelBtnX), S(UiStyle::QwenAdvancedDialogFooterY), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
 }
 
 POINT CalculateCenteredDialogPos(HWND parent, int width, int height) {
@@ -269,7 +269,7 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
         HINSTANCE hInst = GetParentInstance(hwnd);
         state->controls.vocabIdLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabIdLabelY),
-                    S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::LabelH), L"Vocabulary ID");
+                    S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), L"Vocabulary ID");
         state->controls.vocabId = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                        S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdY),
@@ -282,7 +282,7 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
                     L"Optional. Its target model must match the selected ASR model.");
 
         state->controls.vocabJsonLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY),
-                    S(140), S(UiStyle::LabelH), L"Inline vocabulary");
+                    S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), L"Inline vocabulary");
         state->controls.vocabJsonHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonHintY),
                    S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH),
                    L"Managed globally in the top-level \"Vocabulary\" tab (%APPDATA%\\VoxType\\vocabulary.json), shared with Volcano Engine.");
@@ -292,100 +292,101 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             : L"Streaming recognition (not used by this model)";
         state->controls.streamingGroup = CreateWindowW(L"BUTTON", groupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                    S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogStreamingGroupY),
-                                   S(UiStyle::QwenAdvancedDialogLabelW), S(UiStyle::QwenAdvancedDialogStreamingGroupH),
+                                   S(UiStyle::QwenAdvancedDialogGroupW), S(UiStyle::QwenAdvancedDialogStreamingGroupH),
                                    hwnd, nullptr, hInst, nullptr);
         ApplyUiFont(state->controls.streamingGroup);
 
         state->controls.semantic = CreateCheckBox(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION,
-                                       S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingRow1Y),
-                                       S(220), S(UiStyle::CheckH), L"Semantic punctuation");
-        state->controls.silenceLabel = CreateLabel(hwnd, S(420), S(UiStyle::QwenAdvancedDialogStreamingRow1Y) + S(4),
-                    S(105), S(UiStyle::LabelH), L"Max silence (ms)");
+                                       S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingRow1Y),
+                                       S(UiStyle::QwenAdvancedDialogSemanticW), S(UiStyle::CheckH), L"Semantic punctuation");
+        state->controls.silenceLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogStreamingRow1Y) + S(4),
+                    S(UiStyle::QwenAdvancedDialogSilenceLabelW), S(UiStyle::LabelH), L"Max silence (ms)");
         state->controls.silence = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
-                                       S(530), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(100), S(UiStyle::EditH),
+                                       S(UiStyle::QwenAdvancedDialogCol2X + UiStyle::QwenAdvancedDialogSilenceEditDx), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(UiStyle::QwenAdvancedDialogSilenceEditW), S(UiStyle::EditH),
                                        hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_MAX_SENTENCE_SILENCE)),
                                        hInst, nullptr);
         ApplyUiFont(state->controls.silence);
-        state->controls.streamingHint1 = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingHint1Y),
-                   S(470), S(UiStyle::QwenHint2LineH),
+        state->controls.streamingHint1 = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingHint1Y),
+                   S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH),
                    L"Semantic punctuation splits by meaning. Max silence finalizes after 200–6000 ms.");
 
         state->controls.multi = CreateCheckBox(hwnd, IDC_QWEN_MULTI_THRESHOLD,
-                                    S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingRow2Y),
-                                    S(170), S(UiStyle::CheckH), L"Multi-threshold");
+                                    S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingRow2Y),
+                                    S(UiStyle::QwenAdvancedDialogMultiW), S(UiStyle::CheckH), L"Multi-threshold");
         state->controls.heartbeat = CreateCheckBox(hwnd, IDC_QWEN_HEARTBEAT,
-                                        S(350), S(UiStyle::QwenAdvancedDialogStreamingRow2Y),
-                                        S(150), S(UiStyle::CheckH), L"Heartbeat");
-        state->controls.streamingHint2 = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogStreamingHint2Y),
-                   S(470), S(UiStyle::QwenHint2LineH),
+                                        S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogStreamingRow2Y),
+                                        S(UiStyle::QwenAdvancedDialogHeartbeatW), S(UiStyle::CheckH), L"Heartbeat");
+        state->controls.streamingHint2 = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingHint2Y),
+                   S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH),
                    L"For noisy audio; can't combine with semantic punctuation. Heartbeat keeps the connection alive.");
 
         state->controls.noiseEnable = CreateCheckBox(hwnd, IDC_QWEN_SPEECH_NOISE_ENABLE,
-                                          S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogNoiseY),
-                                          S(220), S(UiStyle::CheckH), L"Speech noise threshold");
+                                          S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogNoiseY),
+                                          S(UiStyle::QwenAdvancedDialogNoiseEnableW), S(UiStyle::CheckH), L"Speech noise threshold");
         state->controls.noise = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                     S(420), S(UiStyle::QwenAdvancedDialogNoiseY), S(100), S(UiStyle::EditH),
+                                     S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogNoiseEditDx), S(UiStyle::QwenAdvancedDialogNoiseY), S(UiStyle::QwenAdvancedDialogNoiseEditW), S(UiStyle::EditH),
                                      hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_SPEECH_NOISE_THRESHOLD)),
                                      hInst, nullptr);
         ApplyUiFont(state->controls.noise);
-        state->controls.noiseHintUnit = CreateHint(hwnd, S(530), S(UiStyle::QwenAdvancedDialogNoiseY) + S(4), S(135), S(UiStyle::QwenHintH), L"-1.0 to 1.0");
-        state->controls.noiseHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogNoiseHintY),
-                   S(480), S(UiStyle::QwenHintH), L"Only enable for difficult recording environments.");
+        state->controls.noiseHintUnit = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogNoiseY) + S(4), S(UiStyle::QwenAdvancedDialogNoiseUnitW), S(UiStyle::QwenHintH), L"-1.0 to 1.0");
+        state->controls.noiseHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogNoiseHintY),
+                   S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHintH), L"Only enable for difficult recording environments.");
 
         state->controls.continueContext = CreateCheckBox(
             hwnd, IDC_QWEN_CONTINUE_CONTEXT,
-            S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogContinueY),
-            S(250), S(UiStyle::CheckH), L"Refresh context once before finish");
+            S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogContinueY),
+            S(UiStyle::QwenAdvancedDialogContinueW), S(UiStyle::CheckH), L"Refresh context once before finish");
         state->controls.systemFilter = CreateCheckBox(
             hwnd, IDC_QWEN_SYSTEM_FILTER,
-            S(430), S(UiStyle::QwenAdvancedDialogContinueY),
-            S(230), S(UiStyle::CheckH), L"System reserved filter");
-        state->controls.continueHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogContinueHintY),
-                   S(500), S(UiStyle::QwenHint2LineH),
+            S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogContinueY),
+            S(UiStyle::QwenAdvancedDialogSystemFilterW), S(UiStyle::CheckH), L"System reserved filter");
+        state->controls.continueHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogContinueHintY),
+                   S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH),
                    L"Audio 3 only. Requires focused-field context.\nReads once in the worker thread; no polling.");
 
-        state->controls.vadModelLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft),
-                    S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(120), S(UiStyle::LabelH), L"VAD model");
+        state->controls.vadModelLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol1X),
+                    S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(UiStyle::QwenAdvancedDialogVadLabelW), S(UiStyle::LabelH), L"VAD model");
         state->controls.vadModel = CreateCombo(hwnd, IDC_QWEN_VAD_MODEL,
-                    S(300), S(UiStyle::QwenAdvancedDialogDialectY), S(170), S(UiStyle::ComboH));
+                    S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogVadComboDx), S(UiStyle::QwenAdvancedDialogDialectY), S(UiStyle::QwenAdvancedDialogVadComboW), S(UiStyle::ComboH));
         // The provider default stays first so an untouched 3.1 recording keeps
         // the documented far-field behavior.
         ComboBox_AddString(state->controls.vadModel, L"far_field_meeting_16k");
         ComboBox_AddString(state->controls.vadModel, L"near_meeting_16k");
         state->controls.keepDialect = CreateCheckBox(hwnd, IDC_QWEN_KEEP_DIALECT,
-                    S(480), S(UiStyle::QwenAdvancedDialogDialectY), S(190), S(UiStyle::CheckH),
+                    S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogDialectY), S(UiStyle::QwenAdvancedDialogKeepDialectW), S(UiStyle::CheckH),
                     L"Keep dialect (3.1)");
         state->controls.disfluencyRemoval = CreateCheckBox(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL,
-                    S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogMessageY),
-                    S(330), S(UiStyle::CheckH), L"Filler-word removal / polish (3.1 message)");
+                    S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogMessageY),
+                    S(UiStyle::QwenAdvancedDialogDisfluencyW), S(UiStyle::CheckH), L"Filler-word removal / polish (3.1 message)");
 
-        state->controls.specialReplaceLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogSpecialLabelY),
-                    S(245), S(UiStyle::LabelH), L"Replace words (*) — one per line:");
+        state->controls.specialReplaceLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogSpecialLabelY),
+                    S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH), L"Replace words (*) — one per line:");
         state->controls.specialReplace = CreateWindowExW(
             WS_EX_CLIENTEDGE, L"EDIT", nullptr,
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
-            S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogSpecialY),
-            S(240), S(UiStyle::QwenAdvancedDialogSpecialH), hwnd,
+            S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogSpecialY),
+            S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::QwenAdvancedDialogSpecialH), hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_SPECIAL_REPLACE)),
             hInst, nullptr);
         ApplyUiFont(state->controls.specialReplace);
 
-        state->controls.specialEmptyLabel = CreateLabel(hwnd, S(430), S(UiStyle::QwenAdvancedDialogSpecialLabelY), S(250), S(UiStyle::LabelH),
+        state->controls.specialEmptyLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogSpecialLabelY),
+                    S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH),
                     L"Delete words — 32 total max:");
         state->controls.specialEmpty = CreateWindowExW(
             WS_EX_CLIENTEDGE, L"EDIT", nullptr,
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
-            S(430), S(UiStyle::QwenAdvancedDialogSpecialY),
-            S(250), S(UiStyle::QwenAdvancedDialogSpecialH), hwnd,
+            S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogSpecialY),
+            S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::QwenAdvancedDialogSpecialH), hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_SPECIAL_EMPTY)),
             hInst, nullptr);
         ApplyUiFont(state->controls.specialEmpty);
 
-        state->controls.okButton = CreateButton(hwnd, IDOK, S(500), S(UiStyle::QwenAdvancedDialogFooterY),
+        state->controls.okButton = CreateButton(hwnd, IDOK, S(UiStyle::QwenAdvancedDialogOkBtnX), S(UiStyle::QwenAdvancedDialogFooterY),
                                      S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"OK");
-        state->controls.cancelButton = CreateButton(hwnd, IDCANCEL, S(596), S(UiStyle::QwenAdvancedDialogFooterY),
+        state->controls.cancelButton = CreateButton(hwnd, IDCANCEL, S(UiStyle::QwenAdvancedDialogCancelBtnX), S(UiStyle::QwenAdvancedDialogFooterY),
                                          S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"Cancel");
         SendMessageW(state->controls.okButton, BM_SETSTYLE, BS_DEFPUSHBUTTON, TRUE);
 

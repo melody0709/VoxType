@@ -167,22 +167,53 @@ constexpr int VolcHintY = 388;
 constexpr int MimoPresetComboW = 150;
 constexpr int MimoUrlEditGap = 10;
 constexpr int MimoUrlEditW = 420;
-constexpr int QwenAdvancedDialogW = 720;
-constexpr int QwenAdvancedDialogH = 860;
+constexpr int QwenAdvancedDialogW = 780;
+constexpr int QwenAdvancedDialogH = 900;
 // QwenAdvancedDialogH is the outer window height. Reserve room for the
 // caption/frame before validating client-area controls.
 constexpr int QwenAdvancedDialogNonClientReserveH = 48;
 constexpr int QwenAdvancedDialogLeft = 24;
-constexpr int QwenAdvancedDialogLabelW = 620;
+constexpr int QwenAdvancedDialogGroupW = 732;
+// Single-line trailing label at the left edge of the two rows above the group
+// box ("Vocabulary ID" / "Inline vocabulary").
+constexpr int QwenAdvancedDialogTagLabelW = 140;
 constexpr int QwenAdvancedDialogInputLeft = 170;
-constexpr int QwenAdvancedDialogInputW = 500;
+constexpr int QwenAdvancedDialogInputW = 570;
 constexpr int QwenAdvancedDialogVocabIdLabelY = 28;
 constexpr int QwenAdvancedDialogVocabIdY = 56;
 constexpr int QwenAdvancedDialogVocabIdHintY = 92;
 constexpr int QwenAdvancedDialogVocabJsonLabelY = 146;
 constexpr int QwenAdvancedDialogVocabJsonHintY = 146;
 constexpr int QwenAdvancedDialogStreamingGroupY = 210;
-constexpr int QwenAdvancedDialogStreamingGroupH = 534;
+constexpr int QwenAdvancedDialogStreamingGroupH = 568;
+// Two-column grid inside the group box. Both columns keep the same inner
+// padding to the frame (Col1X - Left and Left + GroupW - (Col2X + SpecialW)
+// are both QwenAdvancedDialogColPadX) so the grid stays centred and symmetric;
+// validate_settings_layout.ps1 asserts this at every supported DPI.
+constexpr int QwenAdvancedDialogColPadX = 24;
+constexpr int QwenAdvancedDialogCol1X = 48;
+constexpr int QwenAdvancedDialogCol2X = 412;
+// Hint lines below a row span both columns.
+constexpr int QwenAdvancedDialogHintW = 660;
+// Per-row control widths. "Dx" is the offset from the row's column origin:
+// the label sits at the column origin, the field follows at origin + Dx.
+constexpr int QwenAdvancedDialogSemanticW = 260;
+constexpr int QwenAdvancedDialogSilenceLabelW = 145;
+constexpr int QwenAdvancedDialogSilenceEditDx = 152;
+constexpr int QwenAdvancedDialogSilenceEditW = 108;
+constexpr int QwenAdvancedDialogMultiW = 220;
+constexpr int QwenAdvancedDialogHeartbeatW = 180;
+constexpr int QwenAdvancedDialogNoiseEnableW = 240;
+constexpr int QwenAdvancedDialogNoiseEditDx = 248;
+constexpr int QwenAdvancedDialogNoiseEditW = 84;
+constexpr int QwenAdvancedDialogNoiseUnitW = 135;
+constexpr int QwenAdvancedDialogContinueW = 330;
+constexpr int QwenAdvancedDialogSystemFilterW = 260;
+constexpr int QwenAdvancedDialogVadLabelW = 100;
+constexpr int QwenAdvancedDialogVadComboDx = 108;
+constexpr int QwenAdvancedDialogVadComboW = 180;
+constexpr int QwenAdvancedDialogKeepDialectW = 220;
+constexpr int QwenAdvancedDialogDisfluencyW = 460;
 constexpr int QwenAdvancedDialogStreamingRow1Y = 242;
 constexpr int QwenAdvancedDialogStreamingHint1Y = 276;
 constexpr int QwenAdvancedDialogStreamingRow2Y = 328;
@@ -191,15 +222,21 @@ constexpr int QwenAdvancedDialogNoiseY = 414;
 constexpr int QwenAdvancedDialogNoiseHintY = 448;
 constexpr int QwenAdvancedDialogContinueY = 484;
 constexpr int QwenAdvancedDialogContinueHintY = 512;
-// Audio 3.1 streaming generation only: near/far-field VAD model plus dialect
-// retention. The row stays disabled for 3.0, which rejects both fields.
+// Audio 3.1 generation: near/far-field VAD model (3.1 duplex only) plus dialect
+// retention (the whole 3.1 generation). The row stays disabled for 3.0, which
+// rejects both fields.
 constexpr int QwenAdvancedDialogDialectY = 566;
 // Audio 3.1 message generation only: native disfluency removal.
 constexpr int QwenAdvancedDialogMessageY = 612;
-constexpr int QwenAdvancedDialogSpecialLabelY = 666;
-constexpr int QwenAdvancedDialogSpecialY = 694;
-constexpr int QwenAdvancedDialogSpecialH = 42;
-constexpr int QwenAdvancedDialogFooterY = 758;
+// The label box is LabelH tall, so this must stay at SpecialY - LabelH or less
+// or the label rectangle overlaps the multiline edit box below it.
+constexpr int QwenAdvancedDialogSpecialLabelY = 650;
+constexpr int QwenAdvancedDialogSpecialY = 680;
+constexpr int QwenAdvancedDialogSpecialW = 320;
+constexpr int QwenAdvancedDialogSpecialH = 76;
+constexpr int QwenAdvancedDialogFooterY = 788;
+constexpr int QwenAdvancedDialogOkBtnX = 568;
+constexpr int QwenAdvancedDialogCancelBtnX = 668;
 constexpr int InputDlgW = 440;
 constexpr int InputDlgH = 190;
 constexpr int InputDlgEditW = 390;

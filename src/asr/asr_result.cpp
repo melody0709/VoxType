@@ -2,6 +2,7 @@
 
 #include "asr_result_policy.h"
 #include "path_service.h"
+#include "qwen_audio_profile.h"
 
 #include <algorithm>
 #include <cwctype>
@@ -116,7 +117,7 @@ bool ShouldRunLlmRefine(const Config& config, const std::wstring& text) {
 std::wstring AsrBackendDisplayName(const Config& config) {
     if (config.asrBackend == L"qwen") {
         const std::wstring model = config.qwenModel.empty()
-            ? L"qwen-audio-3.1-asr-flash-streaming"
+            ? qwen_audio_profile::kMessageModel31
             : config.qwenModel;
         return L"Qwen ASR / " + model;
     }

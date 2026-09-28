@@ -145,6 +145,34 @@ $qwenDialogInputW = Get-UiInt 'QwenAdvancedDialogInputW'
 $qwenDialogSpecialY = Get-UiInt 'QwenAdvancedDialogSpecialY'
 $qwenDialogSpecialH = Get-UiInt 'QwenAdvancedDialogSpecialH'
 $qwenDialogFooterY = Get-UiInt 'QwenAdvancedDialogFooterY'
+$qwenDialogLeft = Get-UiInt 'QwenAdvancedDialogLeft'
+$qwenDialogGroupW = Get-UiInt 'QwenAdvancedDialogGroupW'
+$qwenDialogColPadX = Get-UiInt 'QwenAdvancedDialogColPadX'
+$qwenDialogCol1X = Get-UiInt 'QwenAdvancedDialogCol1X'
+$qwenDialogCol2X = Get-UiInt 'QwenAdvancedDialogCol2X'
+$qwenDialogTagLabelW = Get-UiInt 'QwenAdvancedDialogTagLabelW'
+$qwenDialogHintW = Get-UiInt 'QwenAdvancedDialogHintW'
+$qwenDialogSemanticW = Get-UiInt 'QwenAdvancedDialogSemanticW'
+$qwenDialogSilenceLabelW = Get-UiInt 'QwenAdvancedDialogSilenceLabelW'
+$qwenDialogSilenceEditDx = Get-UiInt 'QwenAdvancedDialogSilenceEditDx'
+$qwenDialogSilenceEditW = Get-UiInt 'QwenAdvancedDialogSilenceEditW'
+$qwenDialogMultiW = Get-UiInt 'QwenAdvancedDialogMultiW'
+$qwenDialogHeartbeatW = Get-UiInt 'QwenAdvancedDialogHeartbeatW'
+$qwenDialogNoiseEditDx = Get-UiInt 'QwenAdvancedDialogNoiseEditDx'
+$qwenDialogNoiseEditW = Get-UiInt 'QwenAdvancedDialogNoiseEditW'
+$qwenDialogNoiseUnitW = Get-UiInt 'QwenAdvancedDialogNoiseUnitW'
+$qwenDialogContinueW = Get-UiInt 'QwenAdvancedDialogContinueW'
+$qwenDialogSystemFilterW = Get-UiInt 'QwenAdvancedDialogSystemFilterW'
+$qwenDialogVadComboDx = Get-UiInt 'QwenAdvancedDialogVadComboDx'
+$qwenDialogVadComboW = Get-UiInt 'QwenAdvancedDialogVadComboW'
+$qwenDialogKeepDialectW = Get-UiInt 'QwenAdvancedDialogKeepDialectW'
+$qwenDialogGroupY = Get-UiInt 'QwenAdvancedDialogStreamingGroupY'
+$qwenDialogGroupH = Get-UiInt 'QwenAdvancedDialogStreamingGroupH'
+$qwenDialogSpecialLabelY = Get-UiInt 'QwenAdvancedDialogSpecialLabelY'
+$qwenDialogSpecialW = Get-UiInt 'QwenAdvancedDialogSpecialW'
+$qwenDialogOkBtnX = Get-UiInt 'QwenAdvancedDialogOkBtnX'
+$qwenDialogCancelBtnX = Get-UiInt 'QwenAdvancedDialogCancelBtnX'
+$footerBtnW = Get-UiInt 'FooterBtnW'
 $volcDialogW = Get-UiInt 'VolcAdvancedDialogW'
 $volcDialogH = Get-UiInt 'VolcAdvancedDialogH'
 $volcDialogNonClientReserveH = Get-UiInt 'VolcAdvancedDialogNonClientReserveH'
@@ -323,6 +351,74 @@ foreach ($panel in $providerBottoms) {
 if (($qwenDialogInputLeft + $qwenDialogInputW) -gt ($qwenDialogW - $margin)) {
     throw 'Qwen Advanced input fields exceed the dialog width'
 }
+if (($qwenDialogLeft * 2 + $qwenDialogGroupW) -gt $qwenDialogW) {
+    throw 'Qwen Advanced group exceeds the dialog width'
+}
+if (($qwenDialogLeft + $qwenDialogTagLabelW) -gt $qwenDialogInputLeft) {
+    throw 'Qwen Advanced row labels overlap the input column'
+}
+# Both grid columns keep the same inset from the group box, so neither column
+# can drift left or right while the other one stays put.
+if (($qwenDialogCol1X - $qwenDialogLeft) -ne $qwenDialogColPadX) {
+    throw 'Qwen Advanced column 1 inset differs from ColPadX'
+}
+if ((($qwenDialogLeft + $qwenDialogGroupW) - ($qwenDialogCol2X + $qwenDialogSpecialW)) -ne $qwenDialogColPadX) {
+    throw 'Qwen Advanced column 2 inset differs from ColPadX'
+}
+# A label that grew past its own column would be clipped by the field next to
+# it, which is exactly how the long option strings used to lose their tail.
+if (($qwenDialogCol2X + $qwenDialogSilenceLabelW) -gt ($qwenDialogCol2X + $qwenDialogSilenceEditDx)) {
+    throw 'Qwen Advanced Max silence label overlaps its edit box'
+}
+$qwenColumn1Rows = @(
+    @{ Name = 'semantic punctuation';   W = $qwenDialogSemanticW },
+    @{ Name = 'multi-threshold';        W = $qwenDialogMultiW },
+    @{ Name = 'speech-noise';           W = $qwenDialogNoiseEditDx + $qwenDialogNoiseEditW },
+    @{ Name = 'VAD model';              W = $qwenDialogVadComboDx + $qwenDialogVadComboW },
+    @{ Name = 'continue-context';       W = $qwenDialogContinueW },
+    @{ Name = 'sensitive-word replace'; W = $qwenDialogSpecialW }
+)
+foreach ($row in $qwenColumn1Rows) {
+    if (($qwenDialogCol1X + $row.W) -gt $qwenDialogCol2X) {
+        throw "Qwen Advanced $($row.Name) overlaps column 2"
+    }
+    if (($qwenDialogCol1X + $row.W) -gt ($qwenDialogLeft + $qwenDialogGroupW)) {
+        throw "Qwen Advanced $($row.Name) exceeds the group box"
+    }
+}
+# Column 2 controls and the hint lines spanning both columns must stay inside
+# the group box: overshooting its right edge is what the old 720 px dialog did.
+$qwenGroupInnerRight = $qwenDialogLeft + $qwenDialogGroupW
+$qwenColumn2Rows = @(
+    @{ Name = 'Max silence';          W = $qwenDialogSilenceEditDx + $qwenDialogSilenceEditW },
+    @{ Name = 'heartbeat';            W = $qwenDialogHeartbeatW },
+    @{ Name = 'speech-noise unit';    W = $qwenDialogNoiseUnitW },
+    @{ Name = 'system filter';        W = $qwenDialogSystemFilterW },
+    @{ Name = 'keep dialect';         W = $qwenDialogKeepDialectW },
+    @{ Name = 'sensitive-word empty'; W = $qwenDialogSpecialW }
+)
+foreach ($row in $qwenColumn2Rows) {
+    if (($qwenDialogCol2X + $row.W) -gt $qwenGroupInnerRight) {
+        throw "Qwen Advanced $($row.Name) exceeds the group box"
+    }
+}
+if (($qwenDialogCol1X + $qwenDialogHintW) -gt $qwenGroupInnerRight) {
+    throw 'Qwen Advanced hint lines exceed the group box'
+}
+# A label box that reaches into the edit box below it, or a group box that
+# reaches into the footer, clips text at high DPI instead of laying out.
+if (($qwenDialogSpecialLabelY + $labelHeight) -gt $qwenDialogSpecialY) {
+    throw 'Qwen Advanced sensitive-word labels overlap their edit boxes'
+}
+if (($qwenDialogGroupY + $qwenDialogGroupH) -gt $qwenDialogFooterY) {
+    throw 'Qwen Advanced group box overlaps the footer buttons'
+}
+if (($qwenDialogOkBtnX + $footerBtnW) -gt $qwenDialogCancelBtnX) {
+    throw 'Qwen Advanced OK button overlaps Cancel'
+}
+if (($qwenDialogCancelBtnX + $footerBtnW) -gt ($qwenDialogW - $margin)) {
+    throw 'Qwen Advanced footer buttons exceed the dialog width'
+}
 $qwenDialogClientBottom = $qwenDialogH - $qwenDialogNonClientReserveH
 $settingsClientBottom = $settingsWindowHeight - $settingsNonClientReserveHeight
 $minimumFooterRoom = $actionButtonH + (2 * $margin)
@@ -441,6 +537,22 @@ foreach ($dpi in @(96, 144, 192, 288)) {
     }
     if ((Scale ($qwenDialogInputLeft + $qwenDialogInputW) $scale) -gt (Scale ($qwenDialogW - $margin) $scale)) {
         throw "Qwen Advanced inputs overflow the dialog at $dpi DPI"
+    }
+    foreach ($row in $qwenColumn1Rows) {
+        if ((Scale ($qwenDialogCol1X + $row.W) $scale) -gt (Scale $qwenDialogCol2X $scale)) {
+            throw "Qwen Advanced $($row.Name) overlaps column 2 at $dpi DPI"
+        }
+    }
+    foreach ($row in $qwenColumn2Rows) {
+        if ((Scale ($qwenDialogCol2X + $row.W) $scale) -gt (Scale $qwenGroupInnerRight $scale)) {
+            throw "Qwen Advanced $($row.Name) exceeds the group box at $dpi DPI"
+        }
+    }
+    if ((Scale ($qwenDialogSpecialLabelY + $labelHeight) $scale) -gt (Scale $qwenDialogSpecialY $scale)) {
+        throw "Qwen Advanced sensitive-word labels overlap their edit boxes at $dpi DPI"
+    }
+    if ((Scale ($qwenDialogCancelBtnX + $footerBtnW) $scale) -gt (Scale ($qwenDialogW - $margin) $scale)) {
+        throw "Qwen Advanced footer buttons exceed the dialog width at $dpi DPI"
     }
     if ((Scale ($qwenDialogSpecialY + $qwenDialogSpecialH) $scale) -gt (Scale ($qwenDialogFooterY - 8) $scale)) {
         throw "Qwen Advanced sensitive-word fields overlap the footer at $dpi DPI"
@@ -608,6 +720,27 @@ foreach ($placement in $testPlacements) {
     $clean = Strip-Comments (Get-Content -LiteralPath $target -Raw -Encoding UTF8)
     if (!$clean.Contains($placement.Text)) {
         throw "$($placement.File) must place its Test Connection button at $($placement.Text)"
+    }
+}
+
+# The Qwen Advanced dialog must consume the shared constants: a hardcoded width
+# would keep every geometric check above green while the real layout drifted
+# away from the numbers they validate.
+$qwenDialogWiring = @(
+    'S(UiStyle::QwenAdvancedDialogGroupW), S(UiStyle::QwenAdvancedDialogStreamingGroupH)',
+    'S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH)',
+    'S(UiStyle::QwenAdvancedDialogSilenceLabelW), S(UiStyle::LabelH)',
+    'S(UiStyle::QwenAdvancedDialogCol2X + UiStyle::QwenAdvancedDialogSilenceEditDx)',
+    'S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH)',
+    'S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHintH)',
+    'S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogNoiseEditDx)',
+    'S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogVadComboDx)',
+    'S(UiStyle::QwenAdvancedDialogOkBtnX), S(UiStyle::QwenAdvancedDialogFooterY)',
+    'S(UiStyle::QwenAdvancedDialogCancelBtnX), S(UiStyle::QwenAdvancedDialogFooterY)'
+)
+foreach ($snippet in $qwenDialogWiring) {
+    if (!$settings.Contains($snippet)) {
+        throw "Qwen Advanced dialog must use the shared layout constant: $snippet"
     }
 }
 

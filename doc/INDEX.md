@@ -9,7 +9,7 @@
 | 厂商 / 生态 | 核心能力 | 接入模型 | 协议类型 | 文档专区 |
 | :--- | :--- | :--- | :--- | :--- |
 | **小米 MiMo** | ASR + LLM 纠错 | ASR: `mimo-v2.5-asr`<br>LLM: `mimo-v2.6-flash` | HTTP Multipart / OpenAI Compatible | [📂 doc/mimo/](mimo/README.md)<br>• [ASR 详细指南](mimo/mimo_asr_guide.md)<br>• [LLM 纠错指南](mimo/mimo_llm_guide.md) |
-| **阿里通义千问** | ASR + 逆向运行时 + LLM 纠错 | ASR: `qwen-audio-3.1-asr-flash-streaming`（新装默认）/ `-message` / `-flash` 与 `3.0`<br>IME: `QianwenIME` 独立运行时<br>LLM: `Qwen/Qwen3.6-35B-A3B` 等 | WebSocket / HTTP / 私有 DLL 挂载 | [📂 doc/qwen/](qwen/README.md)<br>• [3.x (3.0/3.1) 协议规范与指南](qwen/Qwen-Audio-3.x-ASR.md)<br>• [识别率优化与热词](qwen/提升识别准确率.md)<br>• [千问输入法逆向运行时](qwen/qwen_free_standalone_runtime_guide_zh.md) |
+| **阿里通义千问** | ASR + 逆向运行时 + LLM 纠错 | ASR: `qwen-audio-3.1-asr-flash-message`（新装默认）/ `-streaming` / `-flash` 与 `3.0`<br>IME: `QianwenIME` 独立运行时<br>LLM: `Qwen/Qwen3.6-35B-A3B` 等 | WebSocket / HTTP / 私有 DLL 挂载 | [📂 doc/qwen/](qwen/README.md)<br>• [3.x (3.0/3.1) 协议规范与指南](qwen/Qwen-Audio-3.x-ASR.md)<br>• [识别率优化与热词](qwen/提升识别准确率.md)<br>• [千问输入法逆向运行时](qwen/qwen_free_standalone_runtime_guide_zh.md) |
 | **字节火山引擎** | 大模型 ASR + 逆向工程 | ASR: `SeedASR` / `BigASR`<br>IME: `doubao_ime` | 私有二进制帧 WebSocket / Protobuf + Opus | [📂 doc/volcengine/](volcengine/README.md)<br>• [火山 ASR 完整设置指南](volcengine/volcengine_asr_guide_zh.md) / [English](../volcengine_asr_guide.md) |
 | **百度智能云** | 多语种/方言 ASR | ASR: 普通话(1537)、英语(1737)、粤语(1637)、四川话(1837) | HTTP POST REST API | [📂 doc/baidu/](baidu/README.md) |
 | **本地离线引擎** | 本地 ASR + 双 VAD | ASR: SenseVoice / FireRedASR<br>VAD: Silero VAD / FireRedVAD | C++ direct ONNX runtime (sherpa-onnx) | [架构文档 (中文版)](ARCHITECTURE_zh.md) / [English](../ARCHITECTURE.md) |

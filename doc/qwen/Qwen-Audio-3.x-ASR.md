@@ -10,13 +10,13 @@
 
 | 模型标识 (Model ID) | 范式 | 协议 / 端点 | 适用场景 | VoxType 适配类 |
 | :--- | :--- | :--- | :--- | :--- |
-| `qwen-audio-3.1-asr-flash-streaming` | 实时流式 | WebSocket (`/api-ws/v1/inference`) | **新装默认与输入法首选**：超低延迟、原生润色，可用 `vad_model` 切换近/远场，`keep_dialect` 控制方言输出 | `CreateQwenAudioStreamingSession` → `qwen_audio_streaming::Client` |
-| `qwen-audio-3.1-asr-flash-message` | 实时流式 | WebSocket (`/api-ws/v1/inference`，**与 streaming 同一端点**) | 官方定位"语音消息 / 输入法 / 企业业务"：润色可开关、强化多人与噪声场景；参数集更小（拒绝 `language_hints` 等）；**与 streaming 同价、RPM 更高（1200 vs 600）** | 同 `qwen_audio_streaming::Client`，按模型裁剪字段 |
+| `qwen-audio-3.1-asr-flash-message` | 实时流式 | WebSocket (`/api-ws/v1/inference`，**与 streaming 同一端点**) | **新装默认与输入法首选**：官方定位"语音消息 / 输入法 / 企业业务"：润色可开关、强化多人与噪声场景；与 streaming 同价、RPM 更高（1200 vs 600） | 同 `qwen_audio_streaming::Client`，按模型裁剪字段 |
+| `qwen-audio-3.1-asr-flash-streaming` | 实时流式 | WebSocket (`/api-ws/v1/inference`) | 经典双工流式：超低延迟、原生润色，可用 `vad_model` 切换近/远场，`keep_dialect` 控制方言输出 | `CreateQwenAudioStreamingSession` → `qwen_audio_streaming::Client` |
 | `qwen-audio-3.1-asr-flash` | 批量同步 | HTTP POST (`/api/v1/services/aigc/multimodal-generation/generation`) | 松开快捷键后整段识别、高并发稳定降级通道 | `QwenAudioAsrSession` → `qwen_audio_http::Client` |
 | `qwen-audio-3.0-asr-flash-streaming` | 实时流式 | WebSocket (`/api-ws/v1/inference`) | 经典流式模型，向后兼容 | 同上（不发送 3.1 专属参数） |
 | `qwen-audio-3.0-asr-flash` | 批量同步 | HTTP POST (`/api/v1/services/aigc/multimodal-generation/generation`) | 经典批量识别模型，向后兼容 | 同上（不发送 3.1 专属参数） |
 
-> **VoxType 默认模型**：全新安装（无 `config.json`）取 `Config::qwenModel` 的默认值 `qwen-audio-3.1-asr-flash-streaming`；
+> **VoxType 默认模型**：全新安装（无 `config.json`）取 `Config::qwenModel` 的默认值 `qwen-audio-3.1-asr-flash-message`；
 > 已有配置文件**保持原模型不变**（`NormalizePersistedProfile()` 只在没有持久化 `qwen_model` 时回落到 legacy，未知模型名也回落 legacy）。
 
 ### 1.1 3.1 对比 3.0 核心演进
@@ -36,7 +36,9 @@
    - 与 streaming **共用同一 WebSocket 端点与 `run-task` / `continue-task` / `finish-task` 事件协议**，但参数集不同（见 §1.3）。
    - 官方定位为"面向语音消息、输入法和企业业务场景"，强化了多人声、背景对话、远场与环境噪声下的稳定性。
    - 资费与 3.1 streaming **完全相同**（北京：输入 6 元 / 输出 4.5 元每百万 Token），但 **RPM 为 1200**（streaming 为 600）。
-     它不作为 VoxType 默认档位的原因**不是价格**，而是参数集更窄（拒绝 `language_hints` / `special_word_filter` 等），且定位更偏多人与噪声场景。
+     **自 v0.11.4 起它是 VoxType 的千问默认档位**（见本节表格与 §1.3）；选它的代价是参数集更窄
+     （拒绝 `language_hints` / `semantic_punctuation_enabled` / `multi_threshold_mode_enabled` / `special_word_filter`），
+     收益是更高的 RPM 与 `disfluency_removal_enabled` 润色开关——需要 `language_hints` 或敏感词过滤时改选 3.1 streaming。
 
 ### 1.2 定价与限流指标 (Pricing & Quotas)
 

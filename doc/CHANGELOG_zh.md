@@ -2,6 +2,25 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.4 (2026-09-28)
+
+### 界面与布局优化
+
+- **重构千问语音高级设置（`Qwen ASR Advanced Settings`）弹窗为规整双列栅格布局。**
+  - **彻底修复长文本横向截断**：此前 Groupbox 内的控件沿用了"左侧带标签"行的输入列基准（`X = 170`，该基准对 `Vocabulary ID` / `Inline vocabulary` 两行仍是正确的），使无标签行左侧平白缩进 146 像素、右侧文案被硬截断。现改为双列栅格：`Filler-word removal / polish (3.1 message)`、`Refresh context once before finish` 及 `Replace words (*) — one per line:` 等长选项均获得充足宽度完整展示；`Max silence (ms)` 标签同步加宽到 145 像素，避免末尾被裁。
+  - **恢复多行编辑框高度**：底部敏感词替换框（`Replace words`）与删除词框（`Delete words`）原先只有 42 设计像素高（96 DPI 下约 28 物理像素，内容区仅能显示一行），已提升至 76 设计像素，恢复 3~4 行文本展示与可用的垂直滚动条。
+  - **消除边缘错位畸变**：左列标签与多行输入框统一对齐到列 1（`Col1X = 48`），不再让标签压在 Groupbox 边框线（`X = 24`）上；右列对齐到列 2（`Col2X = 412`），两列对 Groupbox 的左右内边距同为 24 像素（`ColPadX`），组内栅格左右对称。
+  - **弹窗尺寸对称扩展**：窗口外框尺寸由 720×860 扩展至 780×900，Groupbox 宽度撑开至 732 像素，所有右列控件与按钮均包裹于框内。
+  - **控件尺寸集中与多 DPI 断言增强**：Qwen 高级设置的列几何与各控件宽度/偏移全部提取到 `src/ui/ui_types.h`（`QwenAdvancedDialog*`），并由 `scripts/validate_settings_layout.ps1` 在 96/144/192/288 DPI 下逐行验证：两列不重叠、不越出 Groupbox、标签矩形不与编辑框重叠、底部按钮不越出对话框。
+
+### 模型与配置更新
+
+- **千问 ASR 默认模型更新为 `qwen-audio-3.1-asr-flash-message`。**
+  - 全新安装与空配置回退默认模型由 `qwen-audio-3.1-asr-flash-streaming` 更新为 `qwen-audio-3.1-asr-flash-message`。
+  - Qwen 设置页模型下拉列表首项调整为 `qwen-audio-3.1-asr-flash-message`。
+  - 模型标识字符串现只在 `src/core/qwen_audio_profile.h`（`kMessageModel31`）定义一次：`Config::qwenModel`、设置页下拉列表与显示名回退均引用它，无引用的 `kQwenDefaultModel` 已删除。
+  - 同步更新离线协议测试断言与模型技术文档（`doc/qwen/Qwen-Audio-3.x-ASR.md`，其 §1.1 不再出现"message 不作为默认档位"的旧说法）。
+
 ## v0.11.3 (2026-09-28)
 
 ### 新增功能与模型整合

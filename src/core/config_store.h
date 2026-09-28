@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <memory>
 
+#include "qwen_audio_profile.h"
+
 #ifndef AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
 #define AUDIO_DIAGNOSTICS_STAGE_KIND_DEFINED
 namespace audio_diagnostics {
@@ -96,9 +98,10 @@ struct Config {
     std::wstring qwenBaseUrl = kQwenBeijingRealtimeBaseUrl;
     std::wstring qwenHttpBaseUrl = kQwenBeijingHttpBaseUrl;
     std::wstring qwenAudioStreamingBaseUrl = kQwenBeijingAudioStreamingBaseUrl;
-    // Fresh installs start on the Audio 3.1 streaming generation. Existing
+    // Fresh installs start on the Audio 3.1 message generation; the constant
+    // lives in qwen_audio_profile.h so the model name is written once. Existing
     // config files keep their selected model (NormalizePersistedProfile).
-    std::wstring qwenModel = L"qwen-audio-3.1-asr-flash-streaming";
+    std::wstring qwenModel = qwen_audio_profile::kMessageModel31;
     std::wstring qwenTransport = L"audio_streaming";
     std::wstring qwenLanguage;
     int qwenChunkMs = 100;
@@ -115,11 +118,13 @@ struct Config {
     std::wstring qwenSpecialWordReplaceList;
     std::wstring qwenSpecialWordEmptyList;
     bool qwenSystemReservedFilter = false;
-    // Audio 3.1 streaming only. The default mirrors the provider default so a
-    // 3.0 recording keeps its previous microphone posture.
+    // Audio 3.1 duplex only (3.1 streaming + 3.1 message): SupportsVadModel().
+    // The default mirrors the provider default so a 3.0 recording keeps its
+    // previous microphone posture.
     std::wstring qwenVadModel = L"far_field_meeting_16k";
-    // Audio 3.1 only (streaming + HTTP batch). false transcribes dialects into
-    // standard Mandarin, which is the provider default as well.
+    // The whole Audio 3.1 generation (streaming + message + HTTP batch):
+    // SupportsKeepDialect(). false transcribes dialects into standard Mandarin,
+    // which is the provider default as well.
     bool qwenKeepDialect = false;
     // qwen-audio-3.1-asr-flash-message only: filters filler words and polishes
     // the transcript. Off by default so the model never rewrites user wording
