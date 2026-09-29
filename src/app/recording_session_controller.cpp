@@ -19,6 +19,8 @@
 #include "volcengine_streaming_session.h"
 #include "volcengine_asr.h"
 #include "hud.h"
+#include "hotkey.h"
+#include "text_injector.h"
 #include "selection_context.h"
 #include "ui_utils.h"
 #include "engine_local.h"
@@ -414,6 +416,9 @@ void StartRecordingSession() {
         g_sessionStartTick = GetTickCount64();
     }
     g_recording = true;
+    if (g_mainWindow) {
+        SetTimer(g_mainWindow, kRecordingWatchdogTimer, kRecordingWatchdogIntervalMs, nullptr);
+    }
 
     StartHudRecordingAnimation();
     s_wasapiUsed = g_wasapiCapture.IsInitialized();
@@ -598,6 +603,9 @@ void StartRecordingSession() {
 
 void StopRecordingSession() {
     if (!g_recording) return;
+    if (g_mainWindow) {
+        KillTimer(g_mainWindow, kRecordingWatchdogTimer);
+    }
     if (g_audioCaptureFailurePending.load(std::memory_order_acquire)) {
         HandleAudioCaptureFailure(
             g_audioCaptureGeneration.load(std::memory_order_acquire),
@@ -782,4 +790,89 @@ void StopRecordingSession() {
     std::wstring name = AsrBackendDisplayName(recordingConfig);
     ShowHud(L"Recognizing... " + name);
     RecognizeAsync(pcm, attemptId, recordingConfig);
+}
+
+void OnRecordingWatchdogTimer() {
+    if (!g_recording) {
+        if (g_mainWindow) {
+            KillTimer(g_mainWindow, kRecordingWatchdogTimer);
+        }
+        return;
+    }
+
+    const ULONGLONG elapsedMs = GetTickCount64() - g_sessionStartTick;
+
+    // 1. Hard duration limit: 60s hard ceiling across all backends
+    if (elapsedMs >= kMaxRecordingDurationMs) {
+        asr_runtime_log::Write("event=recording_hard_limit_reached elapsed_ms=%llu limit_ms=%llu",
+                               static_cast<unsigned long long>(elapsedMs),
+                               static_cast<unsigned long long>(kMaxRecordingDurationMs));
+        StopRecordingSession();
+        return;
+    }
+
+    // 2. Physical key state check (Modifier keys + Main key)
+    // Only evaluate after initial key press latency has settled (>= 300 ms)
+    if (elapsedMs >= 300) {
+        const HotkeyConfig hotkey = CurrentConfiguredHotkey();
+        bool keyStillPressed = true;
+
+        if (hotkey.key == VK_CAPITAL) {
+            keyStillPressed = (GetAsyncKeyState(VK_CAPITAL) & 0x8000) != 0;
+        } else {
+            const bool modifiersMatch = ModifiersMatch(hotkey);
+            bool mainKeyDown = false;
+            if (hotkey.key == VK_RMENU) {
+                mainKeyDown = (GetAsyncKeyState(VK_RMENU) & 0x8000) != 0;
+            } else if (hotkey.key == VK_LMENU) {
+                mainKeyDown = (GetAsyncKeyState(VK_LMENU) & 0x8000) != 0;
+            } else if (hotkey.key != 0) {
+                mainKeyDown = (GetAsyncKeyState(hotkey.key) & 0x8000) != 0;
+            }
+            keyStillPressed = modifiersMatch && mainKeyDown;
+        }
+
+        if (!keyStillPressed) {
+            asr_runtime_log::Write("event=recording_key_up_healed elapsed_ms=%llu key=0x%x",
+                                   static_cast<unsigned long long>(elapsedMs),
+                                   static_cast<unsigned int>(hotkey.key));
+            SetActiveHotkeyKey(0);
+            const bool wasCapsLock = (hotkey.key == VK_CAPITAL);
+            ResetCapsLockHotkeyState();
+            StopRecordingSession();
+            if (wasCapsLock) {
+                RestoreCapsLockState(WasCapsLockOn());
+            }
+            return;
+        }
+    }
+}
+
+void OnSessionLock() {
+    asr_runtime_log::Write("event=session_lock_detected recording=%d", g_recording ? 1 : 0);
+    if (g_mainWindow) {
+        KillTimer(g_mainWindow, kRecordingWatchdogTimer);
+        KillTimer(g_mainWindow, kStreamingWatchdogTimer);
+        KillTimer(g_mainWindow, kRecordingStopDelayTimer);
+    }
+    SetStopDelayPending(false);
+    SetStopDelayRestoreCapsLock(false);
+
+    if (g_recording) {
+        g_recording = false;
+        const uint64_t attemptId = ActiveAsrAttemptId();
+        CancelActiveAsrAttempt(attemptId, false);
+        auto session = TakeActiveStreamingSession();
+        if (session) {
+            session->Abort();
+        }
+        StopAudioCapture();
+        CloseAudioCapture();
+        HideHud();
+        SetActiveHotkeyKey(0);
+        ResetCapsLockHotkeyState();
+    } else if (IsCapturePendingOnly()) {
+        DiscardPendingCapture();
+        CloseAudioCapture();
+    }
 }

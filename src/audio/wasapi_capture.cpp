@@ -12,9 +12,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <avrt.h>
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "mmdevapi.lib")
+#pragma comment(lib, "avrt.lib")
 
 WasapiCapture::WasapiCapture() {}
 
@@ -84,6 +86,7 @@ bool WasapiCapture::InitAudioClient() {
                        reinterpret_cast<WAVEFORMATEXTENSIBLE*>(m_mixFormat)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
 
     m_resampleRatio = (double)kWasapiTargetSampleRate / (double)m_nativeSampleRate;
+    m_resampler.Init(m_nativeSampleRate, kWasapiTargetSampleRate);
 
     REFERENCE_TIME hnsBufferDuration = 500000; // 50ms buffer
     hr = m_audioClient->Initialize(
@@ -158,7 +161,7 @@ bool WasapiCapture::Start(std::wstring& error) {
         return false;
     }
 
-    m_resamplePhase = 0.0;
+    m_resampler.Reset();
     m_running.store(true);
 
     HRESULT hr = m_audioClient->Start();
@@ -217,6 +220,15 @@ void WasapiCapture::ReportRuntimeFailure(DWORD code) {
 void WasapiCapture::CaptureThread() {
     HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     const bool needUninit = SUCCEEDED(hrCom) && hrCom != RPC_E_CHANGED_MODE;
+
+    DWORD taskIndex = 0;
+    HANDLE hAvrt = AvSetMmThreadCharacteristicsW(L"Audio", &taskIndex);
+    if (hAvrt) {
+        AvSetMmThreadPriority(hAvrt, AVRT_PRIORITY_HIGH);
+    } else {
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+    }
+
     while (m_running.load(std::memory_order_relaxed)) {
         DWORD waitResult = WaitForSingleObject(m_event, 200);
         if (!m_running.load(std::memory_order_relaxed)) break;
@@ -340,21 +352,10 @@ void WasapiCapture::CaptureThread() {
 
                 g_audioLevel.store(CalculateAudioLevelFloat(mono.data(), numFrames, 1));
 
-                const UINT32 outputFrames = static_cast<UINT32>(numFrames * m_resampleRatio) + 2;
-                std::vector<BYTE> resampled(outputFrames * sizeof(int16_t));
-                int16_t* out = reinterpret_cast<int16_t*>(resampled.data());
-                UINT32 written = 0;
-
-                while (true) {
-                    double srcPos = m_resamplePhase;
-                    UINT32 idx = static_cast<UINT32>(srcPos);
-                    if (idx + 1 >= numFrames) break;
-                    double frac = srcPos - idx;
-                    float sample = static_cast<float>((1.0 - frac) * mono[idx] + frac * mono[idx + 1]);
-                    int16_t s16 = static_cast<int16_t>(std::clamp(sample * 32768.0f, -32768.0f, 32767.0f));
-                    out[written++] = s16;
-                    m_resamplePhase += 1.0 / m_resampleRatio;
-                }
+                std::vector<int16_t> resampledPcm;
+                m_resampler.Process(std::span<const float>(mono.data(), numFrames), resampledPcm);
+                const UINT32 written = static_cast<UINT32>(resampledPcm.size());
+                const int16_t* out = resampledPcm.data();
 
                 if (written > 0) {
                     const BYTE* begin = reinterpret_cast<const BYTE*>(out);
@@ -412,8 +413,6 @@ void WasapiCapture::CaptureThread() {
                         bool hasVoice = vad ? vad->DetectSpeech(floatBuf, g_config.vadModel) : false;
                         if (hasVoice) g_vadDetectedVoice.store(true);
                     }
-
-                    m_resamplePhase -= written / m_resampleRatio;
                 }
             }
 
@@ -428,6 +427,10 @@ void WasapiCapture::CaptureThread() {
                 break;
             }
         }
+    }
+    if (hAvrt) {
+        AvRevertMmThreadCharacteristics(hAvrt);
+        hAvrt = nullptr;
     }
     if (needUninit) CoUninitialize();
 }

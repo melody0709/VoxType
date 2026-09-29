@@ -33,6 +33,9 @@
 #include <thread>
 #include <cstdio>
 #include <algorithm>
+#include <wtsapi32.h>
+
+#pragma comment(lib, "wtsapi32.lib")
 
 static UINT g_taskbarCreatedMessage = 0;
 static bool s_debugConsoleOpen = false;
@@ -212,10 +215,16 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         SetHotkeyTargetWindow(hwnd);
         AddTrayIcon(hwnd);
         InstallKeyboardHook();
+        WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
         // 启动时把日志开关同步一次。放在这里而不是 main.cpp：主窗口在
         // LoadConfig() 之后创建，语义等价，同时避免 main.cpp 的行数棘轮被顶上基线。
         // Settings 保存与托盘 Debug 开关各自另有同步点。
         asr_runtime_log::ApplyRuntimeLogConfig(g_config);
+        return 0;
+    case WM_WTSSESSION_CHANGE:
+        if (wParam == WTS_SESSION_LOCK) {
+            OnSessionLock();
+        }
         return 0;
     case kTrayMessage:
         if (LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU) {
@@ -522,6 +531,14 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             }
             return 0;
         }
+        if (wParam == kRecordingWatchdogTimer) {
+            OnRecordingWatchdogTimer();
+            return 0;
+        }
+        if (wParam == kClipboardRestoreTimer) {
+            platform::OnClipboardRestoreTimer();
+            return 0;
+        }
         if (wParam == kStreamingWatchdogTimer) {
             KillTimer(hwnd, kStreamingWatchdogTimer);
             if (g_recording) {
@@ -533,6 +550,9 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     recordingLimitMs = g_activeStreamingSession->MaxRecordingMs();
                 }
                 LeaveCriticalSection(&g_streamingSessionCs);
+                if (recordingLimitMs == 0 || recordingLimitMs > kMaxRecordingDurationMs) {
+                    recordingLimitMs = static_cast<DWORD>(kMaxRecordingDurationMs);
+                }
                 if (recordingLimitMs > 0) {
                     const ULONGLONG elapsedMs = GetTickCount64() - GetSessionStartTick();
                     if (elapsedMs >= recordingLimitMs) {
@@ -619,6 +639,9 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         DestroyWindow(hwnd);
         return 0;
     case WM_DESTROY:
+        WTSUnRegisterSessionNotification(hwnd);
+        KillTimer(hwnd, kRecordingWatchdogTimer);
+        KillTimer(hwnd, kClipboardRestoreTimer);
         KillTimer(hwnd, kStreamingWatchdogTimer);
         KillTimer(hwnd, kRecordingStopDelayTimer);
         KillTimer(hwnd, kMicKeepAliveTimer);

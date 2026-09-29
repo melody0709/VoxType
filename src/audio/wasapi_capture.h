@@ -15,6 +15,8 @@
 #include <vector>
 #include <cstdint>
 
+#include "audio_resampler.h"
+
 constexpr UINT32 kWasapiTargetSampleRate = 16000;
 constexpr UINT32 kWasapiTargetChannels = 1;
 constexpr UINT32 kWasapiTargetBits = 16;
@@ -79,7 +81,7 @@ private:
     bool m_usedDefaultDevice{true};
 
     double m_resampleRatio{1.0};
-    double m_resamplePhase{0.0};
+    AudioResampler m_resampler;
 
     std::thread m_captureThread;
     std::atomic<bool> m_running{false};

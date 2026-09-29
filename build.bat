@@ -157,7 +157,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     rem replay target from rotting silently. It was unlinkable for a whole
     rem refactor cycle before 2026-09-28 because nothing verified it.
     echo Building offline protocol/request regression tests...
-    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test asr_audio_replay
+    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test audio_resampler_test asr_audio_replay
     if errorlevel 1 exit /b !ERRORLEVEL!
     set "VOXTYPE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_free_protocol_test.exe"
     if not exist "!VOXTYPE_TEST_EXE!" (
@@ -230,6 +230,14 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running dialog positioning regression tests...
     "!VOXTYPE_DIALOG_POSITIONING_TEST_EXE!"
+    if errorlevel 1 exit /b !ERRORLEVEL!
+    set "VOXTYPE_AUDIO_RESAMPLER_TEST_EXE=%BUILD_ROOT%\artifacts\tests\audio_resampler_test.exe"
+    if not exist "!VOXTYPE_AUDIO_RESAMPLER_TEST_EXE!" (
+        echo ERROR: Audio resampler test executable was not produced: !VOXTYPE_AUDIO_RESAMPLER_TEST_EXE!
+        exit /b 1
+    )
+    echo Running audio resampler regression tests...
+    "!VOXTYPE_AUDIO_RESAMPLER_TEST_EXE!"
     if errorlevel 1 exit /b !ERRORLEVEL!
 )
 

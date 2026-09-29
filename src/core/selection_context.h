@@ -161,6 +161,42 @@ inline bool SetClipboardText(const std::wstring& text) {
             CloseClipboard();
             return false;
         }
+        static const UINT cfIgnore = RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing");
+        if (cfIgnore != 0) {
+            SetClipboardData(cfIgnore, nullptr);
+        }
+        static const UINT cfHistory = RegisterClipboardFormatW(L"CanIncludeInClipboardHistory");
+        if (cfHistory != 0) {
+            HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD));
+            if (hMem) {
+                DWORD* ptr = static_cast<DWORD*>(GlobalLock(hMem));
+                if (ptr) {
+                    *ptr = 0;
+                    GlobalUnlock(hMem);
+                    if (!SetClipboardData(cfHistory, hMem)) {
+                        GlobalFree(hMem);
+                    }
+                } else {
+                    GlobalFree(hMem);
+                }
+            }
+        }
+        static const UINT cfCloud = RegisterClipboardFormatW(L"CanUploadToCloudClipboard");
+        if (cfCloud != 0) {
+            HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD));
+            if (hMem) {
+                DWORD* ptr = static_cast<DWORD*>(GlobalLock(hMem));
+                if (ptr) {
+                    *ptr = 0;
+                    GlobalUnlock(hMem);
+                    if (!SetClipboardData(cfCloud, hMem)) {
+                        GlobalFree(hMem);
+                    }
+                } else {
+                    GlobalFree(hMem);
+                }
+            }
+        }
         CloseClipboard();
         return true;
     }

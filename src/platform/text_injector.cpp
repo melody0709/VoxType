@@ -2,9 +2,14 @@
 #define NOMINMAX
 #endif
 #include "text_injector.h"
+#include "selection_context.h"
+#include "config_store.h"
+#include "app_messages.h"
+#include "app_state.h"
 
 #include <imm.h>
 #include <vector>
+#include <memory>
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "imm32.lib")
@@ -12,6 +17,42 @@
 namespace platform {
 
 namespace {
+
+static bool IsStandardEditControl(HWND hwnd) {
+    if (!hwnd) return false;
+    wchar_t cls[64] = {};
+    if (GetClassNameW(hwnd, cls, 64) <= 0) return false;
+    return _wcsicmp(cls, L"Edit") == 0 ||
+           _wcsnicmp(cls, L"RichEdit", 8) == 0 ||
+           _wcsnicmp(cls, L"RICHEDIT", 8) == 0 ||
+           _wcsicmp(cls, L"Scintilla") == 0;
+}
+
+static HWND GetFocusedWindowForForeground(HWND fg) {
+    if (!fg) return nullptr;
+    DWORD threadId = GetWindowThreadProcessId(fg, nullptr);
+    GUITHREADINFO gti = { sizeof(gti) };
+    if (GetGUIThreadInfo(threadId, &gti) && gti.hwndFocus) {
+        return gti.hwndFocus;
+    }
+    return fg;
+}
+
+static std::unique_ptr<selection_context::ClipboardSnapshot> s_pendingClipboardRestore;
+static DWORD s_expectedClipboardSeq = 0;
+
+void ScheduleDelayedClipboardRestore(std::unique_ptr<selection_context::ClipboardSnapshot> snapshot) {
+    if (!snapshot) return;
+    s_expectedClipboardSeq = GetClipboardSequenceNumber();
+    s_pendingClipboardRestore = std::move(snapshot);
+    if (g_mainWindow) {
+        SetTimer(g_mainWindow, kClipboardRestoreTimer, 150, nullptr);
+    } else {
+        Sleep(100);
+        s_pendingClipboardRestore->Restore();
+        s_pendingClipboardRestore.reset();
+    }
+}
 
 struct ImeStateGuard {
     HWND  targetWnd = nullptr;
@@ -63,22 +104,20 @@ struct ImeStateGuard {
 
 }  // namespace
 
-void SetClipboardText(const std::wstring& text) {
-    if (text.empty() || !OpenClipboard(nullptr)) return;
-    EmptyClipboard();
-    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
-    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, bytes);
-    if (mem) {
-        void* ptr = GlobalLock(mem);
-        if (ptr) {
-            memcpy(ptr, text.c_str(), bytes);
-            GlobalUnlock(mem);
-            SetClipboardData(CF_UNICODETEXT, mem);
-            mem = nullptr;
-        }
-        if (mem) GlobalFree(mem);
+void OnClipboardRestoreTimer() {
+    if (g_mainWindow) {
+        KillTimer(g_mainWindow, kClipboardRestoreTimer);
     }
-    CloseClipboard();
+    if (s_pendingClipboardRestore) {
+        if (GetClipboardSequenceNumber() == s_expectedClipboardSeq) {
+            s_pendingClipboardRestore->Restore();
+        }
+        s_pendingClipboardRestore.reset();
+    }
+}
+
+bool SetClipboardText(const std::wstring& text) {
+    return selection_context::SetClipboardText(text);
 }
 
 void SendCtrlV() {
@@ -134,17 +173,47 @@ void PasteTextImeAware(const std::wstring& text, bool forceUnicodeInput) {
 
     bool isWeChat = wcsstr(processName, L"WeChat") || wcsstr(processName, L"wechat") ||
                     wcsstr(processName, L"Weixin") || wcsstr(processName, L"weixin");
-    if (!isWeChat) {
-        SetClipboardText(text);
-        ImeStateGuard guard;
-        guard.Disable();
-        SendCtrlV();
+    if (isWeChat) {
+        for (wchar_t ch : text) {
+            PostMessageW(fg, WM_CHAR, ch, 0);
+            Sleep(1);
+        }
         return;
     }
 
-    for (wchar_t ch : text) {
-        PostMessageW(fg, WM_CHAR, ch, 0);
-        Sleep(1);
+    std::unique_ptr<selection_context::ClipboardSnapshot> snapshot;
+    if (g_config.restoreClipboardAfterPaste) {
+        snapshot = std::make_unique<selection_context::ClipboardSnapshot>();
+        if (!snapshot->Readable()) {
+            snapshot.reset();
+        }
+    }
+
+    SetClipboardText(text);
+
+    HWND focus = GetFocusedWindowForForeground(fg);
+    bool pasteDone = false;
+
+    if (IsStandardEditControl(focus)) {
+        DWORD_PTR result = 0;
+        if (SendMessageTimeoutW(focus, WM_PASTE, 0, 0,
+                                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                2000, &result)) {
+            pasteDone = true;
+            if (snapshot) {
+                snapshot->Restore();
+                snapshot.reset();
+            }
+        }
+    }
+
+    if (!pasteDone) {
+        ImeStateGuard guard;
+        guard.Disable();
+        SendCtrlV();
+        if (snapshot) {
+            ScheduleDelayedClipboardRestore(std::move(snapshot));
+        }
     }
 }
 
@@ -220,27 +289,43 @@ bool ReplaceSelectionTextImeAware(const SelectionContext& selection,
         return true;
     }
 
-    selection_context::ClipboardSnapshot previousClipboard;
-    if (!previousClipboard.Readable()) {
-        if (error) *error = L"clipboard snapshot unavailable";
-        return false;
+    std::unique_ptr<selection_context::ClipboardSnapshot> snapshot;
+    if (g_config.restoreClipboardAfterPaste) {
+        snapshot = std::make_unique<selection_context::ClipboardSnapshot>();
+        if (!snapshot->Readable()) {
+            if (error) *error = L"clipboard snapshot unavailable";
+            return false;
+        }
     }
-    if (!selection_context::SetClipboardText(text)) {
+
+    if (!SetClipboardText(text)) {
         if (error) *error = L"clipboard unavailable";
         return false;
     }
 
-    DWORD_PTR result = 0;
-    if (SendMessageTimeoutW(focus, WM_PASTE, 0, 0,
-                            SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                            2000, &result)) {
-        return true;
+    bool pasteDone = false;
+    if (IsStandardEditControl(focus)) {
+        DWORD_PTR result = 0;
+        if (SendMessageTimeoutW(focus, WM_PASTE, 0, 0,
+                                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                2000, &result)) {
+            pasteDone = true;
+            if (snapshot) {
+                snapshot->Restore();
+                snapshot.reset();
+            }
+        }
     }
 
-    ImeStateGuard guard;
-    guard.Disable();
-    SendCtrlV();
-    Sleep(100);
+    if (!pasteDone) {
+        ImeStateGuard guard;
+        guard.Disable();
+        SendCtrlV();
+        if (snapshot) {
+            ScheduleDelayedClipboardRestore(std::move(snapshot));
+        }
+    }
+
     return true;
 }
 

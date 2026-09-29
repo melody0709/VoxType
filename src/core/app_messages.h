@@ -45,6 +45,8 @@ constexpr UINT_PTR kHudAnimationTimer = 3;
 constexpr UINT_PTR kStreamingWatchdogTimer = 4;
 constexpr UINT_PTR kRecordingStopDelayTimer = 5;
 constexpr UINT_PTR kMicKeepAliveTimer = 6;
+constexpr UINT_PTR kRecordingWatchdogTimer = 7;
+constexpr UINT_PTR kClipboardRestoreTimer = 8;
 
 constexpr UINT kCapsLockLongPressMs = 300;
 // Key-up does not stop capture immediately; the short delay keeps the tail of
@@ -55,6 +57,8 @@ constexpr UINT kRecordingStopDelayMs = 150;
 // device stays open this long so back-to-back recordings and CapsLock taps do
 // not pay the device open cost again.
 constexpr UINT kMicKeepAliveMs = 2500;
+constexpr UINT kRecordingWatchdogIntervalMs = 500;
+constexpr ULONGLONG kMaxRecordingDurationMs = 60000;
 
 constexpr UINT ID_TRAY_VERSION = 1001;
 constexpr UINT ID_TRAY_SETTINGS = 1002;

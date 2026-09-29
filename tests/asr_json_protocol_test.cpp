@@ -482,7 +482,7 @@ int wmain() {
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 101, "registry total entry count is 101");
+        CHECK(reg.GetEntries().size() == 102, "registry total entry count is 102");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -578,7 +578,8 @@ int wmain() {
             "llm_prompt": "Custom prompt text",
             "enable_llm_debug": true,
             "enable_debug_mode": true,
-            "force_unicode_input": true
+            "force_unicode_input": true,
+            "restore_clipboard_after_paste": true
         })";
 
         Config cfg;
@@ -679,6 +680,7 @@ int wmain() {
         CHECK(cfg.enableLlmDebug == true, "legacy fixture 89: enableLlmDebug");
         CHECK(cfg.enableDebugMode == true, "legacy fixture 90: enableDebugMode");
         CHECK(cfg.forceUnicodeInput == true, "legacy fixture 91: forceUnicodeInput");
+        CHECK(cfg.restoreClipboardAfterPaste == true, "legacy fixture 92: restoreClipboardAfterPaste");
     }
 
     // LLM enable & ShouldRunLlmRefine tests

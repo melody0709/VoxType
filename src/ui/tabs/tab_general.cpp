@@ -87,6 +87,12 @@ void TabGeneral::CreateControls(HWND parent) {
     ApplyUiFont(partialCheckbox);
     AddGeneralControl(partialCheckbox);
 
+    HWND restoreClipboardCheckbox = CreateWindowW(L"BUTTON", L"Restore clipboard after paste", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                  S(UiStyle::ContentLeft + UiStyle::GeneralRestoreClipboardOffsetX), inputY + S(UiStyle::GeneralInputCheckOffsetY), S(UiStyle::GeneralRestoreClipboardW), S(UiStyle::CheckH), parent,
+                                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_RESTORE_CLIPBOARD)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(restoreClipboardCheckbox);
+    AddGeneralControl(restoreClipboardCheckbox);
+
     const int startupY = S(UiStyle::GeneralStartupGroupY);
     HWND startupGroup = CreateWindowW(L"BUTTON", L"Startup", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       S(UiStyle::GeneralGroupX), startupY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralStartupGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
@@ -126,6 +132,7 @@ void TabGeneral::LoadControls(HWND parent, const Config& cfg) {
 
     RefreshStartupRegistrationControl(g_settingsWindow ? g_settingsWindow : parent, true);
     Button_SetCheck(GetDlgItem(parent, IDC_PARTIAL), cfg.enablePartial ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(parent, IDC_RESTORE_CLIPBOARD), cfg.restoreClipboardAfterPaste ? BST_CHECKED : BST_UNCHECKED);
 }
 
 void TabGeneral::SaveControls(HWND parent, Config& cfg) {
@@ -134,6 +141,7 @@ void TabGeneral::SaveControls(HWND parent, Config& cfg) {
     cfg.hotkey = HotkeyToString(hotkey);
 
     cfg.enablePartial = Button_GetCheck(GetDlgItem(hwnd, IDC_PARTIAL)) == BST_CHECKED;
+    cfg.restoreClipboardAfterPaste = Button_GetCheck(GetDlgItem(hwnd, IDC_RESTORE_CLIPBOARD)) == BST_CHECKED;
 }
 
 bool TabGeneral::SaveStartupRegistration(HWND parent) {

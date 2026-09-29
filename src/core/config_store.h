@@ -171,6 +171,7 @@ struct Config {
     std::wstring qwenFreeUtdidOverride;
     bool enableDebugMode = false;
     bool forceUnicodeInput = false;
+    bool restoreClipboardAfterPaste = true;
     std::wstring audioBackend = L"wasapi";
     std::wstring audioDeviceId;
     std::wstring diagnosticAudioMode = L"off";

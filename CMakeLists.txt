@@ -54,6 +54,7 @@ add_executable(VoxType WIN32
     src/audio/batch_vad_trimmer.cpp
     src/audio/streaming_vad_trimmer.cpp
     src/audio/vad_trim_core.cpp
+    src/audio/audio_resampler.cpp
     src/audio/wasapi_capture.cpp
     src/asr/engine_local.cpp
     src/asr/asr_session.cpp
@@ -155,6 +156,8 @@ target_link_libraries(VoxType PRIVATE
     delayimp
     advapi32
     opus
+    avrt
+    wtsapi32
 )
 
 if(MSVC)
@@ -349,6 +352,21 @@ set_target_properties(dialog_positioning_test PROPERTIES
 )
 add_test(NAME dialog_positioning_test COMMAND dialog_positioning_test)
 
+add_executable(audio_resampler_test
+    tests/audio_resampler_test.cpp
+    src/audio/audio_resampler.cpp
+)
+target_include_directories(audio_resampler_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/audio"
+)
+if(MSVC)
+    target_compile_options(audio_resampler_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(audio_resampler_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME audio_resampler_test COMMAND audio_resampler_test)
+
 # Developer-only diagnostic replay utility. It reuses the production ASR
 # sessions but remains outside the canonical runtime payload and normal build.
 add_executable(asr_audio_replay EXCLUDE_FROM_ALL
@@ -366,6 +384,7 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/audio/batch_vad_trimmer.cpp
     src/audio/streaming_vad_trimmer.cpp
     src/audio/vad_trim_core.cpp
+    src/audio/audio_resampler.cpp
     src/audio/wasapi_capture.cpp
     src/asr/engine_local.cpp
     src/asr/asr_session.cpp
@@ -429,6 +448,7 @@ target_link_libraries(asr_audio_replay PRIVATE
     delayimp
     advapi32
     opus
+    avrt
 )
 if(MSVC)
     target_compile_options(asr_audio_replay PRIVATE /O2 /EHsc /utf-8)

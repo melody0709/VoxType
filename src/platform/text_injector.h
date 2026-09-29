@@ -9,7 +9,7 @@
 
 namespace platform {
 
-void SetClipboardText(const std::wstring& text);
+bool SetClipboardText(const std::wstring& text);
 void SendCtrlV();
 void SendUnicodeText(const std::wstring& text);
 void PasteTextImeAware(const std::wstring& text, bool forceUnicodeInput = false);
@@ -19,6 +19,7 @@ bool ReplaceSelectionTextImeAware(const SelectionContext& selection,
 bool IsCapsLockOn();
 void SendCapsLockTap();
 void RestoreCapsLockState(bool wasOn);
+void OnClipboardRestoreTimer();
 
 }  // namespace platform
 
@@ -30,3 +31,4 @@ using platform::ReplaceSelectionTextImeAware;
 using platform::IsCapsLockOn;
 using platform::SendCapsLockTap;
 using platform::RestoreCapsLockState;
+using platform::OnClipboardRestoreTimer;
