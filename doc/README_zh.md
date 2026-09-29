@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.11.6</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.11.7</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -66,9 +66,9 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 .\build.bat
 ```
 
-需要 Visual Studio 2022（C++ 桌面开发工作负载）。
+需要 Visual Studio 2022（C++ 桌面开发工作负载）和 PowerShell 7（`pwsh` 在 PATH 中）。
 
-运行离线协议/请求回归测试（Qwen 协议、LLM 请求/响应策略，以及诊断 WAV、指标、隐私和留存；不需要网络或麦克风）：
+运行离线回归测试（Qwen 协议、LLM 请求/响应策略、诊断 WAV、指标、隐私和留存、音频重采样，以及私有窗口站中的剪贴板回滚；不需要网络或麦克风）：
 
 ```powershell
 .\build.bat --test
@@ -251,9 +251,11 @@ CHANGELOG.md        — 版本变更记录
 <details>
 <summary><strong>📋 更新日志</strong></summary>
 
-详见 [CHANGELOG.md](CHANGELOG.md)
+详见 [CHANGELOG_zh.md](CHANGELOG_zh.md)
 
 **最近更新：**
+
+- **v0.11.7** — 修复热键看门狗反复停录/启动，加固锁屏取消与剪贴板回滚，加入 FIR/Sinc 重采样及静音、录音边界处理，扩充离线回归检查
 - **v0.9.27** — 新增 Microsoft MAI Transcribe 2 batch ASR，支持 OpenRouter/Azure 双通道、独立 DPAPI 凭据、final-only Settings 提示、retry/fallback/诊断/replay 共用链路及离线协议回归测试
 - **v0.9.25** — 为全部 ASR stage 增加共用失败录音诊断、有界本地 WAV/JSON 留存、Settings 打开/删除入口、通用跨后端 WAV replay 和回归测试；同时更新并加固 LLM 供应商/请求链路
 - **v0.9.9** — 恢复 Local 及其他 batch ASR 后端的共用录音中 HUD 音量动画；音量条重新亮起并跳动，同时保持 v0.9.3 的云端“先启动采集”顺序不变

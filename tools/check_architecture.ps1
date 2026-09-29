@@ -6,12 +6,9 @@ param(
     [string]$Root = ""
 )
 
-# NOTE: keep this file ASCII-only. Windows PowerShell 5.1 (the interpreter
-# build.bat uses) reads a BOM-less script with the ANSI code page. A non-ASCII
-# byte placed immediately before a newline makes it swallow that newline, which
-# merges the following code line into a comment and breaks parsing silently.
-# For the same reason all project sources below are read via .NET (UTF-8), never
-# via Get-Content.
+# Keep this script ASCII-only so it also works when run directly under legacy
+# Windows PowerShell 5.1. build.bat now invokes PowerShell 7. Source line counts
+# still use .NET ReadAllLines rather than shell-dependent text enumeration.
 
 $ErrorActionPreference = "Stop"
 

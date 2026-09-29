@@ -12,9 +12,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <avrt.h>
 
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "mmdevapi.lib")
+#pragma comment(lib, "avrt.lib")
 
 WasapiCapture::WasapiCapture() {}
 
@@ -83,7 +85,10 @@ bool WasapiCapture::InitAudioClient() {
                       (m_mixFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
                        reinterpret_cast<WAVEFORMATEXTENSIBLE*>(m_mixFormat)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
 
-    m_resampleRatio = (double)kWasapiTargetSampleRate / (double)m_nativeSampleRate;
+    if (!m_resampler.Init(m_nativeSampleRate, kWasapiTargetSampleRate)) {
+        debug_log::Write("[WASAPI] Invalid sample rate: %u", m_nativeSampleRate);
+        return false;
+    }
 
     REFERENCE_TIME hnsBufferDuration = 500000; // 50ms buffer
     hr = m_audioClient->Initialize(
@@ -158,7 +163,8 @@ bool WasapiCapture::Start(std::wstring& error) {
         return false;
     }
 
-    m_resamplePhase = 0.0;
+    m_resampler.Reset();
+    m_resamplerResetPending.store(false, std::memory_order_release);
     m_running.store(true);
 
     HRESULT hr = m_audioClient->Start();
@@ -217,6 +223,19 @@ void WasapiCapture::ReportRuntimeFailure(DWORD code) {
 void WasapiCapture::CaptureThread() {
     HRESULT hrCom = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     const bool needUninit = SUCCEEDED(hrCom) && hrCom != RPC_E_CHANGED_MODE;
+
+    DWORD taskIndex = 0;
+    HANDLE hAvrt = AvSetMmThreadCharacteristicsW(L"Audio", &taskIndex);
+    if (hAvrt) {
+        AvSetMmThreadPriority(hAvrt, AVRT_PRIORITY_HIGH);
+    } else {
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+    }
+
+    std::vector<float> monoFloat;
+    std::vector<float> mono;
+    std::vector<int16_t> resampledPcm;
+
     while (m_running.load(std::memory_order_relaxed)) {
         DWORD waitResult = WaitForSingleObject(m_event, 200);
         if (!m_running.load(std::memory_order_relaxed)) break;
@@ -249,6 +268,7 @@ void WasapiCapture::CaptureThread() {
             // discarded.  Skip all processing; still release/drain every packet
             // so the driver queue cannot fill up.
             if (g_captureSuppressed.load(std::memory_order_acquire)) {
+                RequestResamplerReset();
                 hr = m_captureClient->ReleaseBuffer(numFrames);
                 if (FAILED(hr)) {
                     ReportRuntimeFailure(static_cast<DWORD>(hr));
@@ -275,86 +295,80 @@ void WasapiCapture::CaptureThread() {
                 }
             }
 
-            if (numFrames > 0 && !(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
-                const float* srcFloat = nullptr;
-                std::vector<float> monoFloat;
-
-                if (m_nativeIsFloat) {
-                    srcFloat = reinterpret_cast<const float*>(captureData);
-                } else if (m_nativeBits == 16) {
-                    const int16_t* srcI16 = reinterpret_cast<const int16_t*>(captureData);
-                    monoFloat.resize(numFrames);
-                    if (m_nativeChannels == 1) {
-                        for (UINT32 i = 0; i < numFrames; ++i)
-                            monoFloat[i] = static_cast<float>(srcI16[i]) / 32768.0f;
-                    } else {
-                        for (UINT32 i = 0; i < numFrames; ++i) {
-                            double sum = 0.0;
-                            for (UINT32 ch = 0; ch < m_nativeChannels; ++ch)
-                                sum += srcI16[i * m_nativeChannels + ch];
-                            monoFloat[i] = static_cast<float>(sum / (m_nativeChannels * 32768.0));
-                        }
-                    }
-                    srcFloat = monoFloat.data();
-                } else {
-                    hr = m_captureClient->ReleaseBuffer(numFrames);
-                    if (FAILED(hr)) {
-                        ReportRuntimeFailure(static_cast<DWORD>(hr));
-                        break;
-                    }
-                    hr = m_captureClient->GetNextPacketSize(&packetLength);
-                    if (FAILED(hr)) {
-                        ReportRuntimeFailure(static_cast<DWORD>(hr));
-                        break;
-                    }
-                    continue;
+            if (numFrames > 0) {
+                if (m_resamplerResetPending.exchange(false, std::memory_order_acq_rel)) {
+                    m_resampler.Reset();
                 }
+                if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
+                    mono.assign(numFrames, 0.0f);
+                } else {
+                    const float* srcFloat = nullptr;
 
-                std::vector<float> mono;
-                if (m_nativeIsFloat) {
-                    mono.resize(numFrames);
-                    if (m_nativeChannels == 1) {
-                        for (UINT32 i = 0; i < numFrames; ++i)
-                            mono[i] = srcFloat[i];
-                    } else {
-                        for (UINT32 i = 0; i < numFrames; ++i) {
-                            double sum = 0.0;
-                            for (UINT32 ch = 0; ch < m_nativeChannels; ++ch)
-                                sum += srcFloat[i * m_nativeChannels + ch];
-                            mono[i] = static_cast<float>(sum / m_nativeChannels);
+                    if (m_nativeIsFloat) {
+                        srcFloat = reinterpret_cast<const float*>(captureData);
+                    } else if (m_nativeBits == 16) {
+                        const int16_t* srcI16 = reinterpret_cast<const int16_t*>(captureData);
+                        monoFloat.resize(numFrames);
+                        if (m_nativeChannels == 1) {
+                            for (UINT32 i = 0; i < numFrames; ++i)
+                                monoFloat[i] = static_cast<float>(srcI16[i]) / 32768.0f;
+                        } else {
+                            for (UINT32 i = 0; i < numFrames; ++i) {
+                                double sum = 0.0;
+                                for (UINT32 ch = 0; ch < m_nativeChannels; ++ch)
+                                    sum += srcI16[i * m_nativeChannels + ch];
+                                monoFloat[i] = static_cast<float>(sum / (m_nativeChannels * 32768.0));
+                            }
                         }
+                        srcFloat = monoFloat.data();
+                    } else {
+                        hr = m_captureClient->ReleaseBuffer(numFrames);
+                        if (FAILED(hr)) {
+                            ReportRuntimeFailure(static_cast<DWORD>(hr));
+                            break;
+                        }
+                        hr = m_captureClient->GetNextPacketSize(&packetLength);
+                        if (FAILED(hr)) {
+                            ReportRuntimeFailure(static_cast<DWORD>(hr));
+                            break;
+                        }
+                        continue;
                     }
-                } else {
-                    mono.assign(srcFloat, srcFloat + numFrames);
-                }
 
-                if (m_nativeIsFloat) {
-                    audio_diagnostics::RecordWasapiFloatPacket(
-                        reinterpret_cast<const float*>(captureData), numFrames,
-                        m_nativeChannels, mono.data(), false);
-                } else {
-                    audio_diagnostics::RecordWasapiPcm16Packet(
-                        reinterpret_cast<const int16_t*>(captureData), numFrames,
-                        m_nativeChannels, mono.data(), false);
+                    if (m_nativeIsFloat) {
+                        mono.resize(numFrames);
+                        if (m_nativeChannels == 1) {
+                            for (UINT32 i = 0; i < numFrames; ++i)
+                                mono[i] = srcFloat[i];
+                        } else {
+                            for (UINT32 i = 0; i < numFrames; ++i) {
+                                double sum = 0.0;
+                                for (UINT32 ch = 0; ch < m_nativeChannels; ++ch)
+                                    sum += srcFloat[i * m_nativeChannels + ch];
+                                mono[i] = static_cast<float>(sum / m_nativeChannels);
+                            }
+                        }
+                    } else {
+                        mono.assign(srcFloat, srcFloat + numFrames);
+                    }
+
+                    if (m_nativeIsFloat) {
+                        audio_diagnostics::RecordWasapiFloatPacket(
+                            reinterpret_cast<const float*>(captureData), numFrames,
+                            m_nativeChannels, mono.data(), false);
+                    } else {
+                        audio_diagnostics::RecordWasapiPcm16Packet(
+                            reinterpret_cast<const int16_t*>(captureData), numFrames,
+                            m_nativeChannels, mono.data(), false);
+                    }
                 }
 
                 g_audioLevel.store(CalculateAudioLevelFloat(mono.data(), numFrames, 1));
 
-                const UINT32 outputFrames = static_cast<UINT32>(numFrames * m_resampleRatio) + 2;
-                std::vector<BYTE> resampled(outputFrames * sizeof(int16_t));
-                int16_t* out = reinterpret_cast<int16_t*>(resampled.data());
-                UINT32 written = 0;
-
-                while (true) {
-                    double srcPos = m_resamplePhase;
-                    UINT32 idx = static_cast<UINT32>(srcPos);
-                    if (idx + 1 >= numFrames) break;
-                    double frac = srcPos - idx;
-                    float sample = static_cast<float>((1.0 - frac) * mono[idx] + frac * mono[idx + 1]);
-                    int16_t s16 = static_cast<int16_t>(std::clamp(sample * 32768.0f, -32768.0f, 32767.0f));
-                    out[written++] = s16;
-                    m_resamplePhase += 1.0 / m_resampleRatio;
-                }
+                resampledPcm.clear();
+                m_resampler.Process(std::span<const float>(mono.data(), numFrames), resampledPcm);
+                const UINT32 written = static_cast<UINT32>(resampledPcm.size());
+                const int16_t* out = resampledPcm.data();
 
                 if (written > 0) {
                     const BYTE* begin = reinterpret_cast<const BYTE*>(out);
@@ -412,8 +426,6 @@ void WasapiCapture::CaptureThread() {
                         bool hasVoice = vad ? vad->DetectSpeech(floatBuf, g_config.vadModel) : false;
                         if (hasVoice) g_vadDetectedVoice.store(true);
                     }
-
-                    m_resamplePhase -= written / m_resampleRatio;
                 }
             }
 
@@ -428,6 +440,10 @@ void WasapiCapture::CaptureThread() {
                 break;
             }
         }
+    }
+    if (hAvrt) {
+        AvRevertMmThreadCharacteristics(hAvrt);
+        hAvrt = nullptr;
     }
     if (needUninit) CoUninitialize();
 }

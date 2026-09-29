@@ -21,7 +21,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 - `CMakeLists.txt` 与 `CMakePresets.json` 是唯一编译权威；`build.bat` 负责准备 MSVC、调用 CMake/Ninja 并安装运行载荷。
 - **`tools\asr_audio_replay.bat` 是唯一的云端后端实跑工具**（喂 WAV 走生产 session，用 `--backend <id> --show-text`）；`build.bat --test` 会**构建**它（不运行）。它必须只定义"没有任何已编译模块拥有"的全局量——`app_state` / `audio_capture` / `streaming_vad_trimmer` / `engine_local` / `asr_metrics` 拥有的符号在工具里重复定义会在链接期炸掉（2026-09-28 修复过一次）。`--context-rounds <n>` 会注入合成识别历史，用于在没有麦克风的情况下打通 dialog-context/多轮上下文链路。
-- On Windows, use  PowerShell 7: `pwsh` (or `rtk pwsh`); never use Windows PowerShell 5.1 (`powershell`) unless explicitly requested.
+- On Windows, use PowerShell 7: `pwsh` (or `rtk pwsh`); never use Windows PowerShell 5.1 (`powershell`) unless explicitly requested.
 
 
 唯一可直接运行的开发程序是 `build\run\x64-release\VoxType.exe`，不能运行 `build\cmake\x64-release\VoxType.exe` 或手工向运行目录复制文件。
@@ -62,9 +62,9 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **版本号只改 `src/app/resource.h` 的 APP_VERSION_MAJOR/MINOR/PATCH/BUILD**，再同步 `README.md` **与 `doc/README_zh.md`** 的版本行，以及 `CHANGELOG.md` **与 `doc/CHANGELOG_zh.md`** 的记录。**两份 README、两份 CHANGELOG 缺一不可**（v0.10.8 曾漏掉 `doc/README_zh.md`，把中英版本号写得不一致）。`src/app/main.cpp` / `src/app/resources.rc` 用宏自动派生。
 - **发布收尾必须打附注 tag**：`git tag -a vX.Y.Z -m "Release vX.Y.Z: <一句话摘要>"`，落在那条带版本号与 CHANGELOG 的提交上。v0.10.0~v0.10.7 每个发布都有 tag，`git tag -l` 是判断"哪一版真的发过"的唯一依据——只 bump 不打 tag 会让下一次改动的起点无从判断。
 - sherpa-onnx `cxx-api.h` **含非 ASCII 字符串字面量**（不只是注释），编译必须 `/utf-8`：缺此项不是告警而是**硬错误**（`error C2001: newline in constant` 及连锁的 C2146/C2061/C2059，实测 MSVC 14.44.35207 + SDK 10.0.26100.0）。
-- **每个 `add_library` / `add_executable` 都必须继承 `/utf-8` 与 `/EHsc`**：新拆出的静态库若只写在 `VoxType` 上就会编译失败。统一走 `voxtype_build_flags` INTERFACE 目标（见重构方案 §3）。守卫对此硬 FAIL。
+- **每个 `add_library` / `add_executable` 都必须继承 `/utf-8` 与 `/EHsc`**：当前 `CMakeLists.txt` 对每个目标显式设置这两个选项；新增目标不得遗漏。机械守卫对缺 `/utf-8` 硬 FAIL；`/EHsc` 目前由构建与代码审查核对，守卫尚未单独检查。重构方案 §3 的 `voxtype_build_flags` INTERFACE 目标目前尚未落地。
 - **`add_library(X STATIC/SHARED/MODULE)` 必须至少声明一个源文件**，否则 CMake 在 generate 阶段直接失败（`No SOURCES given to target`）。需要"先占位后填内容"时用 `INTERFACE`。
-- **本仓库的 `.ps1` 脚本必须纯 ASCII，或存为 UTF-8 with BOM**。`build.bat` 用的是 Windows PowerShell **5.1**，它按 ANSI(CP936) 解码**无 BOM** 的 UTF-8 脚本，会吞掉"紧跟非 ASCII 字节的换行"，症状是与编码毫无关联的 `Missing '=' operator after key in hash literal` 一类解析错误。同理，统计源码行数/条目**禁止用 `Get-Content`**（会少算），必须用 `[System.IO.File]::ReadAllLines()`。
+- **构建脚本使用 PowerShell 7**：`build.bat` 从 PATH 解析 `pwsh.exe`，与本文件的命令执行约定一致。`.ps1` 尽量保留 ASCII 或 UTF-8 with BOM，以便旧环境直接运行时不产生编码误判。统计源码行数/条目**禁止用 `Get-Content`**（会少算），必须用 `[System.IO.File]::ReadAllLines()`。
 - **HUD、Settings 与所有弹窗必须严格遵守 DPI 自适应架构（硬性规范）**：
   - 应用清单启用了 `PerMonitorV2`。全局 UI 统一以 150% DPI（144 DPI）为逻辑设计基准。
   - 所有控件尺寸、间距、窗口外框常量必须集中在 `src/ui/ui_types.h` 的 `UiStyle` 命名空间维护，**绝对禁止**在子窗口/独立对话框（如 `settings_dialogs.cpp`）中私自另设 `k*` 局部常数覆盖全局设计。
@@ -124,6 +124,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 **元规则（重要）**：规则必须可证伪。凡是描述"当前实现"而非"外部行为"的条目，在对应 Milestone 收尾时逐条重审；**已与现实不符的规则是负资产**——它会让执行者建立错误的前置认知，比没有规则更糟。**禁止**把过期规则保留为"历史说明"或注释掉。
 
 - **【A】CapsLock 热键**：短按必须补发 `CapsLock` 保持系统切换，长按录音结束后必须恢复原 Caps Lock 状态。
+- **【A】被低层键盘钩子吞掉的热键不得靠 `GetAsyncKeyState` 判定释放**：CapsLock 等匹配事件由钩子返回非零阻断后，异步键状态并非可靠的物理松开证据。用它每 500ms 停录并清空热键状态会被仍按住的自动重复再次启动，造成 HUD 闪烁和重复上屏。正常 KEYUP 由钩子处理，录音时长由 60s 上限兜底；回归检查见 `tests/recording_watchdog_regression.ps1`。
 - **【A】HUD 与 Settings DPI 全局自适应不变量**：
   1. DirectWrite/Direct2D（HUD）使用 DIP 测量，`SetWindowPos` 使用物理像素，跨屏移动必须重新根据目标显示器 DPI 计算缩放。
   2. Win32 窗口（Settings / 对话框）逻辑设计基准为 144 DPI（Scale = 1.0），在 96 DPI 标准屏下缩放系数为 0.6667。控件与文字高度必须预留安全容限（单行标签高不低于 30、两行提示不低于 48、按钮不低于 34），严禁在局部私自缩减，否则在 96 DPI 下字体行高将超越控件物理边框，引发文字横向腰斩或 descender（y/g/p 下延）硬件级裁切。
@@ -139,8 +140,9 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **【B】Streaming provider 的 send loop / drain thread / retry**：不要强行做成一个复杂模板。**解除条件**：公共层的生命周期与通用策略在 P3 收敛并有测试保护后，可重新评估。
 - **【A】百度 ASR** transient 失败应重发同一段 PCM；token/auth 错误应清 token 后刷新重试，避免用户必须重新说第二遍。
 - **【A】WASAPI 生命周期**必须是 `Init → Start → Stop → Release`，`Stop()` 只停线程不清资源，没有 `Release()` 第二次录音会卡死。`Init()` 成功但 `Start()` 失败时也必须 `Release()`。
-- **【A】WASAPI 重采样相位更新**必须用 `m_resamplePhase -= written / m_resampleRatio`（实际消耗的源样本数），不能用 `m_resamplePhase -= numFrames`（输入帧数），否则非整数采样率比会越界。
-- **【A】微信粘贴**：微信（`Weixin.exe`）用自定义 Qt 控件，`GetFocus()` 返回 NULL 且 IME 拦截 Ctrl+V。必须用 `WM_CHAR` 逐字符发送，不能用剪贴板+Ctrl+V。其他应用用剪贴板+Ctrl+V+IMM32 切换。
+- **【A】WASAPI 非整数比例重采样相位**必须按实际消耗的源样本推进和保留剩余相位，不能直接按收到的输入帧数回退，否则分块处理会错位或越界。现由 `AudioResampler` 以整数分子 `resamplePhaseNumerator_`（单位为 `1/outRate_` 源样本）推进，再按实际消耗量更新历史；分块与整批输出应逐样本一致。
+- **【A】微信粘贴**：微信（`Weixin.exe`）用自定义 Qt 控件，`GetFocus()` 返回 NULL 且 IME 拦截 Ctrl+V。必须用 `WM_CHAR` 逐字符发送，不能用剪贴板+Ctrl+V。
+- **【C】当前文本注入与剪贴板保护**：标准 Edit/RichEdit/Scintilla 控件通过 `SendMessageCallbackW(WM_PASTE)` 的完成回调恢复，非标准控件用 Unicode 输入；不得用固定等待或序列号推断目标已消费。快照必须在覆写前实体化各格式，不能仅持有 `OleGetClipboard` 代理；快照失败时不改剪贴板。选区读取只走 UIA/Win32 原生查询，禁止重新引入会临时覆写剪贴板的 `WM_COPY` 回退。Scintilla 的普通粘贴可用 `WM_PASTE`，但选区读取只依赖 UIA（原生 Win32 Edit 读取器不支持其选区协议）。恢复失败在首次与随后每分钟、pending 粘贴在满 10s 后与随后每分钟写入有界运行日志；日志不包含正文。选区改写仅在无旧粘贴 pending 且重新验证选区/焦点后，才可因粘贴准备失败回退 Unicode。回归检查 `tests/clipboard_test.cpp` 在私有窗口站运行，不触碰用户剪贴板。
 - **守卫基线只许下调，禁止上调**。`tools/check_architecture.ps1` 里的基线数值代表"当前债务上限"，只减不增。任何上调必须由**用户人工确认**，且提交信息里写明理由。守卫自带完整性检查：相对 `HEAD` 上调基线即判 FAIL。
 - **不要为了让守卫变绿而删测试、注释掉守卫调用、或放宽校验规则**。这是最容易被自主执行者选择的"捷径"，属于禁止行为。守卫会校验 `build.bat` 仍在主流程（而非仅 `--test`）调用自己，以及 5 个既有测试目标仍在。
 - **不要用 `file(GLOB ...)` 收集源文件**：会让"新增文件忘进 CMake""删除文件忘出 CMake"双双变成静默行为，并让 target 结构检查失真。守卫已禁止 `GLOB`。

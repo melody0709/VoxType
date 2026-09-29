@@ -17,7 +17,7 @@ flowchart LR
     ASR --> Punct["CT-Transformer punctuation"]
     Punct --> Frontend
     Cloud --> Frontend
-    Frontend --> Inject["Clipboard + Ctrl+V"]
+    Frontend --> Inject["WM_PASTE / Unicode input / WM_CHAR"]
 ```
 
 ## Process
@@ -35,8 +35,6 @@ Single process. Responsibilities:
 - Optionally route audio to cloud ASR backends: Baidu, Volcengine, Qwen ASR, MiMo ASR, Microsoft MAI Transcribe 2, experimental Doubao IME ASR, or the reverse-engineered Qwen IME Free backend.
 - Inject final text into the current application.
 
-- Inject final text into the current application.
-
 `AsrEngine` internally caches `OfflineRecognizer`, `VoiceActivityDetector`, and `OfflinePunctuation`. The same model is not loaded repeatedly.
 
 ## Source Code Structure
@@ -47,7 +45,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 |-----------|----------------|
 | `src/app/` | Application entry point, main window, recording orchestrator, Win32 resources |
 | `src/asr/` | Local ASR engine, ASR provider clients, batch/streaming sessions, metrics, dispatch helpers, context-turn assembly |
-| `src/audio/` | Audio capture (WASAPI / waveIn), FireRed VAD, streaming VAD trimmer |
+| `src/audio/` | Audio capture (WASAPI / waveIn), stateful audio resampling, FireRed VAD, streaming VAD trimmer |
 | `src/ui/` | HUD, HUD pagination, hotkey handling, Settings window, secondary dialog anchoring, UI theme/controls |
 | `src/platform/` | Platform integration (text injector, clipboard, Windows message emulation) |
 | `src/core/` | Core app messages/state, path service, config store, LLM refine, input context reading, vocabulary manager, shared recognition history |
@@ -64,10 +62,11 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | Universal custom vocabulary manager and the single source of truth for hotwords (`%APPDATA%\VoxType\vocabulary.json`): parsing (JSON/lines), the 1–5 ordinary / 50 super weight contract, and weight-ordered transpilation to the Qwen immediate vocabulary, the Volcano Engine `corpus.context` hotwords plus `dialog_ctx`, the context word list, the sherpa hotword file (pre-wired, not yet consumed), and the LLM `【用户词表】` system section |
 | `src/core/asr_history.h` / `src/core/asr_history.cpp` | Session-wide ring buffer of recent final transcripts (storage only, thread-safe, capped at 20 rounds); recorded once per recognition inside `DispatchAsrFinalText` and read by every context-enhancement consumer |
 | `src/asr/asr_context.h` / `src/asr/asr_context.cpp` | Context-turn assembly shared by the cloud backends: round budget selection, tail-first per-turn character capping, and the continue-task field-turn replacement that keeps the history |
-| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Direct text injection into active windows via clipboard paste or WM_CHAR character streaming (WeChat) |
+| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | Text delivery through standard-control paste completion, Unicode input, or WeChat WM_CHAR; conditional clipboard rollback |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | Local sherpa-onnx recognizer, VAD detector, punctuation model lifecycle, preload, DLL availability checks |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | Thread-safe performance latency metrics (VAD, ASR, Punctuation, Cloud API, LLM) |
 | `src/audio/audio_capture.h` / `src/audio/audio_capture.cpp` | Microphone capture lifecycle (WASAPI/waveIn), active buffer management, RMS level calculation |
+| `src/audio/audio_resampler.h` / `src/audio/audio_resampler.cpp` | Stateful 48→16 kHz Kaiser FIR decimation, fractional sinc resampling, PCM16 conversion, and per-utterance reset |
 | `src/audio/audio_diagnostics.h` / `src/audio/audio_diagnostics.cpp` | Provider-neutral capture/stage diagnostics, PCM metrics, WAV/SHA-256/JSON persistence, retention, and managed-folder operations |
 | `src/audio/streaming_vad_trimmer.h` / `src/audio/streaming_vad_trimmer.cpp` | Provider-independent streaming PCM VAD trim for cloud ASR sessions |
 | `src/asr/asr_session.h` / `src/asr/asr_session.cpp` | Batch ASR session abstraction for Local, Baidu, MiMo, MAI, Qwen, and recorded Doubao IME paths |
@@ -124,7 +123,7 @@ Global variables are encapsulated in layer-owned modules (`app_state.*`, `config
 ### Build, packaging, and mutable data
 
 `CMakeLists.txt` and the `x64-release` CMake preset are the build authority.
-`build.bat` prepares MSVC, invokes CMake/Ninja, then installs the only
+`build.bat` requires PowerShell 7 (`pwsh` on PATH), prepares MSVC, invokes CMake/Ninja, then installs the only
 supported runnable development payload at `build/run/x64-release`.
 
 The generated `build/` root is deliberately small and validated:
@@ -213,8 +212,12 @@ Normal hotkey behavior:
 
 Currently uses WASAPI Shared Mode (since v0.7.3), with automatic fallback to `waveIn`:
 
-- WASAPI: Captures at system mix format (typically 48kHz/32bit float/stereo), resamples to 16kHz/16bit/mono via linear interpolation
+- WASAPI: Captures at system mix format (typically 48kHz/32bit float/stereo), downmixes to mono, then resamples to 16kHz/16bit using `AudioResampler`. The 48→16 kHz path uses a 348-tap/347th-order Kaiser FIR (7.5 kHz cutoff, about 5.57 MMAC/s); other ratios use a 64-phase, 32-tap sinc table. The same-rate path converts directly to PCM16.
 - waveIn fallback: 16kHz/16bit/mono, 4 buffers of approximately 100ms each
+
+The capture thread requests MMCSS `Audio` priority, retains packet-buffer capacity, and feeds zero samples for the full length of a WASAPI silent packet. Keep-alive resume requests a resampler reset executed by the capture thread. Fractional-ratio phase uses an integer source-position numerator in units of `1/outRate`, so packet boundaries do not change the phase bucket; 44.1→16 kHz batch and chunked output now match exactly in the regression test. Filtering needs lookahead (about 3.6 ms on the 48 kHz path); no explicit final-tail flush is implemented. The normal 150 ms key-up delay remains a separate capture policy.
+
+The keyboard hook owns normal KEYUP stopping. A 500 ms recording timer checks only the 60-second hard limit; it does not poll consumed keys through `GetAsyncKeyState` or clear a held hotkey. A missed KEYUP therefore relies on the duration limit. WTS lock, logoff, and remote/console disconnect invalidate pending ASR/LLM results, clear delayed-stop/re-press and streaming-VAD state, abort streaming, close active or kept-alive capture, and hide the HUD. Start commands are ignored while locked or disconnected. Reconnection does not clear the lock flag; unlock does not clear the disconnected flag. Failed WTS registration retries every five seconds until successful.
 
 Ordinary recordings are not written to disk. The old single
 `%APPDATA%\VoxType\last_recording.wav` behavior was removed long ago. The
@@ -365,9 +368,13 @@ Enabled when `Punctuation` is set to `Auto punctuate` or `Auto punctuate + LLM` 
 Current implementation (`PasteTextImeAware`):
 
 1. **WeChat** (`Weixin.exe`): `WM_CHAR` character-by-character sending (WeChat's custom Qt controls intercept Ctrl+V)
-2. **Other applications**: Clipboard + `Ctrl+V` + IMM32 temporary English mode switch
-3. **Force Unicode Input** (optional): `SendInput` + `KEYEVENTF_UNICODE` character-by-character sending
-4. All paths use `SendMessageTimeoutW` + `SMTO_ABORTIFHUNG` + 2-second timeout, preventing UI thread blocking if target window hangs
+2. **Standard Edit/RichEdit/Scintilla controls**: fast mode writes the full text once and sends Ctrl+V, temporarily switching the foreground IME to alphanumeric as in the legacy path. Preservation mode sends `WM_PASTE` through `SendMessageCallbackW` and restores the clipboard after its completion callback. A pending paste prevents another clipboard overwrite; ordinary dictation subsequently uses Unicode. Selection rewrite refuses a second edit while an earlier paste is pending.
+3. **Other applications**: fast mode uses the same clipboard/Ctrl+V/IME path. Preservation mode uses `SendInput` + `KEYEVENTF_UNICODE`, without changing the clipboard or IME state.
+4. **Force Unicode Input** (optional): use the Unicode path for every target. Failed sends are reported. Successful API submission/completion does not prove that an application accepted the text (for example, a read-only control can ignore `WM_PASTE`).
+
+In preservation mode, clipboard snapshots materialize offered formats into an independent Shell data object before any write. Allocation, snapshot or privacy-marker failure prevents publication; restoration retries while VoxType still owns the temporary contents. Fast mode skips the full snapshot to keep pasting responsive with rich or delayed-rendered clipboard data. It preallocates text and checks `EmptyClipboard`, but a rare `SetClipboardData` failure after a successful empty operation can still destroy the previous clipboard contents; this mode cannot promise rollback without a full snapshot. The expected sequence is read after `CloseClipboard`, because Windows may synthesize formats and advance it at close; the owner is also checked after close. Sequence/ownership changes detected before restoration abandon it, though the check and OLE restore are not atomic against a simultaneous external copy. Restore failures are logged once and then at most once per minute; an uncompleted paste is logged after 10 seconds and then at most once per minute. These bounded diagnostics contain no transcript. An application that never completes its paste can leave temporary contents until shutdown; no fixed delay is treated as proof of consumption.
+
+Selection rewrites read through UI Automation or native Edit/RichEdit selection messages; they no longer use `WM_COPY`. Scintilla selection rewrite needs working UIA selection support; its native `SCI_GETSELECTION*` messages are not implemented here. Password fields and failed UIA password-property queries are rejected. UIA focus must belong to the captured process, and the foreground is rechecked after a potentially slow selection read. Text reads are bounded to 200,000 characters. If clipboard paste cannot start, a standard-control rewrite uses Unicode only after revalidating selection, focus and the absence of an older pending paste. Unsupported selection providers fail without changing the clipboard. Character input stops if the foreground window changes; focus changes between elements in the same window remain an integration boundary. UIA/OLE calls may still block the caller.
 
 ## Configuration
 
@@ -394,6 +401,7 @@ Current structure is a flat JSON:
   "enable_partial": true,
   "postprocess": "itn",
   "hotkey": "CapsLock",
+  "restore_clipboard_after_paste": false,
   "diagnostic_audio_mode": "off",
   "llm_provider": "DeepSeek",
   "llm_providers_json": "{\"DeepSeek\":{\"endpoint\":\"https://api.deepseek.com\",\"api_key\":\"<encrypted>\",\"model\":\"deepseek-v4-flash\",\"extra_params\":\"\\\"thinking\\\":{\\\"type\\\":\\\"disabled\\\"}\"}}",
@@ -448,6 +456,7 @@ compatibility and are normalized to the same value at load/save time.
 - `asr_backend`: Active ASR backend (`local`, `baidu`, `volcengine`, `qwen`, `mimo`, `mai`, `doubao_ime`, or `qwen_free`).
 - `fallback_asr_backend`: Optional serial fallback (`none`, `local`, `baidu`, `qwen`, `mimo`, `mai`, `doubao_ime`, or `qwen_free`); it must differ from `asr_backend`. Volcengine is not a fallback target.
 - `diagnostic_audio_mode`: Shared recording diagnostics policy (`off`, `failures`, or `all`); defaults to `off` and applies to every ASR provider/stage.
+- `restore_clipboard_after_paste`: Protect the original clipboard (default `false`). The General tab presents the inverse, “Fast paste + clipboard history”, checked by default. Checked means one clipboard write plus Ctrl+V and the transcript can enter Win+V history. Unchecked means custom controls use Unicode and standard controls restore the original clipboard after the paste callback. Partial writes roll back only in preservation mode; WeChat always uses `WM_CHAR`. Saved values retain their meaning across this UI change.
 - `qwen_*`: Qwen profile selection, Beijing Audio 3 HTTP/WSS endpoints, language hints, vocabulary JSON, semantic punctuation, sentence silence, multi-threshold, heartbeat, speech-noise threshold, and chunk settings. Context enhancement is three independent switches — `qwen_enable_input_context` (focused input field), `qwen_history_context` with `qwen_history_context_rounds` (recent final transcripts from `src/core/asr_history.*`, 1–5 rounds, on by default), and the Volcano Engine equivalents `volc_enable_input_context` / `volc_enable_context` + `volc_context_history` / `volc_reuse_vocabulary`. The focused-field snapshot itself is runtime-only and never persisted. Legacy realtime turn detection remains fixed to Manual and is not persisted.
 - `qwen_free_*`: Qwen IME Free bundled `VoiceInputWrite` post-processing switches, experimental selection rewrite, local protocol diagnostics, and optional shell-directory override. Backend enablement is derived from `asr_backend` / `fallback_asr_backend`; the optional UTDID diagnostic override is DPAPI-encrypted.
 - `mimo_*`: Xiaomi MiMo ASR API key, OpenAI-compatible Base URL, model, and language (`auto`, `zh`, `en`). The API key is DPAPI-encrypted in `mimo_api_key`.

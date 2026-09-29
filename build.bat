@@ -51,10 +51,11 @@ set "RUNTIME_DIR=%BUILD_ROOT%\run\x64-release"
 set "RUNTIME_EXE=%RUNTIME_DIR%\VoxType.exe"
 set "INSTALL_MANIFEST=%BUILD_TREE%\install_manifest_Runtime.txt"
 set "VERSION_FILE=%BUILD_TREE%\voxtype-version.txt"
-set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "POWERSHELL_EXE=pwsh.exe"
 
-if not exist "%POWERSHELL_EXE%" (
-    echo ERROR: Windows PowerShell was not found: %POWERSHELL_EXE%
+where "%POWERSHELL_EXE%" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: PowerShell 7 was not found on PATH: %POWERSHELL_EXE%
     exit /b 1
 )
 
@@ -157,8 +158,8 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     rem replay target from rotting silently. It was unlinkable for a whole
     rem refactor cycle before 2026-09-28 because nothing verified it.
     echo Building offline protocol/request regression tests...
-    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test asr_audio_replay
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test audio_resampler_test clipboard_test asr_audio_replay
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_free_protocol_test.exe"
     if not exist "!VOXTYPE_TEST_EXE!" (
         echo ERROR: Qwen protocol test executable was not produced: !VOXTYPE_TEST_EXE!
@@ -166,7 +167,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running offline Qwen protocol regression tests...
     "!VOXTYPE_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_AUDIO_JSON_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_audio_json_test.exe"
     if not exist "!VOXTYPE_AUDIO_JSON_TEST_EXE!" (
         echo ERROR: Qwen Audio JSON test executable was not produced: !VOXTYPE_AUDIO_JSON_TEST_EXE!
@@ -174,7 +175,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running Qwen Audio JSON regression tests...
     "!VOXTYPE_AUDIO_JSON_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_LLM_REFINE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\llm_refine_test.exe"
     if not exist "!VOXTYPE_LLM_REFINE_TEST_EXE!" (
         echo ERROR: LLM refine test executable was not produced: !VOXTYPE_LLM_REFINE_TEST_EXE!
@@ -182,7 +183,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running LLM refine regression tests...
     "!VOXTYPE_LLM_REFINE_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_AUDIO_DIAGNOSTICS_TEST_EXE=%BUILD_ROOT%\artifacts\tests\audio_diagnostics_test.exe"
     if not exist "!VOXTYPE_AUDIO_DIAGNOSTICS_TEST_EXE!" (
         echo ERROR: Audio diagnostics test executable was not produced: !VOXTYPE_AUDIO_DIAGNOSTICS_TEST_EXE!
@@ -190,7 +191,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running audio diagnostics regression tests...
     "!VOXTYPE_AUDIO_DIAGNOSTICS_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_ASR_JSON_PROTOCOL_TEST_EXE=%BUILD_ROOT%\artifacts\tests\asr_json_protocol_test.exe"
     if not exist "!VOXTYPE_ASR_JSON_PROTOCOL_TEST_EXE!" (
         echo ERROR: ASR JSON protocol test executable was not produced: !VOXTYPE_ASR_JSON_PROTOCOL_TEST_EXE!
@@ -198,7 +199,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running ASR JSON protocol regression tests...
     "!VOXTYPE_ASR_JSON_PROTOCOL_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_ASR_RESULT_CLASSIFICATION_TEST_EXE=%BUILD_ROOT%\artifacts\tests\asr_result_classification_test.exe"
     if not exist "!VOXTYPE_ASR_RESULT_CLASSIFICATION_TEST_EXE!" (
         echo ERROR: ASR result classification test executable was not produced: !VOXTYPE_ASR_RESULT_CLASSIFICATION_TEST_EXE!
@@ -206,7 +207,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running ASR result classification regression tests...
     "!VOXTYPE_ASR_RESULT_CLASSIFICATION_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_CLOUD_ASR_TIMEOUT_TEST_EXE=%BUILD_ROOT%\artifacts\tests\cloud_asr_timeout_test.exe"
     if not exist "!VOXTYPE_CLOUD_ASR_TIMEOUT_TEST_EXE!" (
         echo ERROR: Cloud ASR timeout test executable was not produced: !VOXTYPE_CLOUD_ASR_TIMEOUT_TEST_EXE!
@@ -214,7 +215,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running cloud ASR timeout regression tests...
     "!VOXTYPE_CLOUD_ASR_TIMEOUT_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_HUD_PAGINATION_TEST_EXE=%BUILD_ROOT%\artifacts\tests\hud_pagination_test.exe"
     if not exist "!VOXTYPE_HUD_PAGINATION_TEST_EXE!" (
         echo ERROR: HUD pagination test executable was not produced: !VOXTYPE_HUD_PAGINATION_TEST_EXE!
@@ -222,7 +223,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running HUD pagination regression tests...
     "!VOXTYPE_HUD_PAGINATION_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_DIALOG_POSITIONING_TEST_EXE=%BUILD_ROOT%\artifacts\tests\dialog_positioning_test.exe"
     if not exist "!VOXTYPE_DIALOG_POSITIONING_TEST_EXE!" (
         echo ERROR: Dialog positioning test executable was not produced: !VOXTYPE_DIALOG_POSITIONING_TEST_EXE!
@@ -230,7 +231,20 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running dialog positioning regression tests...
     "!VOXTYPE_DIALOG_POSITIONING_TEST_EXE!"
-    if errorlevel 1 exit /b !ERRORLEVEL!
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    set "VOXTYPE_AUDIO_RESAMPLER_TEST_EXE=%BUILD_ROOT%\artifacts\tests\audio_resampler_test.exe"
+    if not exist "!VOXTYPE_AUDIO_RESAMPLER_TEST_EXE!" (
+        echo ERROR: Audio resampler test executable was not produced: !VOXTYPE_AUDIO_RESAMPLER_TEST_EXE!
+        exit /b 1
+    )
+    echo Running audio resampler regression tests...
+    "!VOXTYPE_AUDIO_RESAMPLER_TEST_EXE!"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    echo Running isolated clipboard regression tests...
+    "%BUILD_ROOT%\artifacts\tests\clipboard_test.exe"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    "%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\tests\recording_watchdog_regression.ps1" -SourceRoot "%ROOT%"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
 )
 
 if defined VOXTYPE_PACKAGE_MODE (

@@ -29,6 +29,11 @@ constexpr UINT kHotkeyRecordingMessage = WM_APP + 11;
 constexpr UINT kAudioCaptureErrorMessage = WM_APP + 12;
 constexpr UINT kWaveInCaptureErrorMessage = WM_APP + 13;
 constexpr UINT kDoubaoImeSettingsCredentialsMessage = WM_APP + 14;
+// Privacy-safe clipboard diagnostics; wParam is the event, lParam is a count
+// (restore failures) or elapsed milliseconds (pending paste).
+constexpr UINT kClipboardDiagnosticMessage = WM_APP + 15;
+constexpr WPARAM kClipboardRestoreFailed = 1;
+constexpr WPARAM kClipboardPasteStillPending = 2;
 
 constexpr WPARAM kHotkeyRecordingStart = 1;
 constexpr WPARAM kHotkeyRecordingStop = 2;
@@ -45,6 +50,9 @@ constexpr UINT_PTR kHudAnimationTimer = 3;
 constexpr UINT_PTR kStreamingWatchdogTimer = 4;
 constexpr UINT_PTR kRecordingStopDelayTimer = 5;
 constexpr UINT_PTR kMicKeepAliveTimer = 6;
+constexpr UINT_PTR kRecordingWatchdogTimer = 7;
+constexpr UINT_PTR kClipboardRestoreTimer = 8;
+constexpr UINT_PTR kWtsRetryTimer = 9;
 
 constexpr UINT kCapsLockLongPressMs = 300;
 // Key-up does not stop capture immediately; the short delay keeps the tail of
@@ -55,6 +63,8 @@ constexpr UINT kRecordingStopDelayMs = 150;
 // device stays open this long so back-to-back recordings and CapsLock taps do
 // not pay the device open cost again.
 constexpr UINT kMicKeepAliveMs = 2500;
+constexpr UINT kRecordingWatchdogIntervalMs = 500;
+constexpr ULONGLONG kMaxRecordingDurationMs = 60000;
 
 constexpr UINT ID_TRAY_VERSION = 1001;
 constexpr UINT ID_TRAY_SETTINGS = 1002;

@@ -19,6 +19,7 @@
 #include "volcengine_streaming_session.h"
 #include "volcengine_asr.h"
 #include "hud.h"
+#include "hotkey.h"
 #include "selection_context.h"
 #include "ui_utils.h"
 #include "engine_local.h"
@@ -254,6 +255,7 @@ static void FinishAudioCaptureFailure(uint64_t generation,
     CancelActiveAsrAttempt(attemptId, true);
     MarkActiveAttemptFinalHandled(attemptId);
     KillTimer(g_mainWindow, kStreamingWatchdogTimer);
+    KillTimer(g_mainWindow, kRecordingWatchdogTimer);
     AbortAndResetActiveStreamingSession();
     ResetStreamingVadTrimmerState();
 
@@ -414,6 +416,9 @@ void StartRecordingSession() {
         g_sessionStartTick = GetTickCount64();
     }
     g_recording = true;
+    if (g_mainWindow) {
+        SetTimer(g_mainWindow, kRecordingWatchdogTimer, kRecordingWatchdogIntervalMs, nullptr);
+    }
 
     StartHudRecordingAnimation();
     s_wasapiUsed = g_wasapiCapture.IsInitialized();
@@ -427,10 +432,10 @@ void StartRecordingSession() {
         selection = selection_context::Capture();
         if (selection.Usable()) {
             asr_runtime_log::Write(
-                "event=selection_capture ok=1 chars=%zu uia=%d clipboard=%d",
+                "event=selection_capture ok=1 chars=%zu uia=%d win32=%d",
                 selection.selectedText.size(),
                 selection.capturedWithUiAutomation ? 1 : 0,
-                selection.capturedWithClipboard ? 1 : 0);
+                selection.capturedWithWin32 ? 1 : 0);
         } else {
             asr_runtime_log::Write(
                 "event=selection_capture ok=0 reason=%s",
@@ -598,6 +603,9 @@ void StartRecordingSession() {
 
 void StopRecordingSession() {
     if (!g_recording) return;
+    if (g_mainWindow) {
+        KillTimer(g_mainWindow, kRecordingWatchdogTimer);
+    }
     if (g_audioCaptureFailurePending.load(std::memory_order_acquire)) {
         HandleAudioCaptureFailure(
             g_audioCaptureGeneration.load(std::memory_order_acquire),
@@ -782,4 +790,63 @@ void StopRecordingSession() {
     std::wstring name = AsrBackendDisplayName(recordingConfig);
     ShowHud(L"Recognizing... " + name);
     RecognizeAsync(pcm, attemptId, recordingConfig);
+}
+
+void OnRecordingWatchdogTimer() {
+    if (!g_recording) {
+        if (g_mainWindow) {
+            KillTimer(g_mainWindow, kRecordingWatchdogTimer);
+        }
+        return;
+    }
+
+    const ULONGLONG elapsedMs = GetTickCount64() - g_sessionStartTick;
+
+    // Hard duration limit across all backends. The keyboard hook owns key-up:
+    // it consumes matched keys, so GetAsyncKeyState can report an unchanged
+    // held key as up and create a stop/restart loop on key auto-repeat.
+    if (elapsedMs >= kMaxRecordingDurationMs) {
+        asr_runtime_log::Write("event=recording_hard_limit_reached elapsed_ms=%llu limit_ms=%llu",
+                               static_cast<unsigned long long>(elapsedMs),
+                               static_cast<unsigned long long>(kMaxRecordingDurationMs));
+        StopRecordingSession();
+        return;
+    }
+}
+
+void OnSessionLock() {
+    asr_runtime_log::Write("event=session_lock_detected recording=%d", g_recording ? 1 : 0);
+    if (g_mainWindow) {
+        KillTimer(g_mainWindow, kRecordingWatchdogTimer);
+        KillTimer(g_mainWindow, kStreamingWatchdogTimer);
+        KillTimer(g_mainWindow, kRecordingStopDelayTimer);
+    }
+    SetStopDelayPending(false);
+    SetStopDelayHeldForRepress(false);
+    SetStopDelayRestoreCapsLock(false);
+
+    // Cancel and invalidate any active ASR/LLM attempt to prevent late messages from injecting text onto lock screen
+    const uint64_t attemptId = ActiveAsrAttemptId();
+    if (attemptId != 0) {
+        CancelActiveAsrAttempt(attemptId, true);
+    }
+    auto session = TakeActiveStreamingSession();
+    if (session) {
+        session->Abort();
+    }
+    HideHud();
+    SetActiveHotkeyKey(0);
+    ResetCapsLockHotkeyState();
+
+    if (g_recording) {
+        g_recording = false;
+        StopAudioCapture();
+    } else if (IsCapturePendingOnly()) {
+        DiscardPendingCapture();
+    }
+    // Close the device even during the post-recording keep-alive interval.
+    CloseAudioCapture();
+    ResetStreamingVadTrimmerState();
+    g_captureConfigStale = false;
+    audio_diagnostics::CancelCapture();
 }

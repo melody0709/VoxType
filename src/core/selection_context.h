@@ -8,6 +8,7 @@
 #include <uiautomation.h>
 #include <oleauto.h>
 #include <objidl.h>
+#include <shlobj_core.h>
 
 #include <algorithm>
 #include <cwctype>
@@ -17,6 +18,7 @@
 #pragma comment(lib, "uiautomationcore.lib")
 #pragma comment(lib, "oleaut32.lib")
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "shell32.lib")
 
 // A snapshot of the text selection that existed when a recognition attempt
 // started.  The HWNDs are deliberately kept with the text so a delayed cloud
@@ -25,7 +27,7 @@
 struct SelectionContext {
     bool hasSelection = false;
     bool capturedWithUiAutomation = false;
-    bool capturedWithClipboard = false;
+    bool capturedWithWin32 = false;
     std::wstring selectedText;
     HWND targetWindow = nullptr;  // top-level foreground window
     HWND focusWindow = nullptr;   // focused editor/control, when available
@@ -79,17 +81,52 @@ inline bool ReadClipboardText(std::wstring& out) {
     return false;
 }
 
-// Keep the original IDataObject alive while WM_COPY temporarily replaces the
-// clipboard. Unlike copying only CF_UNICODETEXT, this preserves images, file
-// lists, HTML/RTF and application-private formats without guessing how each
-// clipboard handle must be cloned.
+// Materialize every offered format before touching the clipboard. Holding the
+// OleGetClipboard proxy alone does not keep non-OLE clipboard data alive.
 class ClipboardSnapshot {
 public:
     ClipboardSnapshot() {
         const HRESULT hr = OleInitialize(nullptr);
         shouldUninitialize_ = SUCCEEDED(hr);
         if (FAILED(hr) && hr != S_FALSE) return;
-        readable_ = SUCCEEDED(OleGetClipboard(&dataObject_)) && dataObject_;
+        if (OpenClipboard(nullptr)) {
+            wasEmpty_ = CountClipboardFormats() == 0;
+            CloseClipboard();
+            if (wasEmpty_) {
+                readable_ = true;
+                return;
+            }
+        }
+        IDataObject* source = nullptr;
+        if (SUCCEEDED(OleGetClipboard(&source)) && source) {
+            IEnumFORMATETC* formats = nullptr;
+            if (SUCCEEDED(SHCreateDataObject(nullptr, 0, nullptr, nullptr,
+                                             IID_PPV_ARGS(&dataObject_))) &&
+                SUCCEEDED(source->EnumFormatEtc(DATADIR_GET, &formats)) && formats) {
+                readable_ = true;
+                FORMATETC format = {};
+                HRESULT next;
+                size_t copiedFormats = 0;
+                while ((next = formats->Next(1, &format, nullptr)) == S_OK) {
+                    STGMEDIUM medium = {};
+                    const HRESULT got = source->GetData(&format, &medium);
+                    if (SUCCEEDED(got)) format.tymed = medium.tymed;
+                    const bool copied = SUCCEEDED(got) &&
+                        SUCCEEDED(dataObject_->SetData(&format, &medium, TRUE));
+                    if (SUCCEEDED(got) && !copied) ReleaseStgMedium(&medium);
+                    CoTaskMemFree(format.ptd);
+                    format = {};
+                    if (!copied) {
+                        readable_ = false;
+                        break;
+                    }
+                    ++copiedFormats;
+                }
+                if (FAILED(next) || copiedFormats == 0) readable_ = false;
+            }
+            if (formats) formats->Release();
+            source->Release();
+        }
         if (!readable_ && OpenClipboard(nullptr)) {
             wasEmpty_ = CountClipboardFormats() == 0;
             readable_ = wasEmpty_;
@@ -98,7 +135,6 @@ public:
     }
 
     ~ClipboardSnapshot() {
-        Restore();
         if (dataObject_) dataObject_->Release();
         if (shouldUninitialize_) OleUninitialize();
     }
@@ -107,64 +143,137 @@ public:
     ClipboardSnapshot& operator=(const ClipboardSnapshot&) = delete;
 
     bool Readable() const { return readable_; }
+    bool FlushPending() const { return flushPending_; }
+    bool IsCurrentOleClipboard() const {
+        return flushPending_ && dataObject_ && OleIsCurrentClipboard(dataObject_) == S_OK;
+    }
 
-    void Restore() {
-        if (restored_) return;
-        restored_ = true;
-        if (!readable_) return;
+    // Abandons clipboard restoration so that the destructor does not overwrite
+    // user clipboard contents when sequence check fails or snapshot is superseded.
+    void Dismiss() noexcept { dismissed_ = true; }
+
+    bool Restore() {
+        if (dismissed_) return true;
+        if (restored_) return true;
+        if (!readable_) {
+            restored_ = true;
+            return true;
+        }
         if (wasEmpty_) {
-            if (OpenClipboard(nullptr)) {
-                EmptyClipboard();
-                CloseClipboard();
+            if (!OpenClipboard(nullptr)) {
+                return false;
             }
-            return;
+            const bool emptied = EmptyClipboard() != FALSE;
+            CloseClipboard();
+            if (!emptied) return false;
+            restored_ = true;
+            return true;
         }
-        if (!dataObject_) return;
-        if (SUCCEEDED(OleSetClipboard(dataObject_))) {
-            // Materialize delayed-rendered formats so releasing our snapshot
-            // cannot invalidate the restored clipboard contents.
-            OleFlushClipboard();
+        if (!dataObject_) {
+            restored_ = true;
+            return true;
         }
+        if (!flushPending_) {
+            if (FAILED(OleSetClipboard(dataObject_))) return false;
+            flushPending_ = true;
+        }
+        // Materialize delayed formats before releasing the original IDataObject.
+        if (FAILED(OleFlushClipboard())) return false;
+        restored_ = true;
+        return true;
     }
 
 private:
     IDataObject* dataObject_ = nullptr;
     bool readable_ = false;
     bool restored_ = false;
+    bool dismissed_ = false;
+    bool flushPending_ = false;
     bool wasEmpty_ = false;
     bool shouldUninitialize_ = false;
 };
 
-inline bool SetClipboardText(const std::wstring& text) {
+struct ClipboardWriteResult {
+    bool written = false;
+    bool changed = false;
+    DWORD sequence = 0;
+};
+
+inline ClipboardWriteResult SetClipboardText(const std::wstring& text, HWND ownerWnd,
+                                            DWORD expectedSequence,
+                                            bool excludeFromHistory = true) {
+    ClipboardWriteResult result;
+    if (!ownerWnd || !expectedSequence || text.empty() ||
+        text.size() > SIZE_MAX / sizeof(wchar_t) - 1) return result;
+
+    const UINT cfIgnore = excludeFromHistory
+        ? RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing") : 0;
+    if (excludeFromHistory && !cfIgnore) return result;
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, (text.size() + 1) * sizeof(wchar_t));
+    HGLOBAL ignore = excludeFromHistory ? GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD)) : nullptr;
+    if (!memory || (excludeFromHistory && !ignore)) {
+        if (memory) GlobalFree(memory);
+        if (ignore) GlobalFree(ignore);
+        return result;
+    }
+    void* destination = GlobalLock(memory);
+    DWORD* ignoreValue = ignore ? static_cast<DWORD*>(GlobalLock(ignore)) : nullptr;
+    if (!destination || (ignore && !ignoreValue)) {
+        if (destination) GlobalUnlock(memory);
+        if (ignoreValue) GlobalUnlock(ignore);
+        GlobalFree(memory);
+        GlobalFree(ignore);
+        return result;
+    }
+    memcpy(destination, text.c_str(), (text.size() + 1) * sizeof(wchar_t));
+    if (ignoreValue) *ignoreValue = 0;
+    GlobalUnlock(memory);
+    if (ignore) GlobalUnlock(ignore);
+
     for (int attempt = 0; attempt < 5; ++attempt) {
-        if (!OpenClipboard(nullptr)) {
+        if (!OpenClipboard(ownerWnd)) {
             Sleep(5);
             continue;
         }
-        EmptyClipboard();
-        const SIZE_T bytes = (text.size() + 1) * sizeof(wchar_t);
-        HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
-        if (!memory) {
+        if (GetClipboardSequenceNumber() != expectedSequence) {
             CloseClipboard();
-            return false;
+            break;
         }
-        void* destination = GlobalLock(memory);
-        if (!destination) {
-            GlobalFree(memory);
+        if (!EmptyClipboard()) {
             CloseClipboard();
-            return false;
+            Sleep(5);
+            continue;
         }
-        memcpy(destination, text.c_str(), bytes);
-        GlobalUnlock(memory);
-        if (!SetClipboardData(CF_UNICODETEXT, memory)) {
-            GlobalFree(memory);
-            CloseClipboard();
-            return false;
+        result.changed = true;
+        bool markerReady = !excludeFromHistory;
+        if (excludeFromHistory && SetClipboardData(cfIgnore, ignore)) {
+            ignore = nullptr;
+            markerReady = true;
         }
+        if (markerReady && SetClipboardData(CF_UNICODETEXT, memory)) {
+            memory = nullptr;
+            result.written = true;
+        }
+        // Protected writes install the exclusion before the transcript.
+        if (!result.written) EmptyClipboard();
         CloseClipboard();
-        return true;
+        // Windows can synthesize formats and advance the sequence at close.
+        // A pre-close number would reject our own successful write. If another
+        // application copied at close, do not submit a paste of its contents.
+        if (GetClipboardOwner() == ownerWnd) {
+            result.sequence = GetClipboardSequenceNumber();
+        } else {
+            result.written = false;
+        }
+        break;
     }
-    return false;
+    if (memory) GlobalFree(memory);
+    if (ignore) GlobalFree(ignore);
+    return result;
+}
+
+inline bool IsSelectionPasswordReadable(HRESULT queryResult, BOOL isPassword) {
+    return queryResult == S_OK && isPassword == FALSE;
 }
 
 inline bool TryReadSelectionWithUiAutomation(HWND focusWindow,
@@ -199,6 +308,26 @@ inline bool TryReadSelectionWithUiAutomation(HWND focusWindow,
             error = "UIA_NO_FOCUS";
             break;
         }
+        BOOL isPassword = FALSE;
+        const HRESULT passwordResult = focused->get_CurrentIsPassword(&isPassword);
+        if (!IsSelectionPasswordReadable(passwordResult, isPassword)) {
+            error = isPassword ? "PASSWORD_SELECTION" : "PASSWORD_QUERY_FAILED";
+            break;
+        }
+
+        DWORD focusProcessId = 0;
+        if (!focusWindow || !IsWindow(focusWindow) ||
+            !GetWindowThreadProcessId(focusWindow, &focusProcessId)) {
+            error = "UIA_FOCUS_UNAVAILABLE";
+            break;
+        }
+        int uiaProcessId = 0;
+        if (focused->get_CurrentProcessId(&uiaProcessId) != S_OK ||
+            uiaProcessId <= 0 ||
+            static_cast<DWORD>(uiaProcessId) != focusProcessId) {
+            error = "UIA_PROCESS_MISMATCH";
+            break;
+        }
 
         UIA_HWND nativeWindowValue = nullptr;
         focused->get_CurrentNativeWindowHandle(&nativeWindowValue);
@@ -227,11 +356,13 @@ inline bool TryReadSelectionWithUiAutomation(HWND focusWindow,
             IUIAutomationTextRange* range = nullptr;
             if (FAILED(ranges->GetElement(index, &range)) || !range) continue;
             BSTR text = nullptr;
-            if (SUCCEEDED(range->GetText(-1, &text)) && text) {
+            const int remaining = static_cast<int>(kMaxSelectionChars - selectedText.size() + 1);
+            if (SUCCEEDED(range->GetText(remaining, &text)) && text) {
                 selectedText.append(text, SysStringLen(text));
                 SysFreeString(text);
             }
             range->Release();
+            if (selectedText.size() > kMaxSelectionChars) break;
         }
 
         if (selectedText.size() > kMaxSelectionChars) {
@@ -255,41 +386,41 @@ inline bool TryReadSelectionWithUiAutomation(HWND focusWindow,
     return ok;
 }
 
-inline bool TryReadSelectionWithClipboard(HWND targetWindow,
-                                          HWND focusWindow,
-                                          std::wstring& selectedText,
-                                          std::string& error) {
+inline bool TryReadSelectionWithWin32(HWND focusWindow,
+                                      std::wstring& selectedText,
+                                      std::string& error) {
     selectedText.clear();
-    error.clear();
-    ClipboardSnapshot snapshot;
-    if (!snapshot.Readable()) {
-        error = "CLIPBOARD_BUSY";
+    error = "WIN32_SELECTION_UNAVAILABLE";
+    wchar_t className[64] = {};
+    if (!focusWindow || !GetClassNameW(focusWindow, className, 64) ||
+        (_wcsicmp(className, L"Edit") != 0 &&
+         _wcsnicmp(className, L"RichEdit", 8) != 0)) return false;
+    if (GetWindowLongPtrW(focusWindow, GWL_STYLE) & ES_PASSWORD) {
+        error = "PASSWORD_SELECTION";
         return false;
     }
-
-    HWND copyTarget = IsWindow(focusWindow) ? focusWindow : targetWindow;
+    DWORD start = 0;
+    DWORD end = 0;
     DWORD_PTR ignored = 0;
-    bool sent = false;
-    if (copyTarget) {
-        sent = SendMessageTimeoutW(copyTarget, WM_COPY, 0, 0,
-                                   SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                                   500, &ignored) != 0;
-    }
-    if (!sent && targetWindow && targetWindow != copyTarget) {
-        sent = SendMessageTimeoutW(targetWindow, WM_COPY, 0, 0,
-                                   SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                                   500, &ignored) != 0;
-    }
-
-    bool ok = sent && ReadClipboardText(selectedText) &&
-              selectedText.size() <= kMaxSelectionChars &&
-              HasNonWhitespace(selectedText);
-    snapshot.Restore();
-    if (!ok) {
+    DWORD_PTR length = 0;
+    constexpr UINT flags = SMTO_ABORTIFHUNG | SMTO_BLOCK;
+    if (!SendMessageTimeoutW(focusWindow, EM_GETSEL, reinterpret_cast<WPARAM>(&start),
+                             reinterpret_cast<LPARAM>(&end), flags, 500, &ignored) ||
+        start >= end ||
+        !SendMessageTimeoutW(focusWindow, WM_GETTEXTLENGTH, 0, 0, flags, 500, &length) ||
+        length > kMaxSelectionChars || end > length) return false;
+    std::wstring text(length + 1, L'\0');
+    DWORD_PTR copied = 0;
+    if (!SendMessageTimeoutW(focusWindow, WM_GETTEXT, text.size(),
+                             reinterpret_cast<LPARAM>(text.data()), flags, 500, &copied) ||
+        end > copied) return false;
+    selectedText = text.substr(start, end - start);
+    if (!HasNonWhitespace(selectedText)) {
         selectedText.clear();
-        error = sent ? "WM_COPY_NO_TEXT" : "WM_COPY_FAILED";
+        return false;
     }
-    return ok;
+    error.clear();
+    return true;
 }
 
 inline SelectionContext Capture() {
@@ -314,21 +445,34 @@ inline SelectionContext Capture() {
     std::string uiaError;
     if (TryReadSelectionWithUiAutomation(result.focusWindow,
                                          result.selectedText, uiaError)) {
+        if (TopLevelWindow(GetForegroundWindow()) != result.targetWindow) {
+            result.selectedText.clear();
+            result.error = "FOREGROUND_CHANGED";
+            return result;
+        }
         result.hasSelection = true;
         result.capturedWithUiAutomation = true;
         return result;
     }
 
-    std::string copyError;
-    if (TryReadSelectionWithClipboard(result.targetWindow,
-                                      result.focusWindow,
-                                      result.selectedText, copyError)) {
+    if (uiaError == "PASSWORD_SELECTION" || uiaError == "PASSWORD_QUERY_FAILED") {
+        result.error = uiaError;
+        return result;
+    }
+    std::string win32Error;
+    if (TryReadSelectionWithWin32(result.focusWindow,
+                                  result.selectedText, win32Error)) {
+        if (TopLevelWindow(GetForegroundWindow()) != result.targetWindow) {
+            result.selectedText.clear();
+            result.error = "FOREGROUND_CHANGED";
+            return result;
+        }
         result.hasSelection = true;
-        result.capturedWithClipboard = true;
+        result.capturedWithWin32 = true;
         return result;
     }
 
-    result.error = copyError.empty() ? uiaError : copyError;
+    result.error = win32Error.empty() ? uiaError : win32Error;
     if (result.error.empty()) result.error = "SELECTION_NOT_AVAILABLE";
     return result;
 }
@@ -348,15 +492,13 @@ inline bool VerifyCurrentUiAutomationSelection(const SelectionContext& context) 
     return current == context.selectedText;
 }
 
-inline bool VerifyCurrentClipboardSelection(const SelectionContext& context) {
-    if (!context.capturedWithClipboard) return true;
+inline bool VerifyCurrentWin32Selection(const SelectionContext& context) {
+    if (!context.capturedWithWin32) return true;
     if (!context.Usable()) return false;
 
     std::wstring current;
     std::string error;
-    if (!TryReadSelectionWithClipboard(context.targetWindow,
-                                       context.focusWindow,
-                                       current, error)) {
+    if (!TryReadSelectionWithWin32(context.focusWindow, current, error)) {
         return false;
     }
     return current == context.selectedText;
@@ -364,7 +506,7 @@ inline bool VerifyCurrentClipboardSelection(const SelectionContext& context) {
 
 inline bool VerifyCurrentSelection(const SelectionContext& context) {
     return VerifyCurrentUiAutomationSelection(context) &&
-           VerifyCurrentClipboardSelection(context);
+           VerifyCurrentWin32Selection(context);
 }
 
 } // namespace selection_context

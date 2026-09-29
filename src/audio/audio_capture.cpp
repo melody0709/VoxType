@@ -136,6 +136,7 @@ bool StartAudioCapture(std::wstring& error,
             g_audioLevel.store(0.0f);
             EnterCriticalSection(&g_audioLock);
             g_audioData.clear();
+            if (g_wasapiCapture.IsInitialized()) g_wasapiCapture.RequestResamplerReset();
             g_captureSuppressed.store(false, std::memory_order_release);
             LeaveCriticalSection(&g_audioLock);
             debug_log::Write("event=capture_keepalive_resume backend=%s",

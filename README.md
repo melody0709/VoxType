@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.11.6</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.11.7</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -51,11 +51,12 @@ Interactive menu for model selection, auto-downloads and extracts to `models/` d
 .\build.bat
 ```
 
-Requires Visual Studio 2022 (C++ desktop development workload).
+Requires Visual Studio 2022 (C++ desktop development workload) and PowerShell 7 (`pwsh` on PATH).
 
 To run the offline protocol/request regression tests (Qwen and shared cloud-ASR
-JSON/protocol handling, LLM request/response policy, and diagnostic
-WAV/metrics/privacy/retention; no network or microphone required):
+JSON/protocol handling, LLM request/response policy, diagnostic
+WAV/metrics/privacy/retention, audio resampling, and clipboard rollback in a
+private window station; no network or microphone required):
 
 ```powershell
 .\build.bat --test
@@ -288,6 +289,8 @@ CHANGELOG.md        — Version change log
 See [CHANGELOG.md](CHANGELOG.md)
 
 **Recent Updates:**
+
+- **v0.11.7** — Fixed the hotkey watchdog stop/restart loop, hardened lock cancellation and clipboard rollback, added FIR/sinc resampling with silence and utterance boundaries, and expanded offline regression checks
 - **v0.9.27** — Added Microsoft MAI Transcribe 2 batch ASR through OpenRouter or Azure Speech API, DPAPI-isolated credentials, final-only Settings guidance, retry/fallback/diagnostics/replay integration, and offline request/response regression coverage
 - **v0.9.26** — Hardened shared cloud-ASR JSON parsing, Baidu token/retry/timeout handling, Volcengine initialization and cancellation, streaming session activation, Settings test result isolation, and cross-thread audio/diagnostic state; added offline ASR protocol coverage
 - **v0.9.25** — Added shared failure/audio diagnostics for every ASR stage, bounded local WAV/JSON retention, Settings folder/delete controls, generic cross-backend WAV replay, and regression coverage; also refreshed and hardened the LLM provider/request pipeline

@@ -15,6 +15,8 @@
 #include <vector>
 #include <cstdint>
 
+#include "audio_resampler.h"
+
 constexpr UINT32 kWasapiTargetSampleRate = 16000;
 constexpr UINT32 kWasapiTargetChannels = 1;
 constexpr UINT32 kWasapiTargetBits = 16;
@@ -37,6 +39,8 @@ public:
 
     bool Init(const std::wstring& deviceId = L"");
     bool Start(std::wstring& error);
+    // Apply on the capture thread when a kept-alive device starts a new utterance.
+    void RequestResamplerReset() { m_resamplerResetPending.store(true, std::memory_order_release); }
     void SetCaptureGeneration(uint64_t generation) {
         m_captureGeneration.store(generation, std::memory_order_release);
     }
@@ -78,8 +82,8 @@ private:
     std::wstring m_deviceId;
     bool m_usedDefaultDevice{true};
 
-    double m_resampleRatio{1.0};
-    double m_resamplePhase{0.0};
+    AudioResampler m_resampler;
+    std::atomic<bool> m_resamplerResetPending{false};
 
     std::thread m_captureThread;
     std::atomic<bool> m_running{false};

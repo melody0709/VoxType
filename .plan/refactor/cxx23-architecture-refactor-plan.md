@@ -3,6 +3,7 @@
 > **文档定位**：机器可验证的 AI 施工标准与架构契约守卫文档（取代愿景型白皮书）。  
 > **基线规范**：必须通过 `tools/check_architecture.ps1` 静态断言与 `build.bat --test` 全量回归。  
 > **制定日期**：2026-09-17  
+> **2026-09-29 现状注记**：下文 Windows PowerShell 5.1 的解码事故与 `voxtype_build_flags` 目标属于当时的取证和目标设计。当前 `build.bat` 调用 PowerShell 7，CMake 各 target 直接设置 `/utf-8` 与 `/EHsc`；此处的旧片段保留作历史背景，当前实现以源码和 `AGENTS.md` 为准。
 
 ---
 
@@ -27,7 +28,7 @@
 通过 `tools/check_architecture.ps1` 实施只减不增（Ratcheting）守卫的绝对基线：
 
 > **测量口径（强制性）**：所有源码必须用 **UTF-8** 解码后统计，禁止用 `Get-Content`。
-> 原因：`build.bat` 调用的是 Windows PowerShell **5.1**，其 `Get-Content` 默认按 ANSI 代码页（本机 CP936）解码；UTF-8 源码中**紧跟非 ASCII 字节的换行会被吞掉**，实测使 `main.cpp` 少算 8 行（2751 vs 2759）、`settings.cpp` 少算 11 行（4394 vs 4405）、`globals.h` 的 extern 少算 1 条（90 vs 91）。守卫脚本统一使用 `[System.IO.File]::ReadAllLines()`。
+> 历史原因：当时 `build.bat` 调用 Windows PowerShell **5.1**，其 `Get-Content` 默认按 ANSI 代码页（本机 CP936）解码；UTF-8 源码中**紧跟非 ASCII 字节的换行会被吞掉**，实测使 `main.cpp` 少算 8 行（2751 vs 2759）、`settings.cpp` 少算 11 行（4394 vs 4405）、`globals.h` 的 extern 少算 1 条（90 vs 91）。守卫脚本仍统一使用 `[System.IO.File]::ReadAllLines()`。
 
 | 监控指标 | 物理基线值 | 测量方法 | 违规判据 |
 | :--- | :--- | :--- | :--- |

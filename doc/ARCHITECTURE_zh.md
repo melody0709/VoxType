@@ -17,7 +17,7 @@ flowchart LR
     ASR --> Punct["CT-Transformer 标点"]
     Punct --> Frontend
     Cloud --> Frontend
-    Frontend --> Inject["剪贴板 + Ctrl+V"]
+    Frontend --> Inject["WM_PASTE / Unicode 输入 / WM_CHAR"]
 ```
 
 ## 进程
@@ -45,7 +45,7 @@ flowchart LR
 |------|------|
 | `src/app/` | 程序入口、主窗口、录音编排、Win32 资源 |
 | `src/asr/` | 本地 ASR 引擎、ASR Provider 客户端、批量/流式 session、指标统计、结果分发 |
-| `src/audio/` | 音频采集（WASAPI / waveIn）、FireRed VAD、流式 VAD trim |
+| `src/audio/` | 音频采集（WASAPI / waveIn）、有状态重采样、FireRed VAD、流式 VAD trim |
 | `src/ui/` | HUD、HUD 分页、热键、Settings 窗口、UI 主题资源与控件 |
 | `src/platform/` | 平台集成（文本注入器、剪贴板、Windows 消息模拟） |
 | `src/core/` | 核心窗口消息与状态、路径服务、配置存取、LLM 纠错、输入框上下文读取 |
@@ -57,10 +57,11 @@ flowchart LR
 | `src/core/config_store.h` / `src/core/config_store.cpp` | 配置数据模型（`Config`）、schema 迁移、DPAPI 凭据加密与 JSON 读写 |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | 程序与模型运行目录路径解析、日志与配置文件路径查询 |
 | `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | 通用自定义词汇表管理器：多模式解析（JSON/行格式）、权重比例线性折算与跨 ASR 引擎转译 |
-| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 目标窗口直接文本注入（剪贴板粘贴与针对微信的 WM_CHAR 逐字流式投递） |
+| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 标准控件粘贴完成回调、Unicode 或微信 WM_CHAR 文本投递，以及有条件的剪贴板回滚 |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | 本地 sherpa-onnx 识别器、VAD 探测器、标点模型生命周期管理、预加载及 DLL 安全探测 |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | 线程安全的各阶段耗时指标度量（VAD、ASR、标点、云端 API、LLM） |
 | `src/audio/audio_capture.h` / `src/audio/audio_capture.cpp` | 麦克风音频采集生命周期（WASAPI / waveIn）、缓冲区管理、RMS 音量计算 |
+| `src/audio/audio_resampler.h` / `src/audio/audio_resampler.cpp` | 48→16 kHz Kaiser FIR 抽取、非整数比例 Sinc 重采样、PCM16 转换及每轮录音重置 |
 | `src/audio/audio_diagnostics.h` / `src/audio/audio_diagnostics.cpp` | provider 无关的采集/stage 诊断、PCM 指标、WAV/SHA-256/JSON 持久化、留存与受管目录操作 |
 | `src/audio/streaming_vad_trimmer.h` / `src/audio/streaming_vad_trimmer.cpp` | 云端流式 ASR session 可复用的 provider-independent PCM VAD trim |
 | `src/asr/asr_session.h` / `src/asr/asr_session.cpp` | Local、百度、MiMo、Qwen 和 Doubao IME recorded 路径的批量 ASR session 抽象 |
@@ -169,8 +170,12 @@ Settings 是普通 Win32 窗口，目前分 5 个 tab：
 
 当前使用 WASAPI Shared Mode（v0.7.3 起），自动 fallback 到 `waveIn`：
 
-- WASAPI：以系统混合格式（通常 48kHz/32bit float/立体声）捕获，通过线性插值重采样到 16kHz/16bit/单声道
+- WASAPI：以系统混合格式（通常 48kHz/32bit float/立体声）捕获，混成单声道后通过 `AudioResampler` 转为 16kHz/16bit。48→16 kHz 使用 348 抽头/347 阶 Kaiser FIR（截止 7.5 kHz，约 5.57 MMAC/s）；其他比例使用 64 相位、32 抽头 Sinc 表；同采样率直接转 PCM16。
 - waveIn fallback：16kHz/16bit/单声道，4 个约 100ms buffer
+
+采集线程申请 MMCSS `Audio` 优先级并复用包缓冲区容量。WASAPI 静音包送入等长零样本；保活恢复请求由采集线程重置重采样历史。非整数采样率使用以 `1/outRate` 为单位的整数源位置分子，不再因分包方式改变相位桶；44.1→16 kHz 整批/分块测试输出逐样本一致。滤波器需要前瞻（48 kHz 路径约 3.6ms），当前没有显式冲刷尾部。正常松键后 150ms 延时另属采集策略。
+
+正常 KEYUP 停录由键盘钩子负责；500ms 定时器只检查 60s 硬上限，不通过 `GetAsyncKeyState` 轮询被吞掉的按键，也不清空仍按住的热键状态。KEYUP 丢失时只能等时长上限。WTS 锁屏、注销、远程或控制台断开都会失效化当前 ASR/LLM 结果，清理延迟停录/重按及流式 VAD 状态、终止流式会话、关闭录音或保活中的麦克风并隐藏 HUD；锁屏或断开期间忽略开始命令。重新连接不会自行解除锁屏标志，解锁也不会自行解除断开标志。WTS 注册失败每 5s 重试直至成功。
 
 普通录音不会写入磁盘。早期单一
 `%APPDATA%\VoxType\last_recording.wav` 行为早已删除。新的
@@ -316,9 +321,13 @@ models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8/model.
 当前实现（`PasteTextImeAware`）：
 
 1. **微信**（`Weixin.exe`）：`WM_CHAR` 逐字符发送（微信自定义 Qt 控件拦截 Ctrl+V）
-2. **其他应用**：剪贴板 + `Ctrl+V` + IMM32 临时切换英文模式
-3. **Force Unicode Input**（可选）：`SendInput` + `KEYEVENTF_UNICODE` 逐字符发送
-4. 所有路径使用 `SendMessageTimeoutW` + `SMTO_ABORTIFHUNG` + 2 秒超时，防止目标窗口挂起阻塞 UI
+2. **标准 Edit/RichEdit/Scintilla 控件**：开启“保留原剪贴板”时通过 `SendMessageCallbackW` 发送 `WM_PASTE`，完成回调后恢复；关闭时写入整段文本并发送 Ctrl+V，并沿用旧版粘贴前临时切换前台 IME 为英文的处理，转写保留在剪贴板历史中。保护模式下粘贴尚未完成时，普通听写输入走 Unicode，避免覆写正在消费的剪贴板；选区改写拒绝第二次编辑。
+3. **其他应用**：默认使用同一套剪贴板、Ctrl+V 与 IME 处理；开启“保留原剪贴板”时改用 `SendInput` + `KEYEVENTF_UNICODE`，不改剪贴板或 IME 状态。
+4. **Force Unicode Input**（可选）：所有目标都走 Unicode。发送失败会反馈；API 发送/完成成功不等于目标接受了文本（例如只读控件可忽略 `WM_PASTE`）。
+
+保护模式的快照在写入前将各格式实体化到独立的 Shell 数据对象。内存、快照或隐私标记准备失败时不发布正文；恢复失败且临时内容仍属于 VoxType 时持续重试。快速模式为避免富文本或延迟渲染格式拖慢日常粘贴，刻意跳过完整快照；虽然先分配正文并检查 `EmptyClipboard`，但清空成功后若 `SetClipboardData` 罕见失败，旧剪贴板仍可能丢失，快速模式不能承诺回滚。`CloseClipboard` 可能合成格式并提高序列号，因此在关闭后读取最终序列号并再次检查所有者。恢复前发现序列号或所有者改变就放弃；但检查与 OLE 恢复不是对外部同时复制的原子操作。恢复失败首次及随后每分钟、粘贴 10 秒未完成及随后每分钟写一次无正文的有界诊断日志。目标程序始终不完成粘贴时，临时内容可能保留到退出；固定延迟不作为已消费的证明。
+
+选区改写通过 UI Automation 或 Edit/RichEdit 原生选区消息读取，已移除 `WM_COPY` 回退。Scintilla 的改写依赖可用的 UIA 选区支持，当前未接入其原生 `SCI_GETSELECTION*` 消息。密码框及 UIA 密码属性查询失败时拒绝读取；UIA 焦点必须属于起始进程，可能耗时的选区读取结束后再次核对前台窗口。文本上限 200,000 字符；标准控件剪贴板粘贴无法启动时，只有重新核对选区、焦点且无先前 pending 粘贴才回退 Unicode。不支持的选区提供者直接失败，不改剪贴板。逐字输入在前台窗口改变时停止；同一窗口内的元素级焦点切换仍需集成验证。UIA/OLE 调用仍可能阻塞调用线程。
 
 ## 配置
 
@@ -344,6 +353,7 @@ Portable 包通过 `<app-root>\portable.flag` 识别，并继续使用解压目�
   "enable_partial": true,
   "postprocess": "itn",
   "hotkey": "CapsLock",
+  "restore_clipboard_after_paste": false,
   "diagnostic_audio_mode": "off",
   "llm_provider": "DeepSeek",
   "llm_providers_json": "{\"DeepSeek\":{\"endpoint\":\"https://api.deepseek.com\",\"api_key\":\"<encrypted>\",\"model\":\"deepseek-v4-flash\",\"extra_params\":\"\\\"thinking\\\":{\\\"type\\\":\\\"disabled\\\"}\"}}",
@@ -394,6 +404,7 @@ Portable 包通过 `<app-root>\portable.flag` 识别，并继续使用解压目�
 - `asr_backend`：当前 ASR 后端（`local`、`baidu`、`volcengine`、`qwen`、`mimo`、`doubao_ime` 或 `qwen_free`）。
 - `fallback_asr_backend`：可选串行 fallback（`none`、`local`、`baidu`、`qwen`、`mimo`、`doubao_ime` 或 `qwen_free`），必须与 `asr_backend` 不同；火山引擎不是 fallback target。
 - `diagnostic_audio_mode`：全部 ASR provider/stage 共用的录音诊断策略（`off`、`failures` 或 `all`），默认 `off`。
+- `restore_clipboard_after_paste`：是否保护原剪贴板（默认 `false`）。General 页以相反语义展示“Fast paste + clipboard history”，默认勾选；勾选时优先整段写入剪贴板并发送 Ctrl+V，转写可进入 Win+V；未勾选时对自绘控件使用 Unicode，对标准控件在完成回调后恢复原剪贴板。只有保护模式会对部分写入失败执行回滚，微信始终使用 `WM_CHAR`。已有配置值在界面改名后保持原有含义。
 - `qwen_*`：Qwen ASR 的三种 profile、北京 Audio 3 HTTP/WSS 地址、语言提示、词汇 JSON、语义标点、句间静音、多阈值、heartbeat、噪声阈值和 chunk 配置。上下文增强是三个相互独立的开关——`qwen_enable_input_context`（焦点输入框）、`qwen_history_context` 与 `qwen_history_context_rounds`（来自 `src/core/asr_history.*` 的最近最终转写，1–5 轮，默认开启），以及火山引擎对应项 `volc_enable_input_context` / `volc_enable_context` + `volc_context_history` / `volc_reuse_vocabulary`。焦点字段快照仅在运行时存在，不持久化。旧 realtime 的 turn detection 仍固定 Manual，不再持久化。
 - `qwen_free_*`：千问 IME Free 启用状态、bundled `VoiceInputWrite` 后处理开关、实验性选区改写、本地协议诊断和可选 shell 目录覆盖。UTDID 通常自动获取，不放入普通示例配置。
 - `mimo_*`：MiMo ASR API key、OpenAI-compatible Base URL、模型和语言（`auto`、`zh`、`en`）；`mimo_api_key` 使用 DPAPI 加密。

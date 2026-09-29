@@ -61,5 +61,8 @@ bool IsStopDelayHeldForRepress();
 void SetStopDelayHeldForRepress(bool held);
 void SetCaptureConfigStale(bool stale);
 
+void OnRecordingWatchdogTimer();
+void OnSessionLock();
+
 extern std::unique_ptr<IStreamingAsrSession> g_activeStreamingSession;
 

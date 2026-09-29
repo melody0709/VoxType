@@ -33,10 +33,17 @@
 #include <thread>
 #include <cstdio>
 #include <algorithm>
+#include <wtsapi32.h>
+
+#pragma comment(lib, "wtsapi32.lib")
 
 static UINT g_taskbarCreatedMessage = 0;
 static bool s_debugConsoleOpen = false;
 static StreamingPartialHudState s_streamingPartialHudState;
+static int s_wtsRetryCount = 0;
+static bool s_wtsRegistered = false;
+static bool s_sessionLocked = false;
+static bool s_sessionDisconnected = false;
 
 void SetTaskbarCreatedMessage(UINT msg) {
     g_taskbarCreatedMessage = msg;
@@ -212,10 +219,39 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         SetHotkeyTargetWindow(hwnd);
         AddTrayIcon(hwnd);
         InstallKeyboardHook();
+        s_wtsRegistered = WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) != FALSE;
+        if (!s_wtsRegistered) {
+            asr_runtime_log::Write("event=wts_register_failed error=0x%08lx", GetLastError());
+            s_wtsRetryCount = 0;
+            SetTimer(hwnd, kWtsRetryTimer, 5000, nullptr);
+        }
         // 启动时把日志开关同步一次。放在这里而不是 main.cpp：主窗口在
         // LoadConfig() 之后创建，语义等价，同时避免 main.cpp 的行数棘轮被顶上基线。
         // Settings 保存与托盘 Debug 开关各自另有同步点。
         asr_runtime_log::ApplyRuntimeLogConfig(g_config);
+        return 0;
+    case WM_WTSSESSION_CHANGE:
+        if (wParam == WTS_SESSION_LOCK || wParam == WTS_SESSION_LOGOFF) {
+            s_sessionLocked = true;
+            OnSessionLock();
+        } else if (wParam == WTS_REMOTE_DISCONNECT || wParam == WTS_CONSOLE_DISCONNECT) {
+            s_sessionDisconnected = true;
+            OnSessionLock();
+        } else if (wParam == WTS_REMOTE_CONNECT || wParam == WTS_CONSOLE_CONNECT) {
+            // Reconnection alone does not unlock a locked session.
+            s_sessionDisconnected = false;
+        } else if (wParam == WTS_SESSION_UNLOCK) {
+            s_sessionLocked = false;
+        }
+        return 0;
+    case kClipboardDiagnosticMessage:
+        if (wParam == kClipboardRestoreFailed) {
+            asr_runtime_log::WriteIf(true, "event=clipboard_restore_retry failures=%llu",
+                                    static_cast<unsigned long long>(lParam));
+        } else if (wParam == kClipboardPasteStillPending) {
+            asr_runtime_log::WriteIf(true, "event=clipboard_paste_pending elapsed_ms=%llu",
+                                    static_cast<unsigned long long>(lParam));
+        }
         return 0;
     case kTrayMessage:
         if (LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU) {
@@ -251,6 +287,8 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         return 0;
     }
     case kHotkeyRecordingMessage:
+        if ((s_sessionLocked || s_sessionDisconnected) &&
+            (wParam == kHotkeyCaptureBegin || wParam == kHotkeyRecordingStart)) return 0;
         if (wParam == kHotkeyCaptureBegin) {
             BeginCaptureOnly();
         } else if (wParam == kHotkeyCaptureDiscard) {
@@ -366,7 +404,11 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                         if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
                     }
                 } else {
-                    PasteTextImeAware(text, resultConfig.forceUnicodeInput);
+                    delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput);
+                    if (!delivered) {
+                        ShowHud(L"Text input failed");
+                        if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
+                    }
                 }
                 double pasteMs = tPaste.ElapsedMs();
                 VolcDebugLog("DeliverFinalText: done (%.0fms, delivered=%d)",
@@ -450,7 +492,11 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
                 }
             } else {
-                PasteTextImeAware(text, resultConfig.forceUnicodeInput);
+                delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput);
+                if (!delivered) {
+                    ShowHud(L"Text input failed");
+                    if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
+                }
             }
             double pasteMs = tPaste.ElapsedMs();
 
@@ -522,6 +568,27 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             }
             return 0;
         }
+        if (wParam == kRecordingWatchdogTimer) {
+            OnRecordingWatchdogTimer();
+            return 0;
+        }
+        if (wParam == kClipboardRestoreTimer) {
+            platform::OnClipboardRestoreTimer();
+            return 0;
+        }
+        if (wParam == kWtsRetryTimer) {
+            if (WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION)) {
+                KillTimer(hwnd, kWtsRetryTimer);
+                s_wtsRetryCount = 0;
+                s_wtsRegistered = true;
+                asr_runtime_log::Write("event=wts_register_retry_success");
+            } else {
+                const DWORD err = GetLastError();
+                if (++s_wtsRetryCount % 12 == 0)
+                    asr_runtime_log::Write("event=wts_register_retry_failed error=0x%08lx attempts=%d", err, s_wtsRetryCount);
+            }
+            return 0;
+        }
         if (wParam == kStreamingWatchdogTimer) {
             KillTimer(hwnd, kStreamingWatchdogTimer);
             if (g_recording) {
@@ -533,6 +600,9 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     recordingLimitMs = g_activeStreamingSession->MaxRecordingMs();
                 }
                 LeaveCriticalSection(&g_streamingSessionCs);
+                if (recordingLimitMs == 0 || recordingLimitMs > kMaxRecordingDurationMs) {
+                    recordingLimitMs = static_cast<DWORD>(kMaxRecordingDurationMs);
+                }
                 if (recordingLimitMs > 0) {
                     const ULONGLONG elapsedMs = GetTickCount64() - GetSessionStartTick();
                     if (elapsedMs >= recordingLimitMs) {
@@ -619,6 +689,10 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         DestroyWindow(hwnd);
         return 0;
     case WM_DESTROY:
+        if (s_wtsRegistered) WTSUnRegisterSessionNotification(hwnd);
+        KillTimer(hwnd, kWtsRetryTimer);
+        KillTimer(hwnd, kRecordingWatchdogTimer);
+        platform::CleanupClipboardOnExit();
         KillTimer(hwnd, kStreamingWatchdogTimer);
         KillTimer(hwnd, kRecordingStopDelayTimer);
         KillTimer(hwnd, kMicKeepAliveTimer);
