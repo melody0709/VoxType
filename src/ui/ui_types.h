@@ -49,11 +49,25 @@ constexpr int GeneralGroupX = 30;
 constexpr int GeneralGroupW = 788;
 constexpr int GeneralShortcutGroupH = 170;
 constexpr int GeneralInputGroupGap = 16;
-constexpr int GeneralInputGroupH = 68;
+// Two rows: the input-preview toggles, then the voice text cleanup row
+// (punctuation mode + spacing). Keeping both inside the existing group lets the
+// static layout validator derive the tab bottom from the same constants.
+constexpr int GeneralInputGroupH = 142;
 constexpr int GeneralInputCheckOffsetY = 26;
 constexpr int GeneralInputCheckW = 200;
 constexpr int GeneralRestoreClipboardOffsetX = 220;
 constexpr int GeneralRestoreClipboardW = 480;
+constexpr int GeneralCleanupRowOffsetY = 64;
+constexpr int GeneralCleanupLabelW = 130;
+constexpr int GeneralCleanupComboOffsetX = 148;
+constexpr int GeneralCleanupComboW = 232;
+constexpr int GeneralCleanupCheckOffsetX = 400;
+constexpr int GeneralCleanupCheckW = 360;
+// Third row: local learning loop toggle plus its data reset button.
+constexpr int GeneralLearningRowOffsetY = 102;
+constexpr int GeneralLearningCheckW = 360;
+constexpr int GeneralLearningClearOffsetX = 400;
+constexpr int GeneralLearningClearW = 220;
 constexpr int GeneralStartupGroupGap = 16;
 constexpr int GeneralStartupGroupH = 112;
 constexpr int GeneralStartupCheckOffsetY = 24;
@@ -471,3 +485,9 @@ constexpr int IDC_VOCAB_TAB_HINT = 2245;
 constexpr int IDC_VOCAB_TAB_GROUP = 2246;
 constexpr int IDC_VOCAB_TAB_OPEN_FOLDER = 2247;
 constexpr int IDC_RESTORE_CLIPBOARD = 2248;
+constexpr int IDC_VOICE_PUNCT_MODE = 2249;
+constexpr int IDC_VOICE_SPACING = 2250;
+constexpr int IDC_LEARNING_ENABLED = 2251;
+constexpr int IDC_LEARNING_CLEAR = 2252;
+constexpr int IDC_DOUBAO_CONTEXT_ENABLED = 2253;
+constexpr int IDC_LLM_ORGANIZE = 2254;

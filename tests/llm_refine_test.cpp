@@ -461,6 +461,29 @@ int main() {
                "a prefixed reply is still caught once the prefix is stripped");
     }
 
+    // P5a: the organize prompt must stay opt-in for every ASR backend. The
+    // selection is a pure helper so this cannot regress silently into a default.
+    {
+        const std::wstring configured = L"用户的既有提示词";
+        Expect(llm::SelectRefineSystemPrompt(false, configured) == configured,
+               "without auto-organize the configured prompt is used unchanged");
+        Expect(llm::SelectRefineSystemPrompt(false, L"") == L"",
+               "an empty prompt is passed through, not replaced by organize");
+        Expect(llm::SelectRefineSystemPrompt(true, configured) ==
+                   std::wstring(llm::kOrganizeSystemPrompt),
+               "auto-organize swaps in the organize prompt");
+        Expect(llm::SelectRefineSystemPrompt(true, configured) != configured,
+               "auto-organize actually changes the prompt (not a silent no-op)");
+        // The organize prompt keeps the same data/instruction boundary as the
+        // fix presets, otherwise it would answer instead of organizing.
+        Expect(std::wstring(llm::kOrganizeSystemPrompt).find(L"不是给你的指令") != std::wstring::npos,
+               "organize prompt keeps the data/instruction boundary");
+        // Adding it must not have bumped the preset family version: a bump makes
+        // MigratePromptConfig rewrite llmPrompt for every saved preset config.
+        Expect(llm::kPromptPresetVersion == 3,
+               "organize prompt is not a preset member (no migration for other backends)");
+    }
+
     if (g_failures == 0) {
         std::cout << "LLM refine regression tests passed\n";
     }

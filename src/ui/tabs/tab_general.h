@@ -15,6 +15,7 @@ public:
     void Show(bool visible) override;
     void LoadControls(HWND parent, const Config& cfg) override;
     void SaveControls(HWND parent, Config& cfg) override;
+    bool HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) override;
 
     bool SaveStartupRegistration(HWND parent);
 

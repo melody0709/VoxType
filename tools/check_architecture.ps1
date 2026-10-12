@@ -66,6 +66,15 @@ $BASELINES = @{
     SettingsLines           = 400
     LayerViolations         = 2
     GlobalsCrossLayerHeader = 0
+    # Contract: every src module has an entry in the architecture documents.
+    # Measured 2026-10-12 as UNIQUE-MODULE counts (basename without extension,
+    # whole-word match), after the grouped ui/tabs and ui/providers rows were made
+    # to name their members. The pre-existing undocumented modules are a named
+    # debt in AGENTS.md; each round should ratchet these numbers DOWN, and the
+    # ratchet only forbids NEW undocumented modules. `src/app/resource.*` is
+    # build-derived and stays out.
+    DocEntriesMissingEn     = 28
+    DocEntriesMissingZh     = 35
 }
 
 # Allowed layer dependencies: key = layer of the including file,
@@ -214,6 +223,50 @@ Record-Result -Name "Hard: src/core has zero upper-layer dependency" `
     -Passed ($coreViolations.Count -eq 0) `
     -Details "$($coreViolations.Count) violation(s)"
 foreach ($v in $coreViolations) { Write-Host "    ! $($v.File) -> $($v.Include)" -ForegroundColor Red }
+
+# -----------------------------------------------------------------------------
+# 3.5 Contract: every src module is listed in both architecture documents.
+#     A new module that never reaches the file table is a silent DoD miss (the
+#     build stays green while the written contract rots), and the two language
+#     versions can rot independently, so both are checked.
+#
+#     Counted MODULES (unique basename without extension), not files, so a .h and
+#     .cpp pair counts once. A module counts as documented when its basename
+#     appears as a whole word - not inside a longer identifier - so a grouped row
+#     like "`src/ui/tabs/` | panels: `tab_general`, ..." satisfies the check by
+#     naming its members, while a name buried inside another identifier does not.
+#     tests/ and the build-derived resource.* stay out. The known undocumented
+#     modules are a named debt in AGENTS.md ("architecture documentation debt").
+# -----------------------------------------------------------------------------
+$archDocMissing = @()
+$archZhDocMissing = @()
+$archDocPath = Join-Path $PSScriptRoot "..\ARCHITECTURE.md"
+$archZhDocPath = Join-Path $PSScriptRoot "..\doc\ARCHITECTURE_zh.md"
+$contractSources = @(Get-ChildItem -Path (Join-Path $PSScriptRoot "..\src") -Recurse -Include *.h,*.cpp -File |
+    Where-Object { $_.Name -notmatch '^resource\.' })
+$contractModules = @($contractSources | ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.Name) } |
+    Sort-Object -Unique)
+$archDocText = if (Test-Path $archDocPath) { [System.IO.File]::ReadAllText((Resolve-Path $archDocPath).Path) } else { "" }
+$archZhDocText = if (Test-Path $archZhDocPath) { [System.IO.File]::ReadAllText((Resolve-Path $archZhDocPath).Path) } else { "" }
+foreach ($m in $contractModules) {
+    $moduleRe = '(?<![A-Za-z0-9_])' + [regex]::Escape($m) + '(?![A-Za-z0-9_])'
+    if ($archDocText -notmatch $moduleRe) { $archDocMissing += $m }
+    if ($archZhDocText -notmatch $moduleRe) { $archZhDocMissing += $m }
+}
+
+Record-Result -Name "Contract: src modules listed in ARCHITECTURE.md" `
+    -Passed ($archDocMissing.Count -le $BASELINES["DocEntriesMissingEn"]) `
+    -Details "$($archDocMissing.Count) / $($BASELINES['DocEntriesMissingEn']) missing (current/max_allowed)"
+if ($VerboseOutput -or $archDocMissing.Count -gt $BASELINES["DocEntriesMissingEn"]) {
+    foreach ($m in $archDocMissing) { Write-Host "    ! ARCHITECTURE.md lacks: $m" -ForegroundColor Red }
+}
+
+Record-Result -Name "Contract: src modules listed in doc/ARCHITECTURE_zh.md" `
+    -Passed ($archZhDocMissing.Count -le $BASELINES["DocEntriesMissingZh"]) `
+    -Details "$($archZhDocMissing.Count) / $($BASELINES['DocEntriesMissingZh']) missing (current/max_allowed)"
+if ($VerboseOutput -or $archZhDocMissing.Count -gt $BASELINES["DocEntriesMissingZh"]) {
+    foreach ($m in $archZhDocMissing) { Write-Host "    ! ARCHITECTURE_zh.md lacks: $m" -ForegroundColor Red }
+}
 
 # -----------------------------------------------------------------------------
 # 3. CMake target structure

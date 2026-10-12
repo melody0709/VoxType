@@ -257,6 +257,8 @@ void InitializeRegistry() {
     reg.Register({"vad_smooth_window", &Config::vadSmoothWindow});
     reg.Register({"enable_partial", &Config::enablePartial, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"postprocess", &Config::postprocess});
+    reg.Register({"voice_punct_mode", &Config::voicePunctMode});
+    reg.Register({"voice_spacing_enabled", &Config::voiceSpacingEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"hotkey", &Config::hotkey});
     reg.Register({"enable_llm", &Config::enableLlm, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"llm_provider", &Config::llmProvider});
@@ -269,6 +271,7 @@ void InitializeRegistry() {
     reg.Register({"llm_prompt_preset_version", &Config::llmPromptPresetVersion});
     reg.Register({"llm_vocabulary_injection", &Config::llmVocabularyInjection, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"enable_llm_debug", &Config::enableLlmDebug, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"voice_auto_organize_enabled", &Config::voiceAutoOrganizeEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"enable_debug_mode", &Config::enableDebugMode, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"force_unicode_input", &Config::forceUnicodeInput, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"restore_clipboard_after_paste", &Config::restoreClipboardAfterPaste, CryptoPolicy::None, BoolJsonFormat::Literal});
@@ -323,6 +326,14 @@ void InitializeRegistry() {
     reg.Register({"qwen_enable_continue_context", &Config::qwenEnableContinueContext, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"qwen_history_context", &Config::qwenHistoryContext, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"qwen_history_context_rounds", &Config::qwenHistoryContextRounds});
+    reg.Register({"asr_learning_enabled", &Config::asrLearningEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"asr_learning_reflect_delay_ms", &Config::asrLearningReflectDelayMs});
+    reg.Register({"asr_learning_max_pairs", &Config::asrLearningMaxPairs});
+    reg.Register({"asr_undo_enabled", &Config::asrUndoEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
+    // `asr_undo_window_ms` is deliberately not registered yet: S3 (double-press
+    // undo) is the only consumer and it is not implemented, so a registered key
+    // would be dead configuration. It comes back with S3.
+    reg.Register({"doubao_context_enabled", &Config::doubaoContextEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"qwen_special_word_replace", &Config::qwenSpecialWordReplaceList});
     reg.Register({"qwen_special_word_empty", &Config::qwenSpecialWordEmptyList});
     reg.Register({"qwen_system_reserved_filter", &Config::qwenSystemReservedFilter, CryptoPolicy::None, BoolJsonFormat::Literal});

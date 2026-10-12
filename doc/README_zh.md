@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.11.7</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.11.8</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -162,6 +162,9 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
   - `Polish (auto)` 是 bundled `VoiceInputWrite` 后处理的唯一开关。`Punctuation included` 和 `Correction included` 是只读能力提示，因为原版端点在同一个响应中完成标点和纠错，并不是三个独立 HTTP 请求。实验性的 `Rewrite selection` 代码路径仍保留用于协议研究，但当前在 Settings 中禁用，并且会在配置加载/保存时强制关闭。其请求字段仍是基于逆向证据的兼容映射，需拿到原版同场景真实请求/响应对照后才可作为正式能力启用。
   - `Debug log` 只开启本地千问协议诊断日志，不改变识别结果。
 - 云端 ASR 由远端完成识别；启用 VAD 时，Qwen 和火山引擎使用本地 streaming VAD trim，批量云端后端使用 batch VAD trim 后再上传，千问 IME Free/Doubao IME 直接上传完整原始 PCM/Opus，不走本地 VAD，而是依赖服务端分段。本地标点模型在云端后端下仍不生效
+- **面向全部后端的本地文本清理（默认关闭）**：`标点处理` 可选 `keep_all`（默认）、`space_replace`（标点转空格）、`remove_trailing`（每行去掉一个尾标点）；`中英/数字间加空格` 按脚本边界插空格。两者都按官方豆包输入法逆向出的规则实现：精确标点集合、尾标点保留集、纯数字旁路（`50%`、`3.14` 不被改坏）与 AutoSpace 谓词。出厂默认下最终文本**逐字节原样**通过，已由 `tests/text_post_process_test.cpp` 锁定。
+- **从你自己的修改中学习（默认关闭；全部后端）**：开启后，每次上屏都会对前台文档做一次读回，提取局部 `原词 → 改词` 对并落盘；学习词并入热词表（总量 ≤64、**最低权重**、永不进入 50 权重档、永不覆盖显式词条）。**学到的词会随具备热词通道的云端后端（Qwen、火山）作为热词上传**——这是它影响识别的唯一途径，因此请把该开关理解为"允许把派生自文档的词发给服务端"。关闭后既不读回、也不再使用已学词；General 页的 `Clear learned data` 可删除存储。敏感焦点 fail-closed：不读回、不落盘。配置键：`asr_learning_enabled`（对应 General 复选框）、`asr_learning_reflect_delay_ms`、`asr_learning_max_pairs`。
+- **豆包会话上下文（`doubao_context_enabled`，默认关闭）**：随会话开始上传最近的对话轮次与热词，线位为官方 SDK 使用的 `extra["context"]`。服务端接受该字段，但 A/B 实测未观察到转写变化，因此保持关闭；不希望把文档文本发给服务端时请保持关闭。
 
 **Audio & Advanced tab**（音频与高级）
 - `Enable VAD` — 开启人声检测，录音前先判断是否有语音，无人声时跳过 ASR 以节省时间。5 个声学参数（`Threshold`、`Min silence`、`Min speech`、`Pad start`、`Smooth win`）一并收纳于此，识别页不再堆叠微调项。
@@ -255,6 +258,7 @@ CHANGELOG.md        — 版本变更记录
 
 **最近更新：**
 
+- **v0.11.8** — 新增可选的语音文本清理（标点模式与中英/数字间空格，默认关闭）、从用户自身修改中本地学习、可选的豆包会话上下文上传（默认关闭）；加固共用文本/词表/提示词路径，保证其余后端在默认配置下逐字节不变
 - **v0.11.7** — 修复热键看门狗反复停录/启动，加固锁屏取消与剪贴板回滚，加入 FIR/Sinc 重采样及静音、录音边界处理，扩充离线回归检查
 - **v0.9.27** — 新增 Microsoft MAI Transcribe 2 batch ASR，支持 OpenRouter/Azure 双通道、独立 DPAPI 凭据、final-only Settings 提示、retry/fallback/诊断/replay 共用链路及离线协议回归测试
 - **v0.9.25** — 为全部 ASR stage 增加共用失败录音诊断、有界本地 WAV/JSON 留存、Settings 打开/删除入口、通用跨后端 WAV replay 和回归测试；同时更新并加固 LLM 供应商/请求链路

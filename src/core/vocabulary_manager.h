@@ -6,6 +6,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include <expected>
 #include <cstdint>
@@ -23,6 +24,15 @@ inline constexpr int kOrdinaryWeightDefault = 4;
 inline constexpr int kSuperHotwordWeight = 50;
 inline constexpr size_t kQwenMaxSuperHotwords = 50;
 inline constexpr size_t kMaxVocabularyEntries = 2000;
+// Upper bound on learned corrections merged into runtime word lists. Learned
+// words are a hint, not a vocabulary: a small tail keeps them from crowding the
+// user's explicit list out of the provider context.
+inline constexpr size_t kMaxLearnedVocabularyWords = 64;
+
+// Weight given to a learned correction when it is merged into the runtime
+// vocabulary. Lowest possible on purpose: see MergeLearnedEntries for why the
+// ordering invariant ("explicit vocabulary wins") depends on it.
+inline constexpr int kLearnedVocabularyWeight = 1;
 
 struct VocabularyEntry {
     std::wstring word;
@@ -100,8 +110,29 @@ constexpr size_t kLlmVocabularyMaxEntries = 200;
 // ("git tag" must not become "gittag").
 std::wstring BuildLlmVocabularySection(const VocabularyList& entries);
 
+// Learned corrections (P2) merged into the runtime word lists.
+//
+// Pure policy, unit-tested:
+//   * a learned word never replaces or duplicates an explicit vocabulary entry
+//     (learned data may only protect spellings the user already trusts);
+//   * every learned word is appended at kLearnedVocabularyWeight (the lowest), so
+//     it can never outrank an explicit entry in the weight-ordered hotword string
+//     or the capped LLM section, and can never consume one of the 50 super-hotword
+//     slots;
+//   * at most maxExtra learned words are appended, best first.
+VocabularyList MergeLearnedEntries(const VocabularyList& entries,
+                                   const std::vector<std::pair<std::wstring, int>>& learned,
+                                   size_t maxExtra = 64);
+
 // Convenience Accessors
-VocabularyList GetEffectiveVocabularyEntries(const std::wstring& fallbackConfigVocab = L"");
-std::wstring GetEffectiveQwenVocabulary(const std::wstring& fallbackConfigVocab = L"");
+//
+// `includeLearned` deliberately has NO default: the learned words are private
+// data derived from the user's document and they are uploaded as hotwords by the
+// cloud backends that have a hotword channel, so every caller must decide
+// explicitly. All production callers pass `config.asrLearningEnabled`.
+VocabularyList GetEffectiveVocabularyEntries(const std::wstring& fallbackConfigVocab,
+                                            bool includeLearned);
+std::wstring GetEffectiveQwenVocabulary(const std::wstring& fallbackConfigVocab,
+                                        bool includeLearned);
 
 } // namespace vocabulary_manager

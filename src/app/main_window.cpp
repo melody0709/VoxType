@@ -21,6 +21,8 @@
 #include "settings.h"
 #include "text_injector.h"
 #include "input_context.h"
+#include "injection_ledger.h"
+#include "learning_intake.h"
 #include "ui_utils.h"
 #include "engine_local.h"
 #include "path_service.h"
@@ -253,8 +255,15 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                                     static_cast<unsigned long long>(lParam));
         }
         return 0;
-    case kTrayMessage:
-        if (LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU) {
+    case kInjectionReflectionMessage: {
+        std::unique_ptr<InjectionReflection> reflection(
+            reinterpret_cast<InjectionReflection*>(lParam));
+        if (reflection) {
+            learning_intake::HandleReflection(*reflection, g_config);
+        }
+        return 0;
+    }
+    case kTrayMessage:        if (LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU) {
             ShowTrayMenu(hwnd);
         } else if (LOWORD(lParam) == WM_LBUTTONDBLCLK) {
             ShowSettingsWindow(hwnd);
@@ -404,7 +413,18 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                         if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
                     }
                 } else {
-                    delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput);
+                    InjectionContext injection;
+                    injection.sourceText = text;
+                    // Same fail-closed answer the history already uses: a focus
+                    // we could not verify is treated as sensitive.
+                    injection.sensitive =
+                        input_context::MustSkipHistoryForFocus(resultConfig.asrSensitiveProbe);
+                    injection.capturePreSelection = resultConfig.asrUndoEnabled;
+                    injection.reflectionDelayMs =
+                        resultConfig.asrLearningEnabled
+                            ? static_cast<DWORD>((std::max)(0, resultConfig.asrLearningReflectDelayMs))
+                            : 0;
+                    delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput, &injection);
                     if (!delivered) {
                         ShowHud(L"Text input failed");
                         if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
@@ -492,7 +512,17 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
                 }
             } else {
-                delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput);
+                InjectionContext injection;
+                injection.sourceText = text;
+                injection.llmApplied = true;
+                injection.sensitive =
+                    input_context::MustSkipHistoryForFocus(resultConfig.asrSensitiveProbe);
+                injection.capturePreSelection = resultConfig.asrUndoEnabled;
+                injection.reflectionDelayMs =
+                    resultConfig.asrLearningEnabled
+                        ? static_cast<DWORD>((std::max)(0, resultConfig.asrLearningReflectDelayMs))
+                        : 0;
+                delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput, &injection);
                 if (!delivered) {
                     ShowHud(L"Text input failed");
                     if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);

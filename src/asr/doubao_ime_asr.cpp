@@ -4,8 +4,10 @@
 
 #include "doubao_ime_asr.h"
 
+#include "asr_runtime_log.h"
 #include "audio_diagnostics.h"
 #include "cloud_http_common.h"
+#include "doubao_ime_payload.h"
 #include "utils.h"
 
 #include <bcrypt.h>
@@ -947,26 +949,108 @@ bool GetAsrToken(DoubaoConnection& conn, DoubaoImeConfig& cfg, std::wstring& err
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// S4 carrier experiment hook (retained diagnostic tool, not a migration path).
+//
+// Lets tools\asr_audio_replay.bat exercise the real StartSession payload with an
+// AsrContext base64 without adding production config/UI surface first. With no
+// environment variables set the payload is byte-identical to production.
+//   VOXTYPE_DOUBAO_CTX_B64  : base64 AsrContext; empty/absent -> disabled
+//   VOXTYPE_DOUBAO_CTX_SLOT : extra (default) | top | bad_json | bad_type |
+//                             extra_full (replace the whole extra object body)
+//   VOXTYPE_DOUBAO_EXTRA_JSON : raw extra object body used by extra_full
+// "bad_json"/"bad_type" are deliberately invalid controls: they only pass if the
+// server really parses the start payload, which proves the instrument works.
+//   VOXTYPE_DOUBAO_PUNCT     : "0"/"1" override of enable_punctuation (absent ->
+//                              the configured value). Used by the A/B recipe in
+//                              doc/volcengine/README.md to answer "does the
+//                              service punctuate on its own?" without touching
+//                              the hardcoded default in doubao_ime_config.h.
+// ---------------------------------------------------------------------------
+std::wstring ReadEnvironmentValue(const wchar_t* name) {
+    const DWORD needed = GetEnvironmentVariableW(name, nullptr, 0);
+    if (needed == 0) return {};
+    std::wstring value(needed, L'\0');
+    const DWORD written = GetEnvironmentVariableW(name, value.data(), needed);
+    if (written == 0 || written >= needed) return {};
+    value.resize(written);
+    return value;
+}
+
+// Returns true when the environment pinned enable_punctuation; `enabled` then
+// carries the pinned value. Only "0" and "1" are accepted so a stray variable
+// cannot silently flip the wire field.
+bool ReadDoubaoPunctuationOverride(bool& enabled) {
+    const std::wstring raw = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_PUNCT");
+    if (raw == L"0" || raw == L"1") {
+        enabled = raw == L"1";
+        return true;
+    }
+    return false;
+}
+
+struct DoubaoContextExperiment {
+    std::string base64;
+    std::string slot = "extra";
+    std::string extraJson;
+};
+
+DoubaoContextExperiment ReadDoubaoContextExperiment() {
+    DoubaoContextExperiment experiment;
+    const std::wstring raw = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_CTX_B64");
+    const std::wstring extraJson = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_EXTRA_JSON");
+    if (raw.empty() && extraJson.empty()) return experiment;
+    if (!raw.empty()) experiment.base64 = WideToUtf8(raw);
+    if (!extraJson.empty()) experiment.extraJson = WideToUtf8(extraJson);
+    std::wstring slot = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_CTX_SLOT");
+    if (!slot.empty()) {
+        for (wchar_t& ch : slot) {
+            ch = static_cast<wchar_t>(towlower(ch));
+        }
+        experiment.slot = WideToUtf8(slot);
+    }
+    return experiment;
+}
+
 std::string BuildStartSessionPayload(const DoubaoImeConfig& cfg) {
-    std::ostringstream oss;
-    oss << "{";
-    oss << "\"audio_info\":{";
-    oss << "\"channel\":" << cfg.channels << ",";
-    oss << "\"format\":\"speech_opus\",";
-    oss << "\"sample_rate\":" << cfg.sampleRate;
-    oss << "},";
-    oss << "\"enable_punctuation\":" << (cfg.enablePunctuation ? "true" : "false") << ",";
-    oss << "\"enable_speech_rejection\":false,";
-    oss << "\"extra\":{";
-    oss << "\"app_name\":\"com.android.chrome\",";
-    oss << "\"cell_compress_rate\":8,";
-    oss << "\"did\":\"" << EscapeJson(cfg.deviceId) << "\",";
-    oss << "\"enable_asr_threepass\":true,";
-    oss << "\"enable_asr_twopass\":true,";
-    oss << "\"input_mode\":\"tool\"";
-    oss << "}";
-    oss << "}";
-    return oss.str();
+    const DoubaoContextExperiment experiment = ReadDoubaoContextExperiment();
+
+    // The JSON assembly itself lives in doubao_ime_payload.h (pure, no Config,
+    // no logging) so an offline test can freeze the exact production bytes.
+    doubao_ime_payload::Fields fields;
+    fields.channels = cfg.channels;
+    fields.sampleRate = cfg.sampleRate;
+    fields.enablePunctuation = cfg.enablePunctuation;
+    if (ReadDoubaoPunctuationOverride(fields.enablePunctuation)) {
+        asr_runtime_log::Write("event=doubao_punct_experiment enable_punctuation=%d",
+                               fields.enablePunctuation ? 1 : 0);
+    }
+    fields.deviceIdEscaped = EscapeJson(cfg.deviceId);
+    fields.contextBase64 = cfg.contextBase64;
+
+    doubao_ime_payload::ContextOverride override;
+    if (!experiment.base64.empty() || !experiment.extraJson.empty()) {
+        override.active = true;
+        override.base64 = experiment.base64;
+        if (experiment.slot == "extra_full" && !experiment.extraJson.empty()) {
+            // Caller-supplied extra body (official-equivalent carrier probe).
+            override.extraBodyOverride = experiment.extraJson;
+        } else if (experiment.slot == "top") {
+            override.slot = doubao_ime_payload::ContextOverride::Slot::TopLevel;
+        } else if (experiment.slot == "bad_json") {
+            override.slot = doubao_ime_payload::ContextOverride::Slot::MalformedJson;
+        } else if (experiment.slot == "bad_type") {
+            override.slot = doubao_ime_payload::ContextOverride::Slot::WrongType;
+        }
+    }
+
+    const std::string payload = doubao_ime_payload::BuildStartSessionPayload(fields, override);
+    if (!experiment.base64.empty()) {
+        asr_runtime_log::Write(
+            "event=doubao_context_experiment slot=%s b64_len=%zu payload_len=%zu",
+            experiment.slot.c_str(), experiment.base64.size(), payload.size());
+    }
+    return payload;
 }
 
 std::string BuildAudioPayload(long long timestampMs) {
@@ -1541,8 +1625,26 @@ bool IsAuthFailure(const std::wstring& error) {
            lower.find(L"credential") != std::wstring::npos;
 }
 
+// 服务端按"设备身份"拒绝会话：50700000 = 无法为该 session 路由到后端
+// （service discovery failure）；4020011 = 该身份的并发配额超限。
+// 两者都不是传输问题，也无法靠普通重试恢复；重注册换新身份即可立即恢复
+// （2026-10-12 实机 3/3 验证，见 reverse/work/20261012-doubao-ime-extraction E-008）。
+// 状态码只匹配 "status=<code>" 形态（ResponseFailureText 的固定后缀），不用裸数字
+// 子串：注册失败路径会把原始响应体拼进错误文本，16 位 did 中理论上可含同样数字串。
+bool IsIdentityRefusal(const std::wstring& error) {
+    std::wstring lower = LowerCase(error);
+    return lower.find(L"status=50700000") != std::wstring::npos ||
+           lower.find(L"status=4020011") != std::wstring::npos ||
+           lower.find(L"service discovery failure") != std::wstring::npos ||
+           lower.find(L"concurrency quota exceeded") != std::wstring::npos;
+}
+
 bool IsTransientFailure(const std::wstring& error) {
     std::wstring lower = LowerCase(error);
+    // 身份拒绝（50700000/4020011）也按可重试处理：被拒身份会被清空重注册，
+    // 重试实际换用新身份；实测被拒会话后的首次新身份仍有概率再被拒
+    // （疑为边缘节点抖动），多一次重试可显著提高单次会话的恢复率。
+    if (IsIdentityRefusal(error)) return true;
     return lower.find(L"timeout") != std::wstring::npos ||
            lower.find(L"timed out") != std::wstring::npos ||
            lower.find(L"connection") != std::wstring::npos ||
@@ -1623,7 +1725,8 @@ RecordedRecognitionResult RecognizeRecordedPcm(const DoubaoImeConfig& cfg,
         std::wstring error;
         if (!client.Connect(error)) {
             const bool authFailure = IsAuthFailure(error);
-            if (client.CredentialsChanged() && !authFailure) {
+            const bool identityRefusal = IsIdentityRefusal(error);
+            if (client.CredentialsChanged() && !authFailure && !identityRefusal) {
                 Credentials credentials = client.CurrentCredentials();
                 attemptCfg.deviceId = credentials.deviceId;
                 attemptCfg.cdid = credentials.cdid;
@@ -1634,13 +1737,16 @@ RecordedRecognitionResult RecognizeRecordedPcm(const DoubaoImeConfig& cfg,
             client.Close();
 
             audio_diagnostics::StageTerminal terminal;
-            terminal.terminal = authFailure ? "auth_error" : "connect_error";
-            terminal.reason = authFailure ? "auth_or_config" : "network";
+            terminal.terminal = authFailure ? "auth_error"
+                : (identityRefusal ? "identity_rejected" : "connect_error");
+            terminal.reason = authFailure ? "auth_or_config"
+                : (identityRefusal ? "identity_rejected" : "network");
             terminal.elapsedMs = static_cast<double>(GetTickCount64() - attemptStarted);
             audio_diagnostics::CompleteStage(
                 cfg.diagnosticAttemptId, diagnostic.kind, diagnostic.index, terminal);
 
-            if (!refreshedCredentials && authFailure && attempt + 1 < kMaxRecordedAttempts) {
+            if (!refreshedCredentials && (authFailure || identityRefusal) &&
+                attempt + 1 < kMaxRecordedAttempts) {
                 attemptCfg.deviceId.clear();
                 attemptCfg.cdid.clear();
                 attemptCfg.token.clear();
@@ -1691,12 +1797,25 @@ RecordedRecognitionResult RecognizeRecordedPcm(const DoubaoImeConfig& cfg,
             client.Abort();
             client.Close();
             result.error = ErrorText(error.empty() ? L"send failed" : error);
+            const bool identityRefusal = IsIdentityRefusal(error);
             audio_diagnostics::StageTerminal terminal;
-            terminal.terminal = "send_error";
-            terminal.reason = "network";
+            terminal.terminal = identityRefusal ? "identity_rejected" : "send_error";
+            terminal.reason = identityRefusal ? "identity_rejected" : "network";
             terminal.elapsedMs = static_cast<double>(GetTickCount64() - attemptStarted);
             audio_diagnostics::CompleteStage(
                 cfg.diagnosticAttemptId, diagnostic.kind, diagnostic.index, terminal);
+            if (!refreshedCredentials && attempt + 1 < kMaxRecordedAttempts &&
+                (IsAuthFailure(error) || identityRefusal)) {
+                // 身份拒绝也可能出现在会话建立之后（后端分配阶段才被拒），
+                // 这里必须同连接失败一样清凭据重注册，否则原样重试必然再失败。
+                attemptCfg.deviceId.clear();
+                attemptCfg.cdid.clear();
+                attemptCfg.token.clear();
+                result.clearCredentials = true;
+                refreshedCredentials = true;
+                Sleep(300);
+                continue;
+            }
             if (attempt + 1 < kMaxRecordedAttempts && IsTransientFailure(error)) {
                 Sleep(attempt == 0 ? 500 : 1000);
                 continue;
@@ -1708,14 +1827,27 @@ RecordedRecognitionResult RecognizeRecordedPcm(const DoubaoImeConfig& cfg,
         if (!client.Finish(finalTimeoutMs, text, error)) {
             client.Close();
             result.error = ErrorText(error);
+            const bool identityRefusal = IsIdentityRefusal(error);
             audio_diagnostics::StageTerminal terminal;
-            terminal.terminal = error.find(L"timeout") != std::wstring::npos ||
-                    error.find(L"timed out") != std::wstring::npos
-                ? "timeout" : "transport_error";
-            terminal.reason = terminal.terminal == "timeout" ? "timeout" : "network";
+            terminal.terminal = identityRefusal ? "identity_rejected"
+                : (error.find(L"timeout") != std::wstring::npos ||
+                   error.find(L"timed out") != std::wstring::npos
+                    ? "timeout" : "transport_error");
+            terminal.reason = identityRefusal ? "identity_rejected"
+                : (terminal.terminal == "timeout" ? "timeout" : "network");
             terminal.elapsedMs = static_cast<double>(GetTickCount64() - attemptStarted);
             audio_diagnostics::CompleteStage(
                 cfg.diagnosticAttemptId, diagnostic.kind, diagnostic.index, terminal);
+            if (!refreshedCredentials && attempt + 1 < kMaxRecordedAttempts &&
+                (IsAuthFailure(error) || identityRefusal)) {
+                attemptCfg.deviceId.clear();
+                attemptCfg.cdid.clear();
+                attemptCfg.token.clear();
+                result.clearCredentials = true;
+                refreshedCredentials = true;
+                Sleep(300);
+                continue;
+            }
             if (attempt + 1 < kMaxRecordedAttempts && IsTransientFailure(error)) {
                 Sleep(attempt == 0 ? 500 : 1000);
                 continue;
@@ -1771,7 +1903,8 @@ TestResult TestConnection(const DoubaoImeConfig& cfg) {
         }
 
         const bool authFailure = IsAuthFailure(error);
-        if (client.CredentialsChanged() && !authFailure) {
+        const bool identityRefusal = IsIdentityRefusal(error);
+        if (client.CredentialsChanged() && !authFailure && !identityRefusal) {
             Credentials creds = client.CurrentCredentials();
             attemptCfg.deviceId = creds.deviceId;
             attemptCfg.cdid = creds.cdid;
@@ -1792,7 +1925,7 @@ TestResult TestConnection(const DoubaoImeConfig& cfg) {
         client.Close();
         lastError = error;
 
-        if (!refreshedCredentials && authFailure) {
+        if (!refreshedCredentials && (authFailure || identityRefusal)) {
             attemptCfg.deviceId.clear();
             attemptCfg.cdid.clear();
             attemptCfg.token.clear();

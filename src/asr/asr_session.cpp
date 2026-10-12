@@ -421,7 +421,8 @@ public:
         cfg.model = config_.qwenModel;
         cfg.languageHints = config_.qwenLanguageHints.empty() ? config_.qwenLanguage : config_.qwenLanguageHints;
         cfg.vocabularyId = config_.qwenVocabularyId;
-        cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(config_.qwenVocabulary);
+        cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(config_.qwenVocabulary,
+                                                                   config_.asrLearningEnabled);
         cfg.inputContextText = inputContextText_;
         // Independent of the focused-field switch: the history turns were
         // assembled from the history opt-in and must travel on their own.

@@ -46,6 +46,10 @@ add_executable(VoxType WIN32
     src/core/config_registry.cpp
     src/core/asr_history.cpp
     src/core/vocabulary_manager.cpp
+    src/core/injection_ledger.cpp
+    src/core/correction_extractor.cpp
+    src/core/learning_store.cpp
+    src/app/learning_intake.cpp
     src/core/asr_probe_service.cpp
     src/core/app_state.cpp
     src/audio/audio_capture.cpp
@@ -62,10 +66,12 @@ add_executable(VoxType WIN32
     src/asr/asr_result.cpp
     src/asr/asr_context.cpp
     src/asr/asr_dispatcher.cpp
+    src/asr/text_post_process.cpp
     src/asr/asr_runtime_log.cpp
     src/asr/cloud_asr_common.cpp
     src/asr/cloud_http_common.cpp
     src/asr/doubao_ime_asr.cpp
+    src/asr/doubao_ime_context.cpp
     src/asr/doubao_ime_streaming_session.cpp
     src/asr/mai_transcribe.cpp
     src/asr/mimo_asr.cpp
@@ -262,6 +268,8 @@ add_executable(asr_json_protocol_test
     src/core/config_registry.cpp
     src/core/path_service.cpp
     src/core/vocabulary_manager.cpp
+    src/core/learning_store.cpp
+    src/asr/doubao_ime_context.cpp
 )
 target_compile_definitions(asr_json_protocol_test PRIVATE
     UNICODE _UNICODE VOXTYPE_MAI_PROTOCOL_TEST=1)
@@ -367,7 +375,12 @@ set_target_properties(audio_resampler_test PROPERTIES
 )
 add_test(NAME audio_resampler_test COMMAND audio_resampler_test)
 
-add_executable(clipboard_test tests/clipboard_test.cpp)
+add_executable(clipboard_test
+    tests/clipboard_test.cpp
+    # The test compiles text_injector.cpp in-process, which now records into the
+    # injection ledger, so the ledger implementation must be linked here too.
+    src/core/injection_ledger.cpp
+)
 target_include_directories(clipboard_test PRIVATE
     "${CMAKE_SOURCE_DIR}/src/core" "${CMAKE_SOURCE_DIR}/src/platform"
 )
@@ -380,6 +393,41 @@ set_target_properties(clipboard_test PROPERTIES
 )
 add_test(NAME clipboard_test COMMAND clipboard_test)
 
+add_executable(text_post_process_test
+    tests/text_post_process_test.cpp
+    src/asr/text_post_process.cpp
+)
+target_include_directories(text_post_process_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/asr"
+    "${CMAKE_SOURCE_DIR}/src/core"
+)
+if(MSVC)
+    target_compile_options(text_post_process_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(text_post_process_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME text_post_process_test COMMAND text_post_process_test)
+
+add_executable(correction_learning_test
+    tests/correction_learning_test.cpp
+    src/core/correction_extractor.cpp
+    src/core/learning_store.cpp
+    src/core/injection_ledger.cpp
+    src/core/path_service.cpp
+    src/core/vocabulary_manager.cpp
+)
+target_include_directories(correction_learning_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/core"
+)
+if(MSVC)
+    target_compile_options(correction_learning_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(correction_learning_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME correction_learning_test COMMAND correction_learning_test)
+
 # Developer-only diagnostic replay utility. It reuses the production ASR
 # sessions but remains outside the canonical runtime payload and normal build.
 add_executable(asr_audio_replay EXCLUDE_FROM_ALL
@@ -391,6 +439,7 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/core/app_state.cpp
     src/core/asr_history.cpp
     src/core/vocabulary_manager.cpp
+    src/core/learning_store.cpp
     src/audio/audio_capture.cpp
     src/audio/audio_chunk_sink.cpp
     src/audio/audio_diagnostics.cpp
@@ -405,10 +454,12 @@ add_executable(asr_audio_replay EXCLUDE_FROM_ALL
     src/asr/asr_result.cpp
     src/asr/asr_context.cpp
     src/asr/asr_dispatcher.cpp
+    src/asr/text_post_process.cpp
     src/asr/asr_runtime_log.cpp
     src/asr/cloud_asr_common.cpp
     src/asr/cloud_http_common.cpp
     src/asr/doubao_ime_asr.cpp
+    src/asr/doubao_ime_context.cpp
     src/asr/doubao_ime_streaming_session.cpp
     src/asr/mai_transcribe.cpp
     src/asr/mimo_asr.cpp

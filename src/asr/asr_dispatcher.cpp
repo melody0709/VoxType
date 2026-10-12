@@ -6,6 +6,7 @@
 #include "asr_result.h"
 #include "asr_runtime_log.h"
 #include "input_context.h"
+#include "text_post_process.h"
 #include "app_state.h"
 #include "app_messages.h"
 
@@ -31,6 +32,43 @@ void DispatchAsrFinalText(HWND targetWindow,
     // a missing history entry can be explained from the log.
     const bool sensitiveFocus = input_context::MustSkipHistoryForFocus(config.asrSensitiveProbe);
     const bool usableText = IsUsableAsrTextForContext(text);
+    // Local cleanup runs before the history/LLM consumers so every downstream
+    // reader (shared history, provider context uploads, the injected text) sees
+    // the same final string. Unusable texts are never touched: that keeps the
+    // no-speech and operational-error semantics intact. A cleanup that would
+    // erase an otherwise usable transcript is refused - injecting nothing is
+    // worse than keeping a stray punctuation mark.
+    //
+    // `metadata.bundledPostProcessApplied` deliberately does NOT exempt this step.
+    // That flag's contract is LLM de-duplication only ("the provider has already
+    // produced the final post-processed text, so the main pipeline must not run
+    // its generic LLM on it a second time" - asr_streaming_session.h), and its
+    // only setter is the Qwen-free path, whose bundled response is a
+    // VoiceInputWrite / selection rewrite: a semantic rewrite, not punctuation
+    // formatting. The modes below are a local formatting preference, so letting
+    // that flag suppress them would silently drop a user setting for one backend.
+    // (Doubao never sets the flag - its DispatchFinal calls are single-argument.)
+    //
+    // Consequence, measured 2026-10-12 (see doc/volcengine/README.md): the Doubao
+    // IME service punctuates regardless of our enable_punctuation field, so a
+    // non-default mode composes with the service's punctuation instead of
+    // duplicating it - remove_trailing drops a mark the service just added,
+    // keep_all (the default) keeps it.
+    if (usableText) {
+        const text_post_process::PunctMode punctMode =
+            text_post_process::PunctModeFromString(config.voicePunctMode);
+        std::wstring processed = text_post_process::ApplyVoicePostProcess(text, config);
+        if (processed.empty()) {
+            asr_runtime_log::Write("event=voice_post_process_skipped reason=empty_result mode=%s",
+                                   text_post_process::PunctModeLogName(punctMode));
+        } else if (processed != text) {
+            asr_runtime_log::Write(
+                "event=voice_post_process mode=%s spacing=%d in_chars=%zu out_chars=%zu",
+                text_post_process::PunctModeLogName(punctMode),
+                config.voiceSpacingEnabled ? 1 : 0, text.size(), processed.size());
+            text = std::move(processed);
+        }
+    }
     if (asr_context::ShouldRecordHistory(usableText, sensitiveFocus)) {
         asr_history::Add(text);
     } else if (usableText && sensitiveFocus) {

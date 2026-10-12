@@ -3,6 +3,7 @@
 #endif
 
 #include "vocabulary_manager.h"
+#include "learning_store.h"
 #include "path_service.h"
 #include "utils.h"
 
@@ -753,25 +754,66 @@ std::wstring BuildLlmVocabularySection(const VocabularyList& entries) {
     return section;
 }
 
-VocabularyList GetEffectiveVocabularyEntries(const std::wstring& fallbackConfigVocab) {
+VocabularyList MergeLearnedEntries(const VocabularyList& entries,
+                                   const std::vector<std::pair<std::wstring, int>>& learned,
+                                   size_t maxExtra) {
+    VocabularyList merged = entries;
+    if (learned.empty() || maxExtra == 0) return merged;
+    size_t appended = 0;
+    for (const auto& learnedEntry : learned) {
+        if (appended >= maxExtra) break;
+        const std::wstring& word = learnedEntry.first;
+        if (word.empty() || !IsValidTerm(word)) continue;
+        bool known = false;
+        for (const VocabularyEntry& entry : merged) {
+            if (EqualsIgnoreCase(entry.word, word)) {
+                known = true;
+                break;
+            }
+        }
+        if (known) continue;
+        VocabularyEntry entry;
+        entry.word = word;
+        // Learned data is a hint, never user-confirmed vocabulary. Every consumer
+        // orders by `weight desc` with a stable sort and this list appends learned
+        // words last, so the lowest weight is what makes "explicit entries and the
+        // 50-weight super-hotword tier always come first" true by construction:
+        // the character-budgeted hotword string and the capped LLM section would
+        // otherwise let a learned word consume an explicit entry's slot. The
+        // store's own weight/hits still drive its eviction order; the value the
+        // store reports is deliberately not used here.
+        entry.weight = kLearnedVocabularyWeight;
+        merged.push_back(std::move(entry));
+        ++appended;
+    }
+    return merged;
+}
+
+VocabularyList GetEffectiveVocabularyEntries(const std::wstring& fallbackConfigVocab,
+                                            bool includeLearned) {
+    VocabularyList entries;
     auto fileRes = ReadVocabularyFile();
     if (fileRes) {
         auto parsed = ParseVocabularyText(*fileRes);
         if (parsed && !parsed->empty()) {
-            return *parsed;
+            entries = *parsed;
         }
     }
-    if (!fallbackConfigVocab.empty()) {
+    if (entries.empty() && !fallbackConfigVocab.empty()) {
         auto parsed = ParseVocabularyText(fallbackConfigVocab);
         if (parsed && !parsed->empty()) {
-            return *parsed;
+            entries = *parsed;
         }
     }
-    return {};
+    if (!includeLearned) return entries;
+    // The learning store is the only local correction source; it is merged here
+    // so every provider context builder and the LLM section see the same words.
+    return MergeLearnedEntries(entries, learning_store::WeightedWords(kMaxLearnedVocabularyWords));
 }
 
-std::wstring GetEffectiveQwenVocabulary(const std::wstring& fallbackConfigVocab) {
-    auto entries = GetEffectiveVocabularyEntries(fallbackConfigVocab);
+std::wstring GetEffectiveQwenVocabulary(const std::wstring& fallbackConfigVocab,
+                                        bool includeLearned) {
+    auto entries = GetEffectiveVocabularyEntries(fallbackConfigVocab, includeLearned);
     if (entries.empty()) return L"";
     std::string qwenJson = TranspileToQwenJson(entries);
     return Utf8ToWide(qwenJson);

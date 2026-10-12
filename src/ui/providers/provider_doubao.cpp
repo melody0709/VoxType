@@ -9,6 +9,8 @@
 #include "asr_probe_service.h"
 #include "app_messages.h"
 
+#include <windowsx.h>
+
 namespace ui_provider {
 
 namespace {
@@ -61,6 +63,14 @@ void ProviderDoubao::CreateControls(HWND parent) {
     HWND hint = CreateLabel(parent, S(UiStyle::InputLeft), S(UiStyle::RowInputY(3)), S(560), S(UiStyle::LabelH),
                             L"Experimental unofficial Doubao IME endpoint. No API key is required.");
     m_controls.push_back(hint);
+
+    // Opt-in context upload. Row 5 keeps clear of the Test button, whose row is
+    // pinned by scripts/validate_settings_layout.ps1.
+    HWND contextCheck = CreateCheckBox(
+        parent, IDC_DOUBAO_CONTEXT_ENABLED, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(5)),
+        S(660), S(UiStyle::CheckH),
+        L"Send recent context (dictation history + hotwords) with each session");
+    m_controls.push_back(contextCheck);
 }
 
 void ProviderDoubao::DestroyControls() {
@@ -78,10 +88,14 @@ void ProviderDoubao::Show(bool visible) {
 
 void ProviderDoubao::LoadControls(HWND parent, const Config& cfg) {
     RefreshDoubaoImeStatus(parent);
+    Button_SetCheck(GetDlgItem(parent, IDC_DOUBAO_CONTEXT_ENABLED),
+                    cfg.doubaoContextEnabled ? BST_CHECKED : BST_UNCHECKED);
 }
 
 void ProviderDoubao::SaveControls(HWND parent, Config& cfg) {
     // Runtime tokens and device id are managed directly in config
+    cfg.doubaoContextEnabled =
+        Button_GetCheck(GetDlgItem(parent, IDC_DOUBAO_CONTEXT_ENABLED)) == BST_CHECKED;
 }
 
 bool ProviderDoubao::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {

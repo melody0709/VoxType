@@ -58,6 +58,9 @@ flowchart LR
 | `src/core/path_service.h` / `src/core/path_service.cpp` | 程序与模型运行目录路径解析、日志与配置文件路径查询 |
 | `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | 通用自定义词汇表管理器：多模式解析（JSON/行格式）、权重比例线性折算与跨 ASR 引擎转译 |
 | `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 标准控件粘贴完成回调、Unicode 或微信 WM_CHAR 文本投递，以及有条件的剪贴板回滚 |
+| `src/core/correction_extractor.h` / `src/core/correction_extractor.cpp` | 学习链路的本地编辑提取器：把"注入文本 + 前台文档读回"变成差异对 `原词 → 改词`（前后缀裁剪、长度/标点/控制字符策略，以及带头/尾锚逐步缩短、折叠换行重试、尾部锚探测区域边界的文档级入口） |
+| `src/core/learning_store.h` / `src/core/learning_store.cpp` | 学习到的纠正对 JSONL 存储（`%LOCALAPPDATA%\VoxType\learning\corrections.json`）：命中/权重强化、(hits, lastMs) 淘汰与供运行时词表合并的 `WeightedWords()`。其中的词会被具备热词通道的云端后端作为热词上传——见头部的隐私说明 |
+| `src/core/injection_ledger.h` / `src/core/injection_ledger.cpp` | 单槽、单调递增的上屏台账（方式、注入文本、目标/焦点窗口、前置选区、敏感标记）与带序列校验的 `Snapshot()` / `Invalidate()` / `Consume()`；反射链路与后续撤销路径对齐所用的共享状态 |
 | `src/asr/engine_local.h` / `src/asr/engine_local.cpp` | 本地 sherpa-onnx 识别器、VAD 探测器、标点模型生命周期管理、预加载及 DLL 安全探测 |
 | `src/asr/asr_metrics.h` / `src/asr/asr_metrics.cpp` | 线程安全的各阶段耗时指标度量（VAD、ASR、标点、云端 API、LLM） |
 | `src/audio/audio_capture.h` / `src/audio/audio_capture.cpp` | 麦克风音频采集生命周期（WASAPI / waveIn）、缓冲区管理、RMS 音量计算 |
@@ -68,6 +71,7 @@ flowchart LR
 | `src/asr/asr_result.h` / `src/asr/asr_result.cpp` | ASR 文本归一化、结果/失败分类、稳定的后端/结果日志名，以及 `MakeAsrWatchdogTimeoutText()` —— 看门狗超时文案的唯一构造入口，前缀保证落在运维错误白名单内 |
 | `src/asr/asr_dispatcher.h` / `src/asr/asr_dispatcher.cpp` | ASR final 结果分发、LLM 门控、raw ASR 记录 |
 | `src/asr/asr_runtime_log.h` / `src/asr/asr_runtime_log.cpp` | 仅 Debug Mode 使用的隐私安全 ASR 生命周期日志，带时间/PID 和有界轮转 |
+| `src/asr/text_post_process.h` / `src/asr/text_post_process.cpp` | 在 `DispatchAsrFinalText` 中、所有消费者（历史、provider 上下文、上屏）之前执行的本地文本清理：三种标点模式（`keep_all` / `space_replace` / `remove_trailing`）配逆向得出的标点集合、尾标点保留集与纯数字旁路，以及 CJK/拉丁/数字边界加空格。用户未显式开启时逐字节惰性 |
 | `src/asr/cloud_asr_common.h` / `src/asr/cloud_asr_common.cpp` | 云端 replay buffer、自适应 finalize timeout、空 final retry 辅助、`ComputeCloudAsrPostStopWatchdogMs()`（共享的停录后看门狗预算：primary final 等待 + retry 预留，带上限），以及 replay 可行性算术 `EstimateCloudAsrReplaySendMs()` / `CloudAsrReplayFitsInBudget()` |
 | `src/asr/asr_diagnostics.h` / `src/asr/asr_diagnostics.cpp` | 把公共 `Config` stage 路由和 provider 终态映射到 `audio_diagnostics`，provider 不直接写文件 |
 | `src/ui/hud.h` / `src/ui/hud.cpp` | HUD 窗口、Direct2D/DirectWrite 渲染、托盘图标、UI 资源创建/销毁 |
@@ -76,13 +80,14 @@ flowchart LR
 | `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI 字体与画刷等 GDI/DirectWrite 主题资源生命周期管理 |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | 热键配置、CapsLock 长按逻辑、`WH_KEYBOARD_LL` Hook、`HotkeyEdit` 自绘控件 |
 | `src/ui/settings.h` / `src/ui/settings.cpp` | Settings 窗口外壳、Tab 切换器、顶层窗口布局与事件分发 |
-| `src/ui/tabs/` | 模块化 Settings Tab 面板：`General`、`Recognition`、`Cloud ASR`、`Vocabulary`、`LLM` 和 `Prompt` |
-| `src/ui/providers/` | 模块化云端 ASR Provider 子面板：`Baidu`、`Volcengine`、`Qwen`、`MiMo`、`Doubao IME`、`Qwen Free` 和 `MAI` |
+| `src/ui/tabs/` | 模块化 Settings Tab 面板：`tab_general`、`tab_advanced`、`tab_speech_engine`、`tab_vocabulary`、`tab_llm`，共享基类 `settings_tab_base` |
+| `src/ui/providers/` | 模块化 ASR Provider 子面板（云端与本地）：`provider_base`、`provider_baidu`、`provider_volcengine`、`provider_qwen`、`provider_qwen_free`、`provider_mimo`、`provider_mai`、`provider_doubao`、`provider_local`，以及布局助手 `qwen_settings_helper` |
 | `src/ui/settings_controls.h` / `src/ui/settings_controls.cpp` | Settings 对话框控件句柄封装与按分类显隐控制 |
 | `src/app/main.cpp` | 精简 Win32 程序入口（`wWinMain`）与消息主循环 |
 | `src/app/main_window.h` / `src/app/main_window.cpp` | 隐藏主消息窗口、托盘消息调度、热键响应、定时器触发 |
 | `src/app/recording_session_controller.h` / `src/app/recording_session_controller.cpp` | 编排录音生命周期、VAD 裁剪与 ASR 调度的核心状态机 |
 | `src/app/asr_attempt_manager.h` / `src/app/asr_attempt_manager.cpp` | ASR 主备后端重试与分发尝试编排 |
+| `src/app/learning_intake.h` / `src/app/learning_intake.cpp` | 学习链路的 app 层策略：把注入反射与台账（序列、敏感、开关）核对后提取纠正对并落盘。它是"是否学习"的唯一决策点，`text_injector` 只做观察 |
 | `src/app/debug_logger.h` / `src/app/debug_logger.cpp` | 调试信息输出与控制台附加管理 |
 | `src/core/llm_refine.h` | LLM 纠错模块：供应商预设/迁移、请求 JSON、端点规范化、有界 WinHTTP 请求和 OpenAI 兼容响应解析（header-only，`llm::` 命名空间） |
 | `src/asr/baidu_asr.h` | 百度智能云 ASR 模块（header-only） |
@@ -98,6 +103,8 @@ flowchart LR
 | `src/asr/mimo_asr.h` / `src/asr/mimo_asr.cpp` | 小米 MiMo ASR 批量客户端（`mimo-v2.5-asr`，通过 `/chat/completions` 上传 WAV） |
 | `src/asr/doubao_ime_asr.h` / `src/asr/doubao_ime_asr.cpp` | 实验性豆包输入法客户端：设备注册、token bootstrap、Opus 编码、手写 protobuf over WebSocket |
 | `src/asr/doubao_ime_streaming_session.h` / `src/asr/doubao_ime_streaming_session.cpp` | 豆包输入法 `IStreamingAsrSession` 封装：pending PCM buffer、replay retry、partial HUD、凭据写回 |
+| `src/asr/doubao_ime_context.h` / `src/asr/doubao_ime_context.cpp` | 豆包输入法会话上下文装配：从共享历史取对话轮次、从有效词表取热词，序列化为客户端放进 `extra["context"]` 的 AsrContext JSON/base64（未开启 `doubao_context_enabled` 时不装配） |
+| `src/asr/doubao_ime_payload.h`（header-only） | 纯函数的豆包 `StartSession` 载荷构造器，从客户端抽出以便用 `tests/asr_json_protocol_test.cpp` 离线锁定逐字节输出；同时承载用于线包实验的诊断载体覆盖 |
 | `tools/doubao_ime_probe.bat` / `tools/doubao_ime_probe.cpp` | 独立豆包输入法诊断 probe：复用保存凭据、执行 live protocol 检查，可选执行 16kHz mono WAV 识别检查，并支持按实时节奏发送/接收的 streaming probe |
 | `tools/asr_audio_replay.bat` / `tools/asr_audio_replay.cpp` | 开发专用规范 WAV 校验与多后端 replay，复用生产 batch/streaming session |
 | `src/audio/firered_vad.h` | FireRed VAD 模块（header-only） |

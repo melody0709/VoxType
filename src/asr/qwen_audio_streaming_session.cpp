@@ -45,7 +45,8 @@ qwen_audio_streaming::Config BuildConfig(const Config& c) {
     out.model = c.qwenModel;
     out.languageHints = c.qwenLanguageHints.empty() ? c.qwenLanguage : c.qwenLanguageHints;
     out.vocabularyId = c.qwenVocabularyId;
-    out.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(c.qwenVocabulary);
+    out.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(c.qwenVocabulary,
+                                                                  c.asrLearningEnabled);
     // The field turn follows the focused-field switch; the history turns follow
     // the history switch, which is independent (an enabled history must not be
     // dropped just because focused-field context is off).

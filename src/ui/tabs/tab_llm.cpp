@@ -139,6 +139,7 @@ void TabLlm::UpdateControlEnableState(HWND parent) {
     EnableWindow(GetDlgItem(parent, IDC_LLM_TEST), masterEnabled);
     EnableWindow(GetDlgItem(parent, IDC_LLM_DEBUG), masterEnabled);
     EnableWindow(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT), masterEnabled);
+    EnableWindow(GetDlgItem(parent, IDC_LLM_ORGANIZE), masterEnabled);
     EnableWindow(GetDlgItem(parent, IDC_LLM_OPEN_LOG), masterEnabled);
 }
 
@@ -223,6 +224,18 @@ void TabLlm::CreateControls(HWND parent) {
     ApplyUiFont(llmDebug);
     AddLlmControl(llmDebug);
     AddLlmControl(CreateButton(parent, IDC_LLM_OPEN_LOG, S(576), actionRowY, S(150), S(UiStyle::ActionBtnH), L"Open Log Folder"));
+
+    // Row 8: auto-organize (P5a). Off by default - the LLM stays an opt-in
+    // corrector, and this switch only selects which prompt the refine path uses.
+    const int organizeRowY = S(UiStyle::RowInputY(8));
+    HWND organizeCheck = CreateWindowW(
+        L"BUTTON", L"Auto-organize dictation (layout, filler removal, polish)",
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+        S(UiStyle::ContentLeft), organizeRowY, S(640), S(UiStyle::CheckH),
+        parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_ORGANIZE)),
+        GetParentInstance(parent), nullptr);
+    ApplyUiFont(organizeCheck);
+    AddLlmControl(organizeCheck);
 }
 
 void TabLlm::DestroyControls() {
@@ -294,6 +307,8 @@ void TabLlm::LoadControls(HWND parent, const Config& cfg) {
 
     Button_SetCheck(GetDlgItem(parent, IDC_LLM_DEBUG), cfg.enableLlmDebug ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT), cfg.llmVocabularyInjection ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(GetDlgItem(parent, IDC_LLM_ORGANIZE),
+                    cfg.voiceAutoOrganizeEnabled ? BST_CHECKED : BST_UNCHECKED);
 
     UpdateControlEnableState(parent);
 }
@@ -303,6 +318,7 @@ void TabLlm::SaveControls(HWND parent, Config& cfg) {
     StoreVisibleProvider(parent, cfg);
     cfg.enableLlmDebug = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_DEBUG)) == BST_CHECKED);
     cfg.llmVocabularyInjection = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT)) == BST_CHECKED);
+    cfg.voiceAutoOrganizeEnabled = (Button_GetCheck(GetDlgItem(parent, IDC_LLM_ORGANIZE)) == BST_CHECKED);
     cfg.llmPrompt = m_currentPrompt;
     cfg.llmPromptPreset = m_currentPromptPresetId.empty()
         ? llm::PromptPresetIdForText(m_currentPrompt)

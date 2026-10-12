@@ -21,6 +21,8 @@
 #include "asr_result.h"
 #include "path_service.h"
 #include "llm_refine.h"
+#include "doubao_ime_context.h"
+#include "doubao_ime_payload.h"
 
 // 离线测试桩：不链接真实日志实现（其依赖 globals.h → sherpa-onnx 等重头文件），
 // 本测试只验证协议解析行为，日志调用直接吞掉。
@@ -478,11 +480,17 @@ int wmain() {
                   defaults.qwenKeepDialect && defaults.qwenDisfluencyRemovalEnabled,
               "Qwen context, heartbeat, dialect and polish switches default to on");
     }
-    // 28) 全量 101 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 28) 全量 111 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    //     条目数在这里是"变更探测器"：任何注册表条目被删/被加都必须同步改这一行。
+    //     102 -> 104（P3 voice_punct_mode / voice_spacing_enabled）、
+    //     104 -> 109（P2 asr_learning_* 三项 + P6 asr_undo_* 两项）、
+    //     109 -> 110（P1 doubao_context_enabled）、110 -> 111（P5 voice_auto_organize_enabled）、
+    //     111 -> 110（移除无消费者的 asr_undo_window_ms，S3 落地时再加回）
+    //     都是 2026-10 的有意上调，不是漂移。
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 102, "registry total entry count is 102");
+        CHECK(reg.GetEntries().size() == 110, "registry total entry count is 110");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -925,6 +933,34 @@ int wmain() {
         CHECK(vocabulary_manager::BuildVocabularyWordList({ { L"甲", 4 } }, 0).empty(),
               "a zero-character budget yields an empty word list");
 
+        // 6c. Learned corrections must never outrank explicit vocabulary.
+        {
+            // A learned word arrives with whatever weight the store holds (here the
+            // 50 super-hotword weight) and must still merge in at the lowest one.
+            const auto merged = vocabulary_manager::MergeLearnedEntries(
+                { { L"显式词", 4 } }, { { L"学习词", 50 } });
+            CHECK(merged.size() == 2 && merged[0].word == L"显式词" &&
+                      merged[1].word == L"学习词",
+                  "a learned word is appended after the explicit vocabulary");
+            CHECK(merged[1].weight == vocabulary_manager::kLearnedVocabularyWeight &&
+                      !vocabulary_manager::IsSuperHotword(merged[1].weight),
+                  "a learned word never lands in the 50 super-hotword tier");
+
+            // The character budget is what makes ordering matter: an explicit word
+            // must keep its slot even when a learned word could fill it.
+            const std::wstring budgeted = vocabulary_manager::BuildVocabularyWordList(merged, 3);
+            CHECK(budgeted == L"显式词",
+                  "the character budget keeps the explicit word and drops the learned one");
+
+            // An explicit entry is never duplicated or re-weighted by learning.
+            const auto deduped = vocabulary_manager::MergeLearnedEntries(
+                { { L"GitTag", 4 } }, { { L"gittag", 1 }, { L"新词", 1 } });
+            CHECK(deduped.size() == 2 && deduped[0].word == L"GitTag" && deduped[0].weight == 4,
+                  "learning never replaces or re-weights an explicit entry");
+            CHECK(vocabulary_manager::MergeLearnedEntries({}, { { L"词", 1 } }, 0).empty(),
+                  "a zero maxExtra cap appends nothing");
+        }
+
         // 7. Transpilation to Sherpa-onnx
         std::string sherpaHotwords = vocabulary_manager::TranspileToSherpaHotwords(volcEntries);
         CHECK(sherpaHotwords.find(" : 3.0\n") != std::string::npos, "sherpa hotwords score 3.0");
@@ -1336,6 +1372,197 @@ int wmain() {
             fallback = BuildFallbackConfig(primary);
             CHECK(AsrBackendDisplayName(fallback) == L"Baidu Cloud / Mandarin (1537)", "fallback baidu scheme A");
         }
+    }
+
+    // 29) doubao_ime AsrContext 装配（P1，依据 E-015/E-017/E-018）
+    {
+        // 热词数组是纯函数：与机器上实际词表文件无关，可稳定断言线级形状。
+        const std::string hotwords = doubao_ime_context::BuildHotwordsJson(
+            {L"浙里办", L"VoxType", L"浙里办", L""});
+        CHECK(hotwords.find("\"word\":\"浙里办\"") != std::string::npos,
+              "asr context hotword word");
+        CHECK(hotwords.find("\"class\":\"user\"") != std::string::npos,
+              "asr context hotword class is the neutral tag");
+        CHECK(hotwords.find("\"frequency\":0") != std::string::npos,
+              "asr context hotword frequency is 0 (official always sends 0)");
+        CHECK(hotwords.find("VoxType") != std::string::npos, "asr context keeps every distinct word");
+        size_t occurrences = 0;
+        for (size_t pos = hotwords.find("浙里办"); pos != std::string::npos;
+             pos = hotwords.find("浙里办", pos + 1)) {
+            ++occurrences;
+        }
+        CHECK(occurrences == 1, "asr context deduplicates hotwords");
+        const std::string capped = doubao_ime_context::BuildHotwordsJson(
+            {L"a", L"b", L"c"}, doubao_ime_context::ContextOptions{5, 400, 2, true});
+        CHECK(capped.find("\"c\"") == std::string::npos, "asr context caps the hotword list");
+
+        // chat 双重编码：cursor_position = 该条码点数，尾部换行被裁掉。
+        Config contextConfig;
+        contextConfig.qwenVocabulary.clear();
+        const std::vector<std::wstring> history = {L"上午好\n", L"这是测试"};
+        const std::string json =
+            doubao_ime_context::BuildAsrContextJson(history, contextConfig);
+        CHECK(json.find("\"type\":\"user_input\"") != std::string::npos,
+              "asr context chat entry type");
+        CHECK(json.find("\\\"cursor_position\\\":4") != std::string::npos,
+              "asr context cursor position counts the turn code points");
+        CHECK(json.find("\\\"text\\\":\\\"上午好\\\"") != std::string::npos,
+              "asr context strips the trailing newline inside data.text");
+        CHECK(json.find("\"time\":") != std::string::npos, "asr context carries a time field");
+        CHECK(json.find("\"start_type\":\"shortcut_long\"") != std::string::npos,
+              "asr context start type matches the hold-hotkey semantics");
+        CHECK(json.find("loc_info") == std::string::npos, "asr context omits loc_info");
+        CHECK(json.find("app_apk_name") == std::string::npos, "asr context omits app_apk_name");
+        CHECK(json.find("ime_info") == std::string::npos, "asr context omits ime_info");
+
+        CHECK(doubao_ime_context::EncodeBase64("abc") == "YWJj", "base64 three bytes");
+        CHECK(doubao_ime_context::EncodeBase64("ab") == "YWI=", "base64 pads two bytes");
+        CHECK(doubao_ime_context::EncodeBase64("a") == "YQ==", "base64 pads one byte");
+        CHECK(doubao_ime_context::CountCodePoints(L"a\U0001F600b") == 3,
+              "code point count merges surrogate pairs");
+        const std::string encoded =
+            doubao_ime_context::BuildAsrContextBase64(history, contextConfig);
+        CHECK(!encoded.empty() && encoded.find('{') == std::string::npos &&
+                  encoded.find(':') == std::string::npos,
+              "the uploaded carrier is base64, not raw json");
+    }
+
+    // 30) doubao_ime 启动载荷逐字节锁定。
+    //     这是"默认会话不受任何优化影响"的硬保证：只要默认字段的字节串变了，
+    //     要么是有人无意改了线包，要么是本用例需要显式更新（并说明原因）。
+    {
+        const auto occurrences = [](const std::string& hay, const std::string& needle) {
+            size_t count = 0;
+            for (size_t pos = hay.find(needle); pos != std::string::npos;
+                 pos = hay.find(needle, pos + 1)) {
+                ++count;
+            }
+            return count;
+        };
+        const auto balancedBraces = [](const std::string& text) {
+            int depth = 0;
+            bool inString = false;
+            for (size_t i = 0; i < text.size(); ++i) {
+                const char ch = text[i];
+                if (inString) {
+                    if (ch == '\\') {
+                        ++i;
+                    } else if (ch == '"') {
+                        inString = false;
+                    }
+                    continue;
+                }
+                if (ch == '"') {
+                    inString = true;
+                } else if (ch == '{') {
+                    ++depth;
+                } else if (ch == '}') {
+                    --depth;
+                    if (depth < 0) return false;
+                }
+            }
+            return depth == 0 && !inString;
+        };
+
+        doubao_ime_payload::Fields fields;
+        fields.deviceIdEscaped = "legacy_device_123";
+        const std::string baseline = doubao_ime_payload::BuildStartSessionPayload(fields);
+        const std::string frozen =
+            "{\"audio_info\":{\"channel\":1,\"format\":\"speech_opus\",\"sample_rate\":16000},"
+            "\"enable_punctuation\":true,\"enable_speech_rejection\":false,"
+            "\"extra\":{\"app_name\":\"com.android.chrome\",\"cell_compress_rate\":8,"
+            "\"did\":\"legacy_device_123\",\"enable_asr_threepass\":true,"
+            "\"enable_asr_twopass\":true,\"input_mode\":\"tool\"}}";
+        CHECK(baseline == frozen, "doubao start payload default bytes are frozen");
+        CHECK(occurrences(baseline, "\"context\"") == 0,
+              "a default doubao session carries no context field");
+        CHECK(balancedBraces(baseline), "default payload is structurally balanced");
+
+        doubao_ime_payload::Fields withContext = fields;
+        withContext.contextBase64 = "QUJD";
+        const std::string carried =
+            doubao_ime_payload::BuildStartSessionPayload(withContext);
+        CHECK(occurrences(carried, "\"context\"") == 1,
+              "context appears exactly once inside extra");
+        CHECK(carried.find("\"input_mode\":\"tool\",\"context\":\"QUJD\"}}") != std::string::npos,
+              "context sits inside the extra object, after input_mode");
+        // Everything emitted before the context insertion must be byte-identical
+        // (baseline minus its two closing braces is carried's prefix).
+        const std::string sharedPrefix = baseline.substr(0, baseline.size() - 2);
+        CHECK(carried.compare(0, sharedPrefix.size(), sharedPrefix) == 0,
+              "adding context leaves every other field byte-identical");
+        CHECK(balancedBraces(carried), "payload with context is structurally balanced");
+
+        doubao_ime_payload::ContextOverride topLevel;
+        topLevel.active = true;
+        topLevel.slot = doubao_ime_payload::ContextOverride::Slot::TopLevel;
+        topLevel.base64 = "QUJD";
+        const std::string atTop =
+            doubao_ime_payload::BuildStartSessionPayload(fields, topLevel);
+        CHECK(occurrences(atTop, "\"context\"") == 1, "top-level carrier emits one field");
+        CHECK(atTop.size() > 20 && atTop.rfind(",\"context\":\"QUJD\"}") == atTop.size() - 18,
+              "top-level carrier is appended next to extra");
+        CHECK(atTop.find("\"input_mode\":\"tool\",\"context\"") == std::string::npos,
+              "top-level carrier does not leak into the extra object");
+
+        doubao_ime_payload::ContextOverride wrongType;
+        wrongType.active = true;
+        wrongType.slot = doubao_ime_payload::ContextOverride::Slot::WrongType;
+        CHECK(doubao_ime_payload::BuildStartSessionPayload(fields, wrongType)
+                      .find("\"context\":12345") != std::string::npos,
+              "the wrong-type control still reaches the wire");
+
+        doubao_ime_payload::ContextOverride malformed;
+        malformed.active = true;
+        malformed.slot = doubao_ime_payload::ContextOverride::Slot::MalformedJson;
+        malformed.base64 = "QUJD";
+        CHECK(!balancedBraces(doubao_ime_payload::BuildStartSessionPayload(fields, malformed)),
+              "the malformed control is deliberately unclosed");
+
+        doubao_ime_payload::ContextOverride extraBody;
+        extraBody.active = true;
+        extraBody.extraBodyOverride = "\"probe\":1";
+        const std::string replaced =
+            doubao_ime_payload::BuildStartSessionPayload(fields, extraBody);
+        CHECK(replaced.find("\"probe\":1") != std::string::npos &&
+                  replaced.find("app_name") == std::string::npos,
+              "an extra-body override replaces the built-in extra keys");
+
+        // The production context and a diagnostic override must never both emit
+        // "context": a duplicate JSON key would be ambiguous, and the malformed
+        // control would otherwise truncate an otherwise valid payload. The
+        // override owns the key whenever it fires.
+        doubao_ime_payload::ContextOverride both;
+        both.active = true;
+        both.slot = doubao_ime_payload::ContextOverride::Slot::Extra;
+        both.base64 = "T1ZFUlJJREU=";
+        const std::string precedence = doubao_ime_payload::BuildStartSessionPayload(withContext, both);
+        CHECK(occurrences(precedence, "\"context\"") == 1,
+              "a diagnostic override replaces the production context instead of doubling it");
+        CHECK(precedence.find("T1ZFUlJJREU=") != std::string::npos &&
+                  precedence.find("QUJD") == std::string::npos,
+              "the override wins over the production context");
+
+        doubao_ime_payload::ContextOverride malformedWithContext;
+        malformedWithContext.active = true;
+        malformedWithContext.slot = doubao_ime_payload::ContextOverride::Slot::MalformedJson;
+        CHECK(occurrences(
+                  doubao_ime_payload::BuildStartSessionPayload(withContext, malformedWithContext),
+                  "\"context\"") == 1,
+              "the malformed control does not double the production context");
+
+        doubao_ime_payload::ContextOverride bodyWithContext;
+        bodyWithContext.active = true;
+        bodyWithContext.extraBodyOverride = "\"probe\":1";
+        CHECK(doubao_ime_payload::BuildStartSessionPayload(withContext, bodyWithContext)
+                      .find("QUJD") == std::string::npos,
+              "an extra-body override drops the production context with the built-in keys");
+
+        doubao_ime_payload::Fields noPunctuation = fields;
+        noPunctuation.enablePunctuation = false;
+        CHECK(doubao_ime_payload::BuildStartSessionPayload(noPunctuation)
+                      .find("\"enable_punctuation\":false") != std::string::npos,
+              "punctuation flag still reaches the wire");
     }
 
     if (g_failures == 0) {

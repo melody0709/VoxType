@@ -25,6 +25,7 @@
 #include "hud.h"
 #include "app_state.h"
 #include "app_messages.h"
+#include "injection_ledger.h"
 #include "asr_metrics.h"
 #include "engine_local.h"
 
@@ -98,11 +99,16 @@ void RefineWithLlmAsync(const AsrFinalMessage& finalMessage) {
     cfg.endpoint = config.llmEndpoint;
     cfg.apiKey = config.llmApiKey;
     cfg.model = config.llmModel;
-    cfg.systemPrompt = config.llmPrompt;
+    // Auto-organize (P5a) reuses the refine transport but swaps the system
+    // prompt for the only one that may re-layout the text. Default off; the
+    // echo/answer guards inside llm::Refine stay in force either way. The
+    // selection itself is a tested helper (llm_refine_test).
+    cfg.systemPrompt = llm::SelectRefineSystemPrompt(config.voiceAutoOrganizeEnabled, config.llmPrompt);
     cfg.extraParams = config.llmExtraParams;
     if (config.llmVocabularyInjection) {
         cfg.vocabulary = vocabulary_manager::BuildLlmVocabularySection(
-            vocabulary_manager::GetEffectiveVocabularyEntries(config.qwenVocabulary));
+            vocabulary_manager::GetEffectiveVocabularyEntries(config.qwenVocabulary,
+                                                              config.asrLearningEnabled));
     }
     bool debug = config.enableLlmDebug;
     std::thread([asrText, cfg, debug, finalMessage]() {
@@ -459,6 +465,9 @@ static std::mutex g_asrAttemptMutex;
 static RecognitionAttemptContext g_activeAttempt;
 
 uint64_t BeginAsrAttempt(const Config& config, SelectionContext selection) {
+    // A new recording ends the lifetime of the previous injection: undo and the
+    // organization hotkey must not act on text that the user already moved past.
+    injection_ledger::Invalidate();
     const uint64_t attemptId = ++g_asrAttemptSeq;
     Config attemptConfig = config;
     attemptConfig.asrAttemptId = attemptId;
@@ -523,7 +532,8 @@ uint64_t BeginAsrAttempt(const Config& config, SelectionContext selection) {
             // context at all; a domain word list is the provider's documented
             // "词表" form for exactly that case.
             const std::wstring words = vocabulary_manager::BuildVocabularyWordList(
-                vocabulary_manager::GetEffectiveVocabularyEntries(config.qwenVocabulary),
+                vocabulary_manager::GetEffectiveVocabularyEntries(config.qwenVocabulary,
+                                                          config.asrLearningEnabled),
                 qwen_context::kMaxContextCharacters);
             if (!words.empty()) {
                 attemptConfig.qwenContextHistoryTurns.push_back(words);

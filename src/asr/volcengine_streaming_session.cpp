@@ -436,7 +436,8 @@ private:
 
             vocabulary_manager::VocabularyList vocab;
             if (config_.volcEnableReuseVocabulary) {
-                vocab = vocabulary_manager::GetEffectiveVocabularyEntries(config_.qwenVocabulary);
+                vocab = vocabulary_manager::GetEffectiveVocabularyEntries(config_.qwenVocabulary,
+                                                                 config_.asrLearningEnabled);
             }
 
             std::vector<std::wstring> history;

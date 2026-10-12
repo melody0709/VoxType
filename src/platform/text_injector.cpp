@@ -7,9 +7,13 @@
 #include "app_messages.h"
 #include "app_state.h"
 #include "debug_logger.h"
+#include "injection_ledger.h"
 
 #include <imm.h>
+#include <atomic>
+#include <chrono>
 #include <memory>
+#include <thread>
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "imm32.lib")
@@ -213,6 +217,89 @@ void CleanupClipboardOnExit() {
     }
 }
 
+namespace {
+
+// True while a read-back worker is sleeping/reading, so repeated injections
+// cannot accumulate threads (see StartReflectionWorker).
+std::atomic<bool> s_reflectionInFlight{false};
+
+// One-shot read-back worker for the learning loop. It only observes; every
+// policy decision (learn or not) happens in the app layer when the message is
+// handled, so a failure here can never change what is typed.
+void StartReflectionWorker(uint64_t sequence, DWORD reflectionDelayMs) {
+    if (reflectionDelayMs == 0 || !g_mainWindow) return;
+    // At most one read-back in flight. Pressing the hotkey again before the delay
+    // elapses must not pile up detached workers: each one sleeps through the delay
+    // and then reads the focused document, so a rapid sequence of injections would
+    // otherwise leave a thread per press queued behind the same window.
+    bool expected = false;
+    if (!s_reflectionInFlight.compare_exchange_strong(expected, true)) return;
+    std::thread([sequence, reflectionDelayMs]() {
+        struct InFlightReset {
+            ~InFlightReset() { s_reflectionInFlight.store(false); }
+        } inFlightReset;
+        std::this_thread::sleep_for(std::chrono::milliseconds(reflectionDelayMs));
+        injection_ledger::Record record;
+        if (!injection_ledger::Snapshot(record) || record.sequence != sequence) return;
+
+        auto* reflection = new InjectionReflection();
+        reflection->sequence = sequence;
+        if (record.sensitive) {
+            // A sensitive injection is never read back: the document may be a
+            // password field and the observation must not reach any store.
+            reflection->reason = "sensitive";
+        } else if (selection_context::TopLevelWindow(GetForegroundWindow()) !=
+                   record.targetWindow) {
+            reflection->reason = "foreground_changed";
+        } else {
+            std::wstring observed;
+            std::string error;
+            HWND focus = record.focusWindow ? record.focusWindow : GetForegroundWindow();
+            if (selection_context::TryReadFocusedDocumentText(focus, observed, error)) {
+                reflection->readSucceeded = true;
+                reflection->observedText = std::move(observed);
+            } else {
+                reflection->reason = "read_failed";
+            }
+        }
+
+        if (!g_mainWindow ||
+            !PostMessageW(g_mainWindow, kInjectionReflectionMessage,
+                          static_cast<WPARAM>(sequence), reinterpret_cast<LPARAM>(reflection))) {
+            delete reflection;
+        }
+    }).detach();
+}
+
+// Records the successful injection so the undo/organize/learning consumers can
+// line up with what the host application now contains.
+void RecordCompletedInjection(const std::wstring& text,
+                              injection_ledger::InjectionMethod method,
+                              HWND foreground,
+                              HWND focusWindow,
+                              bool hasPreSelection,
+                              const std::wstring& preSelectionText,
+                              const platform::InjectionContext* context,
+                              DWORD reflectionDelayMs) {
+    injection_ledger::Record record;
+    record.injectedText = text;
+    record.method = method;
+    record.targetWindow = selection_context::TopLevelWindow(foreground);
+    record.focusWindow = focusWindow;
+    record.tickMs = GetTickCount();
+    record.hasPreSelection = hasPreSelection;
+    record.preSelectionText = preSelectionText;
+    if (context) {
+        record.sourceText = context->sourceText;
+        record.sensitive = context->sensitive;
+        record.llmApplied = context->llmApplied;
+    }
+    const uint64_t sequence = injection_ledger::RecordInjection(std::move(record));
+    StartReflectionWorker(sequence, reflectionDelayMs);
+}
+
+}  // namespace
+
 bool SendUnicodeText(const std::wstring& text) {
     const HWND target = GetForegroundWindow();
     if (!text.empty() && !target) return false;
@@ -301,11 +388,32 @@ bool PasteViaClipboard(HWND focus, const std::wstring& text, bool restoreClipboa
     return true;
 }
 
-bool PasteTextImeAware(const std::wstring& text, bool forceUnicodeInput) {
+bool PasteTextImeAware(const std::wstring& text,
+                       bool forceUnicodeInput,
+                       const InjectionContext* context) {
     if (text.empty()) return true;
 
+    const DWORD reflectionDelayMs = context ? context->reflectionDelayMs : 0;
+    bool hasPreSelection = false;
+    std::wstring preSelectionText;
+    if (context && context->capturePreSelection) {
+        // Must run before the text lands: the paste replaces the selection.
+        SelectionContext selection = selection_context::Capture();
+        if (selection.Usable() && !selection.selectedText.empty()) {
+            hasPreSelection = true;
+            preSelectionText = selection.selectedText;
+        }
+    }
+    const auto finish = [&](injection_ledger::InjectionMethod method, HWND foreground,
+                            HWND focusWindow) {
+        RecordCompletedInjection(text, method, foreground, focusWindow, hasPreSelection,
+                                 preSelectionText, context, reflectionDelayMs);
+        return true;
+    };
+
     if (forceUnicodeInput) {
-        return SendUnicodeText(text);
+        if (!SendUnicodeText(text)) return false;
+        return finish(injection_ledger::InjectionMethod::UnicodeInput, GetForegroundWindow(), nullptr);
     }
 
     HWND fg = GetForegroundWindow();
@@ -329,22 +437,31 @@ bool PasteTextImeAware(const std::wstring& text, bool forceUnicodeInput) {
             if (!PostMessageW(fg, WM_CHAR, ch, 0)) return false;
             Sleep(1);
         }
-        return true;
+        return finish(injection_ledger::InjectionMethod::WmChar, fg, nullptr);
     }
 
     HWND focus = GetFocusedWindowForForeground(fg);
     if (!g_config.restoreClipboardAfterPaste) {
         bool shortcutAttempted = false;
-        if (PasteViaClipboard(focus, text, false, &shortcutAttempted)) return true;
-        return !shortcutAttempted && GetForegroundWindow() == fg && SendUnicodeText(text);
+        if (PasteViaClipboard(focus, text, false, &shortcutAttempted)) {
+            return finish(injection_ledger::InjectionMethod::ClipboardPaste, fg, focus);
+        }
+        if (shortcutAttempted || GetForegroundWindow() != fg) return false;
+        if (!SendUnicodeText(text)) return false;
+        return finish(injection_ledger::InjectionMethod::UnicodeInput, fg, focus);
     }
     // There is no acknowledgement that an asynchronous Ctrl+V has consumed
     // the clipboard. Protected mode uses Unicode for nonstandard controls.
     if (!IsStandardEditControl(focus)) {
-        return SendUnicodeText(text);
+        if (!SendUnicodeText(text)) return false;
+        return finish(injection_ledger::InjectionMethod::UnicodeInput, fg, focus);
     }
-    return PasteViaClipboard(focus, text, true) ||
-           (GetForegroundWindow() == fg && SendUnicodeText(text));
+    if (PasteViaClipboard(focus, text, true)) {
+        return finish(injection_ledger::InjectionMethod::ClipboardPaste, fg, focus);
+    }
+    if (GetForegroundWindow() != fg) return false;
+    if (!SendUnicodeText(text)) return false;
+    return finish(injection_ledger::InjectionMethod::UnicodeInput, fg, focus);
 }
 
 bool ReplaceSelectionTextImeAware(const SelectionContext& selection,

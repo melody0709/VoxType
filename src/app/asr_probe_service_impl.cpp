@@ -65,7 +65,8 @@ public:
                 vcfg.correctTableId = req.configSnapshot.volcCorrectTableId;
                 vcfg.correctTableName = req.configSnapshot.volcCorrectTableName;
                 if (req.configSnapshot.volcEnableReuseVocabulary) {
-                    auto vocab = vocabulary_manager::GetEffectiveVocabularyEntries(req.configSnapshot.qwenVocabulary);
+                    auto vocab = vocabulary_manager::GetEffectiveVocabularyEntries(
+            req.configSnapshot.qwenVocabulary, req.configSnapshot.asrLearningEnabled);
                     vcfg.contextJson = vocabulary_manager::BuildVolcengineContextJson(vocab);
                 }
                 auto res = volc_asr::TestConnection(vcfg);
@@ -84,7 +85,8 @@ public:
                     cfg.model = model;
                     cfg.languageHints = req.configSnapshot.qwenLanguageHints;
                     cfg.vocabularyId = req.configSnapshot.qwenVocabularyId;
-                    cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(req.configSnapshot.qwenVocabulary);
+                    cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(
+        req.configSnapshot.qwenVocabulary, req.configSnapshot.asrLearningEnabled);
                     cfg.keepDialect = req.configSnapshot.qwenKeepDialect;
                     auto res = qwen_audio_http::TestConnection(cfg);
                     pr.ok = res.ok;
@@ -99,7 +101,8 @@ public:
                     cfg.model = model;
                     cfg.languageHints = req.configSnapshot.qwenLanguageHints;
                     cfg.vocabularyId = req.configSnapshot.qwenVocabularyId;
-                    cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(req.configSnapshot.qwenVocabulary);
+                    cfg.vocabulary = vocabulary_manager::GetEffectiveQwenVocabulary(
+        req.configSnapshot.qwenVocabulary, req.configSnapshot.asrLearningEnabled);
                     cfg.semanticPunctuation = req.configSnapshot.qwenSemanticPunctuation;
                     cfg.multiThresholdMode = req.configSnapshot.qwenMultiThresholdMode;
                     cfg.heartbeat = req.configSnapshot.qwenHeartbeat;

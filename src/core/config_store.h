@@ -37,6 +37,15 @@ constexpr wchar_t kQwenDefaultLanguageHints[] = L"zh,en,yue";
 #ifndef VOXTYPE_CONFIG_DEFINED
 #define VOXTYPE_CONFIG_DEFINED
 
+// Persisted values of Config::voicePunctMode (P3 voice text cleanup). Defined in
+// the core layer so the settings combo (ui) and the post-processor (asr) agree
+// on the exact strings without either layer including the other.
+namespace voice_text_mode {
+inline constexpr wchar_t kKeepAll[] = L"keep_all";
+inline constexpr wchar_t kSpaceReplace[] = L"space_replace";
+inline constexpr wchar_t kRemoveTrailing[] = L"remove_trailing";
+} // namespace voice_text_mode
+
 struct Config {
     int configVersion = 0;
     std::wstring modelId = L"firered_ctc";
@@ -51,6 +60,11 @@ struct Config {
     int vadSmoothWindow = 5;
     bool enablePartial = false;
     std::wstring postprocess = L"itn";
+    // Voice text cleanup (P3): official punctuation post-processing mode
+    // (keep_all / space_replace / remove_trailing) plus the optional inner
+    // CJK/ASCII boundary spacing. Both run locally on the final transcript.
+    std::wstring voicePunctMode = L"keep_all";
+    bool voiceSpacingEnabled = false;
     std::wstring hotkey = L"CapsLock";
     bool enableLlm = false;
     std::wstring llmProvider = L"DeepSeek";
@@ -63,6 +77,9 @@ struct Config {
     std::wstring llmExtraParams;
     bool llmVocabularyInjection = true;
     bool enableLlmDebug = false;
+    // Auto-organize after dictation (P5a). Reuses the LLM transport but sends the
+    // organize prompt; default off so the LLM is never a default corrector.
+    bool voiceAutoOrganizeEnabled = false;
     std::wstring llmProvidersJson;
     std::wstring asrBackend = L"local";
     std::wstring fallbackAsrBackend = L"none";
@@ -154,6 +171,29 @@ struct Config {
     // oldest first. The focused-field text travels separately in
     // qwenInputContextSnapshot so the continue-task refresh can keep the history.
     std::vector<std::wstring> qwenContextHistoryTurns;
+    // Local learning loop (P2). Off by default: enabling it (a) reads the focused
+    // document back after every injection to compare it locally, and (b) merges
+    // the words it learns into the runtime vocabulary, which the cloud backends
+    // with a hotword channel (Qwen, Volcengine) upload with the request. Both are
+    // private data derived from the user's document, so turning it on must be an
+    // explicit choice -- the same rule `doubaoContextEnabled` follows.
+    // The flag gates BOTH halves: while it is off, nothing is read back and no
+    // previously learned word is used either.
+    bool asrLearningEnabled = false;
+    int asrLearningReflectDelayMs = 2500;
+    int asrLearningMaxPairs = 300;
+    // Undo-last-injection window (P6). The pre-selection snapshot is only
+    // captured while this is enabled.
+    // Undo (S3) is not implemented yet, and the only effect of this flag today is
+    // that every injection captures the pre-injection selection/caret on the UI
+    // thread (selection_context::Capture(), three 500 ms SendMessageTimeoutW plus
+    // UIA) before pasting -- for every backend. Keep it off until S3 consumes the
+    // captured context; enabling it must stay the user's explicit choice.
+    bool asrUndoEnabled = false;
+    // doubao_ime session context upload (P1). Default off: the carrier is proven
+    // accepted (E-018) but its effect on our identity was not observable, so
+    // uploading transcripts is an explicit user choice.
+    bool doubaoContextEnabled = false;
     uint64_t asrAttemptId = 0;
     std::wstring mimoApiKey;
     std::wstring mimoBaseUrl = L"https://api.xiaomimimo.com/v1";

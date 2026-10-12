@@ -482,6 +482,169 @@ inline bool IsSameForegroundWindow(const SelectionContext& context) {
     return TopLevelWindow(GetForegroundWindow()) == context.targetWindow;
 }
 
+// Reads the whole text of the focused document. Used when a later decision must
+// be based on what the host application actually contains (learning reflection
+// after an injection, and the manual organize hotkey).
+//
+// Contract for callers: a failure is "no observation" and must never be read as
+// "the text did not change" — every reason is reported through `error`.
+// Password fields are refused by both paths, exactly like the selection reader.
+inline bool TryReadFocusedDocumentTextWithUiAutomation(HWND focusWindow,
+                                                       std::wstring& documentText,
+                                                       size_t maxChars,
+                                                       std::string& error) {
+    documentText.clear();
+    error.clear();
+
+    HRESULT initHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const bool shouldUninitialize = SUCCEEDED(initHr);
+    if (FAILED(initHr) && initHr != RPC_E_CHANGED_MODE) {
+        error = "COM_INIT_FAILED";
+        return false;
+    }
+
+    IUIAutomation* automation = nullptr;
+    IUIAutomationElement* focused = nullptr;
+    IUIAutomationTextPattern* textPattern = nullptr;
+    IUIAutomationTextRange* documentRange = nullptr;
+    bool ok = false;
+
+    do {
+        HRESULT hr = CoCreateInstance(CLSID_CUIAutomation, nullptr,
+                                      CLSCTX_INPROC_SERVER,
+                                      IID_PPV_ARGS(&automation));
+        if (FAILED(hr) || !automation) {
+            error = "UIA_CREATE_FAILED";
+            break;
+        }
+        hr = automation->GetFocusedElement(&focused);
+        if (FAILED(hr) || !focused) {
+            error = "UIA_NO_FOCUS";
+            break;
+        }
+        BOOL isPassword = FALSE;
+        const HRESULT passwordResult = focused->get_CurrentIsPassword(&isPassword);
+        if (!IsSelectionPasswordReadable(passwordResult, isPassword)) {
+            error = isPassword ? "PASSWORD_DOCUMENT" : "PASSWORD_QUERY_FAILED";
+            break;
+        }
+
+        DWORD focusProcessId = 0;
+        if (!focusWindow || !IsWindow(focusWindow) ||
+            !GetWindowThreadProcessId(focusWindow, &focusProcessId)) {
+            error = "UIA_FOCUS_UNAVAILABLE";
+            break;
+        }
+        int uiaProcessId = 0;
+        if (focused->get_CurrentProcessId(&uiaProcessId) != S_OK || uiaProcessId <= 0 ||
+            static_cast<DWORD>(uiaProcessId) != focusProcessId) {
+            error = "UIA_PROCESS_MISMATCH";
+            break;
+        }
+        UIA_HWND nativeWindowValue = nullptr;
+        focused->get_CurrentNativeWindowHandle(&nativeWindowValue);
+        HWND nativeWindow = static_cast<HWND>(nativeWindowValue);
+        if (focusWindow && nativeWindow &&
+            TopLevelWindow(nativeWindow) != TopLevelWindow(focusWindow)) {
+            error = "UIA_FOCUS_MISMATCH";
+            break;
+        }
+
+        hr = focused->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&textPattern));
+        if (FAILED(hr) || !textPattern) {
+            error = "UIA_TEXT_PATTERN_UNAVAILABLE";
+            break;
+        }
+        hr = textPattern->get_DocumentRange(&documentRange);
+        if (FAILED(hr) || !documentRange) {
+            error = "UIA_DOCUMENT_RANGE_UNAVAILABLE";
+            break;
+        }
+        BSTR text = nullptr;
+        const int request = static_cast<int>((std::min<size_t>)(maxChars + 1, 0x7FFFFFFF));
+        if (FAILED(documentRange->GetText(request, &text)) || !text) {
+            error = "UIA_DOCUMENT_TEXT_UNAVAILABLE";
+            break;
+        }
+        documentText.assign(text, SysStringLen(text));
+        SysFreeString(text);
+        if (documentText.size() > maxChars) {
+            documentText.clear();
+            error = "DOCUMENT_TOO_LARGE";
+            break;
+        }
+        ok = true;
+    } while (false);
+
+    if (documentRange) documentRange->Release();
+    if (textPattern) textPattern->Release();
+    if (focused) focused->Release();
+    if (automation) automation->Release();
+    if (shouldUninitialize) CoUninitialize();
+    return ok;
+}
+
+inline bool TryReadFocusedDocumentTextWithWin32(HWND focusWindow,
+                                                std::wstring& documentText,
+                                                size_t maxChars,
+                                                std::string& error) {
+    documentText.clear();
+    error = "WIN32_DOCUMENT_UNAVAILABLE";
+    wchar_t className[64] = {};
+    if (!focusWindow || !GetClassNameW(focusWindow, className, 64) ||
+        (_wcsicmp(className, L"Edit") != 0 &&
+         _wcsnicmp(className, L"RichEdit", 8) != 0)) {
+        return false;
+    }
+    if (GetWindowLongPtrW(focusWindow, GWL_STYLE) & ES_PASSWORD) {
+        error = "PASSWORD_DOCUMENT";
+        return false;
+    }
+    constexpr UINT flags = SMTO_ABORTIFHUNG | SMTO_BLOCK;
+    DWORD_PTR length = 0;
+    if (!SendMessageTimeoutW(focusWindow, WM_GETTEXTLENGTH, 0, 0, flags, 500, &length)) {
+        return false;
+    }
+    if (length > maxChars) {
+        error = "DOCUMENT_TOO_LARGE";
+        return false;
+    }
+    std::wstring text(length + 1, L'\0');
+    DWORD_PTR copied = 0;
+    if (!SendMessageTimeoutW(focusWindow, WM_GETTEXT, text.size(),
+                             reinterpret_cast<LPARAM>(text.data()), flags, 500, &copied)) {
+        return false;
+    }
+    text.resize((std::min<DWORD_PTR>)(copied, text.size()));
+    documentText = std::move(text);
+    error.clear();
+    return true;
+}
+
+inline bool TryReadFocusedDocumentText(HWND focusWindow,
+                                       std::wstring& documentText,
+                                       std::string& error,
+                                       size_t maxChars = 20000) {
+    std::string uiaError;
+    if (TryReadFocusedDocumentTextWithUiAutomation(focusWindow, documentText, maxChars, uiaError)) {
+        return true;
+    }
+    if (uiaError == "PASSWORD_DOCUMENT" || uiaError == "PASSWORD_QUERY_FAILED") {
+        documentText.clear();
+        error = uiaError;
+        return false;
+    }
+    std::string win32Error;
+    if (TryReadFocusedDocumentTextWithWin32(focusWindow, documentText, maxChars, win32Error)) {
+        error.clear();
+        return true;
+    }
+    documentText.clear();
+    error = win32Error.empty() ? uiaError : win32Error;
+    if (error.empty()) error = "DOCUMENT_NOT_AVAILABLE";
+    return false;
+}
+
 inline bool VerifyCurrentUiAutomationSelection(const SelectionContext& context) {
     if (!context.capturedWithUiAutomation) return true;
     std::wstring current;

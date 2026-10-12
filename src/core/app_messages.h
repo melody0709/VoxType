@@ -5,6 +5,9 @@
 #endif
 #include <windows.h>
 
+#include <cstdint>
+#include <string>
+
 constexpr wchar_t kAppName[] = L"VoxType";
 constexpr wchar_t kMainClass[] = L"VoxType.Main";
 constexpr wchar_t kSettingsClass[] = L"VoxType.Settings";
@@ -34,6 +37,18 @@ constexpr UINT kDoubaoImeSettingsCredentialsMessage = WM_APP + 14;
 constexpr UINT kClipboardDiagnosticMessage = WM_APP + 15;
 constexpr WPARAM kClipboardRestoreFailed = 1;
 constexpr WPARAM kClipboardPasteStillPending = 2;
+// Posted by the injection reflection worker once it has read the focused
+// document back (see learning_intake). lParam owns a heap InjectionReflection;
+// the handler deletes it. The sequence lets a stale read-back be dropped, and
+// `reason` carries a static skip reason so the app layer owns all logging.
+constexpr UINT kInjectionReflectionMessage = WM_APP + 16;
+
+struct InjectionReflection {
+    uint64_t sequence = 0;
+    bool readSucceeded = false;
+    const char* reason = "";
+    std::wstring observedText;
+};
 
 constexpr WPARAM kHotkeyRecordingStart = 1;
 constexpr WPARAM kHotkeyRecordingStop = 2;

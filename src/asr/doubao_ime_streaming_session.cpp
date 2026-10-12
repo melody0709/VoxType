@@ -282,7 +282,8 @@ private:
                 return true;
             }
             const bool authFailure = doubao_ime_asr::IsAuthFailure(error);
-            if (client->CredentialsChanged() && !authFailure) {
+            const bool identityRefusal = doubao_ime_asr::IsIdentityRefusal(error);
+            if (client->CredentialsChanged() && !authFailure && !identityRefusal) {
                 SyncCredentialsFromClient(*client);
             }
             client->Close();
@@ -292,7 +293,9 @@ private:
                 return false;
             }
 
-            const bool canRefresh = !refreshedCredentials && authFailure;
+            // 身份被服务端拒绝（50700000/4020011）与鉴权失败同类处置：清空凭据，
+            // 重注册换取新身份后重试；两者都不是传输层问题，普通重试无法恢复。
+            const bool canRefresh = !refreshedCredentials && (authFailure || identityRefusal);
             if (canRefresh) {
                 NotifyStatus(L"Refreshing... Doubao IME");
                 dcfg_.deviceId.clear();
@@ -351,6 +354,7 @@ private:
             return result;
         }
 
+        bool refreshedCredentials = false;
         for (int attempt = 0; attempt < 2 && !abort_.load(); ++attempt) {
             const unsigned diagnosticIndex = nextRetryStageIndex_++;
             const audio_diagnostics::StageMetadata diagnostic = RetryStage(
@@ -364,10 +368,12 @@ private:
             if (!client.Connect(error)) {
                 client.Close();
                 ClearActiveClient(&client);
-                if (attempt == 0 && doubao_ime_asr::IsAuthFailure(error)) {
+                const bool authFailure = doubao_ime_asr::IsAuthFailure(error);
+                if (!refreshedCredentials &&
+                    (authFailure || doubao_ime_asr::IsIdentityRefusal(error))) {
                     audio_diagnostics::StageTerminal terminal =
                         asr_diagnostics::TerminalFromText(DoubaoErrorText(error));
-                    terminal.terminal = "auth_error";
+                    terminal.terminal = authFailure ? "auth_error" : "identity_rejected";
                     terminal.elapsedMs = static_cast<double>(GetTickCount64() - attemptStarted);
                     audio_diagnostics::CompleteStage(
                         config_.asrAttemptId, diagnostic.kind,
@@ -376,6 +382,7 @@ private:
                     retryCfg.cdid.clear();
                     retryCfg.token.clear();
                     PostCredentials({}, true);
+                    refreshedCredentials = true;
                     continue;
                 }
                 result.error = DoubaoErrorText(error);
@@ -417,13 +424,28 @@ private:
                 ClearActiveClient(&client);
                 result.error = DoubaoErrorText(error.empty() ? L"send failed" : error);
                 result.transportError = true;
+                const bool identityRefusal =
+                    !abort_.load() && doubao_ime_asr::IsIdentityRefusal(error);
                 audio_diagnostics::StageTerminal terminal =
                     asr_diagnostics::TerminalFromText(result.error);
-                terminal.terminal = abort_.load() ? "aborted" : "send_error";
+                if (identityRefusal) {
+                    terminal.terminal = "identity_rejected";
+                    terminal.reason = "identity_rejected";
+                } else {
+                    terminal.terminal = abort_.load() ? "aborted" : "send_error";
+                }
                 terminal.elapsedMs = static_cast<double>(GetTickCount64() - attemptStarted);
                 audio_diagnostics::CompleteStage(
                     config_.asrAttemptId, diagnostic.kind,
                     diagnostic.index, terminal);
+                if (!abort_.load() && !refreshedCredentials &&
+                    (doubao_ime_asr::IsAuthFailure(error) || identityRefusal)) {
+                    retryCfg.deviceId.clear();
+                    retryCfg.cdid.clear();
+                    retryCfg.token.clear();
+                    PostCredentials({}, true);
+                    refreshedCredentials = true;
+                }
                 continue;
             }
 
@@ -433,12 +455,29 @@ private:
                 ClearActiveClient(&client);
                 result.error = DoubaoErrorText(error);
                 result.transportError = true;
+                const bool identityRefusal =
+                    !abort_.load() && doubao_ime_asr::IsIdentityRefusal(error);
                 audio_diagnostics::StageTerminal terminal =
                     asr_diagnostics::TerminalFromText(result.error);
+                if (identityRefusal) {
+                    // 拒绝（50700000 等）常发生在会话建立之后的后端分配阶段，
+                    // 典型落点就是这里（拒绝以 SessionFailed 形式在 finish 阶段返回）。
+                    terminal.terminal = "identity_rejected";
+                    terminal.reason = "identity_rejected";
+                }
                 terminal.elapsedMs = static_cast<double>(GetTickCount64() - attemptStarted);
                 audio_diagnostics::CompleteStage(
                     config_.asrAttemptId, diagnostic.kind,
                     diagnostic.index, terminal);
+                if (!abort_.load() && !refreshedCredentials &&
+                    (doubao_ime_asr::IsAuthFailure(error) || identityRefusal)) {
+                    // 必须清凭据重注册，否则第二次重放仍会带着被拒身份再撞一次。
+                    retryCfg.deviceId.clear();
+                    retryCfg.cdid.clear();
+                    retryCfg.token.clear();
+                    PostCredentials({}, true);
+                    refreshedCredentials = true;
+                }
                 continue;
             }
             client.Close();
@@ -479,7 +518,9 @@ private:
                 audio_diagnostics::StageTerminal terminal =
                     asr_diagnostics::TerminalFromText(DoubaoErrorText(error));
                 terminal.terminal = doubao_ime_asr::IsAuthFailure(error)
-                    ? "auth_error" : "connect_error";
+                    ? "auth_error"
+                    : (doubao_ime_asr::IsIdentityRefusal(error)
+                        ? "identity_rejected" : "connect_error");
                 CompletePrimary(terminal);
                 DispatchFinal(DoubaoErrorText(error));
             }
@@ -745,8 +786,11 @@ private:
         if (failed) {
             primaryTerminal = asr_diagnostics::TerminalFromText(
                 DoubaoErrorText(error));
-            if (error.find(L"timed out") != std::wstring::npos ||
-                error.find(L"timeout") != std::wstring::npos) {
+            if (doubao_ime_asr::IsIdentityRefusal(error)) {
+                primaryTerminal.terminal = "identity_rejected";
+                primaryTerminal.reason = "identity_rejected";
+            } else if (error.find(L"timed out") != std::wstring::npos ||
+                       error.find(L"timeout") != std::wstring::npos) {
                 primaryTerminal.terminal = "timeout";
             }
         } else if (finalText.empty()) {
@@ -764,7 +808,9 @@ private:
         const DWORD retryTimeout = ReplayWaitMs(replayBuffer.Size());
         // 失败路径先过预算门控：装不下就跳过重试，failed 保持 true，随后
         // DispatchFinal() 会下发更精确的 provider 错误并由 fallback 接手。
-        // shouldRetryEmptyFinal 与 shouldRetryFailure 互斥，故收紧条件不改变块内语义。
+        // shouldRetryEmptyFinal 与 shouldRetryFailure 互斥（空结果路径 failed 恒为 false），
+        // 所以块内必须自己处理"空结果 + 重放期间传输失败"：否则重放时被身份拒绝会被
+        // 吞成 "No speech detected"，identity_rejected 文案连同自愈线索一起丢失。
         const bool shouldRetryFailure = failed && retryWithReplay &&
             replayBuffer.Available() && !replayBuffer.Empty() &&
             ShouldStartFailureReplay("doubao_ime", "final", CurrentWatchdogMs(),
@@ -778,7 +824,12 @@ private:
             } else if (!retryResult.transportError) {
                 finalText.clear();
                 failed = false;
-            } else if (shouldRetryFailure) {
+            } else {
+                // A transport failure during the replay is real on both entry
+                // paths. This branch used to be gated on shouldRetryFailure,
+                // which is always false on the empty-result path, so an identity
+                // refusal during the replay was swallowed: failed stayed false and
+                // the terminal became "No speech detected".
                 error = retryResult.error.empty() ? error : retryResult.error;
                 failed = true;
             }

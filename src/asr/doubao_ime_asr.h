@@ -35,6 +35,9 @@ struct DoubaoImeConfig {
     audio_diagnostics::StageKind diagnosticStageKind =
         audio_diagnostics::StageKind::Primary;
     unsigned diagnosticStageIndex = 0;
+    // Base64 AsrContext uploaded as extra["context"]. Empty (the default) keeps
+    // the payload byte-identical to a session without context enhancement.
+    std::string contextBase64;
 };
 
 struct TestResult {
@@ -97,6 +100,7 @@ private:
 };
 
 bool IsAuthFailure(const std::wstring& error);
+bool IsIdentityRefusal(const std::wstring& error);
 bool IsTransientFailure(const std::wstring& error);
 size_t FrameBytesForConfig(const DoubaoImeConfig& cfg);
 std::wstring MergeRecognizedText(std::wstring base, const std::wstring& incoming);
