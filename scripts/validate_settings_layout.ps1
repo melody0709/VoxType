@@ -63,6 +63,12 @@ $startupGap = Get-UiInt 'GeneralStartupGroupGap'
 $startupHeight = Get-UiInt 'GeneralStartupGroupH'
 $startupHintOffsetY = Get-UiInt 'GeneralStartupHintOffsetY'
 $hintWidth = Get-UiInt 'GeneralStartupHintW'
+$learningCheckW = Get-UiInt 'GeneralLearningCheckW'
+$learningClearOffsetX = Get-UiInt 'GeneralLearningClearOffsetX'
+$learningClearW = Get-UiInt 'GeneralLearningClearW'
+$learningRowOffsetY = Get-UiInt 'GeneralLearningRowOffsetY'
+$actionBtnH = Get-UiInt 'ActionBtnH'
+$checkH = Get-UiInt 'CheckH'
 
 # Tab 2 (Speech Engine): Row 0 routing and the Qwen / Volcano compact grids
 $primaryBackendComboW = Get-UiInt 'PrimaryBackendComboW'
@@ -239,6 +245,25 @@ if (($contentLeft + $hintWidth) -gt ($groupX + $groupWidth)) {
 }
 if (($startupHintOffsetY + $qwenHint2LineHeight) -gt $startupHeight) {
     throw 'Startup explanatory text keeps a single-line box and would clip its second line'
+}
+
+# Row 3 of the input group (local learning loop). The toggle label is a privacy
+# disclosure rather than a caption, so it cannot be shortened to fit and the
+# toggle width is the load-bearing number in this row. The static pass cannot
+# measure rendered text (it only sees UiStyle constants), so it pins the row
+# geometry instead: a widened label that pushed the Clear button off the group,
+# under the toggle, or out of the input group fails the build rather than
+# shipping a clipped control. See the measurement note on GeneralLearningCheckW
+# in ui_types.h for the GDI figures behind the current value.
+if ($learningClearOffsetX -lt $learningCheckW) {
+    throw "Learning row: Clear button at offset $learningClearOffsetX overlaps the toggle (width $learningCheckW)"
+}
+if (($contentLeft + $learningClearOffsetX + $learningClearW) -gt ($groupX + $groupWidth)) {
+    throw 'Clear learned data button exceeds the General group width'
+}
+$learningRowHeight = [Math]::Max($checkH, $actionBtnH)
+if (($learningRowOffsetY + $learningRowHeight) -gt $inputGroupH) {
+    throw "Learning row overflows the input group: bottom=$($learningRowOffsetY + $learningRowHeight), height=$inputGroupH"
 }
 
 # --- Tab 5: Audio & Advanced ------------------------------------------------
@@ -679,6 +704,10 @@ foreach ($requiredOwner in @(
         @{ Id = 'IDC_ASR_BACKEND'; File = 'tab_speech_engine.cpp' },
         @{ Id = 'IDC_ASR_FALLBACK_BACKEND'; File = 'tab_speech_engine.cpp' },
         @{ Id = 'IDC_PARTIAL'; File = 'tab_general.cpp' },
+        @{ Id = 'IDC_VOICE_PUNCT_MODE'; File = 'tab_general.cpp' },
+        @{ Id = 'IDC_VOICE_SPACING'; File = 'tab_general.cpp' },
+        @{ Id = 'IDC_LEARNING_ENABLED'; File = 'tab_general.cpp' },
+        @{ Id = 'IDC_LEARNING_CLEAR'; File = 'tab_general.cpp' },
         @{ Id = 'IDC_POSTPROCESS'; File = 'provider_local.cpp' },
         @{ Id = 'IDC_MODEL'; File = 'provider_local.cpp' },
         @{ Id = 'IDC_THREADS'; File = 'provider_local.cpp' },

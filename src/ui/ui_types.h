@@ -64,9 +64,15 @@ constexpr int GeneralCleanupComboW = 232;
 constexpr int GeneralCleanupCheckOffsetX = 400;
 constexpr int GeneralCleanupCheckW = 360;
 // Third row: local learning loop toggle plus its data reset button.
+// The toggle label carries the cloud synchronization note ("Learn from manual corrections (cloud sync)").
+// Sized against the rendered width of that string in the 9pt UI font: at 96 DPI the box is 440 * 96/144 = 293 px
+// and the BS_AUTOCHECKBOX indicator takes ~20 px, leaving ample slack for the string.
+// The text and the control both scale linearly with DPI, so the slack is the same at 96/144/192/288.
 constexpr int GeneralLearningRowOffsetY = 102;
-constexpr int GeneralLearningCheckW = 360;
-constexpr int GeneralLearningClearOffsetX = 400;
+constexpr int GeneralLearningCheckW = 440;
+// Offset from ContentLeft; keeps a 40 px gap after the widened toggle and ends
+// the button at 742, inside the group's ~806 usable right edge.
+constexpr int GeneralLearningClearOffsetX = 480;
 constexpr int GeneralLearningClearW = 220;
 constexpr int GeneralStartupGroupGap = 16;
 constexpr int GeneralStartupGroupH = 112;

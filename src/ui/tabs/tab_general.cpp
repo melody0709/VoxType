@@ -7,6 +7,7 @@
 #include "settings.h"
 #include "ui_types.h"
 #include "hotkey.h"
+#include "injection_ledger.h"
 #include "learning_store.h"
 #include "startup_registration.h"
 
@@ -20,9 +21,9 @@ namespace {
 // voice_text_mode (core layer) so the ASR post-processor parses exactly these
 // strings without ui ever including the asr layer.
 const wchar_t* const kPunctModeLabels[] = {
-    L"Keep punctuation as-is",
-    L"Replace punctuation with space",
-    L"Remove trailing punctuation",
+    L"Keep all punctuation",
+    L"Replace with spaces",
+    L"No end punctuation",
 };
 
 std::wstring PunctModeValueFromIndex(int index) {
@@ -135,7 +136,7 @@ void TabGeneral::CreateControls(HWND parent) {
                                           IDC_VOICE_SPACING,
                                           S(UiStyle::ContentLeft + UiStyle::GeneralCleanupCheckOffsetX), cleanupY,
                                           S(UiStyle::GeneralCleanupCheckW), S(UiStyle::CheckH),
-                                          L"Spaces between CJK and ASCII/digits");
+                                          L"Space between Chinese & English");
     AddGeneralControl(spacingCheckbox);
 
     // Row 3 of the same group: local learning loop (P2).
@@ -144,7 +145,7 @@ void TabGeneral::CreateControls(HWND parent) {
                                            IDC_LEARNING_ENABLED,
                                            S(UiStyle::ContentLeft), learningY,
                                            S(UiStyle::GeneralLearningCheckW), S(UiStyle::CheckH),
-                                           L"Learn from my edits (reads doc; words to cloud)");
+                                           L"Learn from manual corrections (cloud sync)");
     AddGeneralControl(learningCheckbox);
     HWND clearLearningBtn = CreateButton(parent,
                                          IDC_LEARNING_CLEAR,
@@ -229,6 +230,13 @@ bool TabGeneral::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWN
         SetStatus(parent, L"Learned data could not be deleted (file is in use).");
         return true;
     }
+    // Drop the pending reflection before reporting success. A worker that already
+    // snapshotted the injection still calls learning_store::Add() when its message
+    // reaches this window, and Add re-reads the (now empty) file, so without this
+    // the pair would be written straight back and the status line above would be
+    // a lie. The whole window is reflectionDelayMs (2.5 s by default), so
+    // "dictate, then clear" hits it reliably.
+    injection_ledger::Invalidate();
     SetStatus(parent, L"Learned corrections deleted.");
     return true;
 }

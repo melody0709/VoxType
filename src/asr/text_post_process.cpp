@@ -136,6 +136,15 @@ bool BypassesPunctuationPostProcess(const std::u32string& cps) {
     // Official FUN_1407755c0: text made only of digits and punctuation, with at
     // least one non-punctuation character, whose last character is '%' or '℃'
     // is passed through untouched so that amounts survive post-processing.
+    //
+    // Unreachable with today's table, and that is not a bug: neither '%' (0x25) nor
+    // '℃' (0x2103) is a member of IsPostProcessPunctuation, so the loop below
+    // bails out on the first of them and amounts survive by never being treated as
+    // punctuation at all. The per-position exemptions in ToSpaceReplace and
+    // StripTrailingPunctuation are what would take over if the table ever grew
+    // those code points - both are covered by tests. If you add 0x25 or 0x2103 to
+    // that table, this function becomes live for the first time, so read both paths
+    // together rather than assuming this one already runs.
     if (cps.empty()) return false;
     bool sawNonPunctuation = false;
     for (char32_t cp : cps) {

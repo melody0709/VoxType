@@ -123,8 +123,15 @@ const TextCase kTextCases[] = {
     {L"他说：“好”", kRemoveTrailing, L"他说：“好”"},
     {L"你好。。", kRemoveTrailing, L"你好。"},
 
-    // The digits + punctuation bypass survives every mode.
+    // Amounts survive every mode. '%' and '℃' are not punctuation in today's
+    // table, so nothing here reaches BypassesPunctuationPostProcess(); if the
+    // table ever grows 0x25 / 0x2103 these cases start exercising the
+    // per-position exemptions instead, which is why they exist.
     {L"100%!", kSpaceReplace, L"100%"},
+    {L"100%", kRemoveTrailing, L"100%"},
+    {L"25℃", kSpaceReplace, L"25℃"},
+    {L"温度25℃", kRemoveTrailing, L"温度25℃"},
+    {L"温度25℃。", kRemoveTrailing, L"温度25℃"},
 
     // Inner spacing only; the host-text leading/trailing rules are out of scope.
     {L"测试A", kSpacingOnly, L"测试 A"},
