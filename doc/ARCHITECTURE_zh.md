@@ -108,7 +108,11 @@ flowchart LR
 | `tools/doubao_ime_probe.bat` / `tools/doubao_ime_probe.cpp` | 独立豆包输入法诊断 probe：复用保存凭据、执行 live protocol 检查，可选执行 16kHz mono WAV 识别检查，并支持按实时节奏发送/接收的 streaming probe |
 | `tools/asr_audio_replay.bat` / `tools/asr_audio_replay.cpp` | 开发专用规范 WAV 校验与多后端 replay，复用生产 batch/streaming session |
 | `src/audio/firered_vad.h` | FireRed VAD 模块（header-only） |
-| `src/core/input_context.h` | 输入框上下文读取模块（header-only，UIA/MSAA/WM_GETTEXT 分层 Fallback） |
+| `src/core/input_context.h` | 输入框上下文读取模块（header-only，UIA/MSAA/WM_GETTEXT 分层 Fallback），并持有根层浏览器门控：浏览器目标改走配套扩展桥，绝不发起无障碍请求 |
+| `src/core/browser_target.h` | 浏览器识别模块（header-only，纯函数）：按进程镜像名与窗口类名判定前台顶层窗口是否 Chromium/Gecko 系浏览器，不使用 UIA/MSAA/COM。Electron 与 WebView2 宿主刻意不算浏览器 |
+| `src/core/accessibility_focus.h` | 捕获窗口内的 UIA 查询（header-only）：先确认非浏览器 HWND，再定位其元素并在后代范围内找键盘焦点。input_context/selection_context 共用；禁止全局焦点和屏幕点命中，避免查询期间切进浏览器而触发其无障碍 |
+| `src/core/browser_bridge.h` | 浏览器配套扩展桥（header-only）：长度前缀 JSON 分帧、按 SID+会话隔离的命名管道服务端、fail-closed 的 `ClassifyFocus` 三态判定，以及本 EXE 的 Native Messaging host 模式。路由绑定原生浏览器 PID 与最后聚焦窗口；应答用页面 DPR / tab zoom 得到浏览器真实界面缩放，按显示器工作区原点校验矩形，不依赖 Windows DPI。用于替代浏览器无障碍读取 |
+| `src/core/selection_context.h` | 选区与焦点文档快照（header-only，先 UIA 后 Win32），带同样的根层浏览器门控，浏览器永不收到无障碍请求 |
 | `src/core/startup_registration.h` / `src/core/startup_registration.cpp` | 当前用户 Windows 开机自启注册表管理，支持旧版便携路径探测与修复 |
 | `src/core/utils.h` | 共享工具函数（WideToUtf8、Utf8ToWide、EscapeJson、Trim） |
 

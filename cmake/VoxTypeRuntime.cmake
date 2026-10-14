@@ -19,6 +19,18 @@ function(voxtype_install_runtime target)
         "${_src}/README.md"
         "${_src}/doc/README_zh.md"
         "${_src}/doc/volcengine/volcengine_asr_guide_zh.md"
+        # Browser companion payload: the MV3 extension the user loads unpacked,
+        # the native messaging host manifest the browser reads, and the
+        # registration helper that owns the two HKCU values.
+        "${_src}/extensions/browser-bridge/manifest.json"
+        "${_src}/extensions/browser-bridge/worker.js"
+        "${_src}/extensions/browser-bridge/README.md"
+        "${_src}/extensions/browser-bridge/icons/icon-16.png"
+        "${_src}/extensions/browser-bridge/icons/icon-32.png"
+        "${_src}/extensions/browser-bridge/icons/icon-48.png"
+        "${_src}/extensions/browser-bridge/icons/icon-128.png"
+        "${_src}/packaging/native-messaging/com.voxtype.browser_bridge.json"
+        "${_src}/tools/register_browser_bridge.ps1"
     )
     foreach(_required IN LISTS _runtime_files)
         if(NOT EXISTS "${_required}")
@@ -35,7 +47,10 @@ function(voxtype_install_runtime target)
         file(REMOVE_RECURSE
             "${_runtime_root}/models"
             "${_runtime_root}/doc"
-            "${_runtime_root}/docs")
+            "${_runtime_root}/docs"
+            "${_runtime_root}/extensions"
+            "${_runtime_root}/native-messaging"
+            "${_runtime_root}/scripts")
         file(REMOVE
             "${_runtime_root}/VoxType.exe"
             "${_runtime_root}/sherpa-onnx-cxx-api.dll"
@@ -74,6 +89,20 @@ function(voxtype_install_runtime target)
         COMPONENT Runtime)
     install(FILES "${_src}/doc/README_zh.md"
         DESTINATION "doc"
+        COMPONENT Runtime)
+
+    # Browser companion: the unpacked extension (the user points "Load unpacked"
+    # at <runtime>/extensions/browser-bridge), the native messaging host manifest
+    # whose relative path resolves to <runtime>/VoxType.exe, and the registration
+    # helper. Nothing here is installed outside the runtime directory.
+    install(DIRECTORY "${_src}/extensions/browser-bridge"
+        DESTINATION "extensions"
+        COMPONENT Runtime)
+    install(FILES "${_src}/packaging/native-messaging/com.voxtype.browser_bridge.json"
+        DESTINATION "native-messaging"
+        COMPONENT Runtime)
+    install(PROGRAMS "${_src}/tools/register_browser_bridge.ps1"
+        DESTINATION "scripts"
         COMPONENT Runtime)
 
     set(_manifest_script "${CMAKE_CURRENT_BINARY_DIR}/WriteRuntimeManifest.cmake")

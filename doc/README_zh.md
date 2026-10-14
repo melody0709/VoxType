@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.11.8</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.11.9</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -258,6 +258,7 @@ CHANGELOG.md        — 版本变更记录
 
 **最近更新：**
 
+- **v0.11.9** — 不再向浏览器索取无障碍能力（此前会让浏览器一直变慢，只有重启浏览器才恢复），改用可选的 Chrome/Edge 配套扩展经 Native Messaging 读取浏览器内焦点输入框；浏览器路径现在 fail-closed，绝不回退到 UI Automation
 - **v0.11.8** — 新增可选的语音文本清理（标点模式与中英/数字间空格，默认关闭）、从用户自身修改中本地学习、可选的豆包会话上下文上传（默认关闭）；加固共用文本/词表/提示词路径，保证其余后端在默认配置下逐字节不变
 - **v0.11.7** — 修复热键看门狗反复停录/启动，加固锁屏取消与剪贴板回滚，加入 FIR/Sinc 重采样及静音、录音边界处理，扩充离线回归检查
 - **v0.9.27** — 新增 Microsoft MAI Transcribe 2 batch ASR，支持 OpenRouter/Azure 双通道、独立 DPAPI 凭据、final-only Settings 提示、retry/fallback/诊断/replay 共用链路及离线协议回归测试

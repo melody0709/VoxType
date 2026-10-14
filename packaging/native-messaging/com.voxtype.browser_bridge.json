@@ -1,0 +1,9 @@
+{
+  "name": "com.voxtype.browser_bridge",
+  "description": "VoxType browser companion native messaging host",
+  "path": "../VoxType.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://cjmhlnmnolcbkjpfdbnpejfnigacbpai/"
+  ]
+}

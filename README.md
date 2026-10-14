@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.11.8</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.11.9</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -293,6 +293,7 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 **Recent Updates:**
 
+- **v0.11.9** — Stopped asking browsers for accessibility (which permanently slowed them down until a browser restart) and replaced the browser focused-field read with an optional Chrome/Edge companion extension over native messaging; the browser path now fails closed instead of falling back to UI Automation
 - **v0.11.8** — Added opt-in voice text cleanup (punctuation modes and CJK/Latin spacing, off by default), local learning from your own edits, and an off-by-default Doubao session-context upload; hardened the shared text, vocabulary and prompt paths so every other backend stays byte-identical by default
 - **v0.11.7** — Fixed the hotkey watchdog stop/restart loop, hardened lock cancellation and clipboard rollback, added FIR/sinc resampling with silence and utterance boundaries, and expanded offline regression checks
 - **v0.9.27** — Added Microsoft MAI Transcribe 2 batch ASR through OpenRouter or Azure Speech API, DPAPI-isolated credentials, final-only Settings guidance, retry/fallback/diagnostics/replay integration, and offline request/response regression coverage

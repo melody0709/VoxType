@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "VoxType Browser Bridge",
+  "description": "Lets VoxType keep its dictation context in the browser without enabling browser accessibility. Reads the focused input field only while you dictate; password fields are never read.",
+  "version": "1.0.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy44EWQeEnlZa3rQUdHzXKyvzG6nwTUB5dO8dRvDpF8TCbfJ850RmX0rpkCzZoxwvYyYK/sgx9DdiE6GYtyxdN+B3uydwhd98tmKpTPFX1/3T3ojeZNWzZcOtUBx6RuKg9PD59rHoaaMafmWHUM0qoy+xMrtj09fysKpnEDn0Gy1Ti02lVfjvM1ELWGu4Y7R1/Ur6me4Bqc0dslTpPnZUPbYq8nXJIPvaFkPmb4ckOZJRnh0Oq76hi0a89z0OTRP1QzX4FhuXj4lMmXHlyZu0ocb0q8xhxSBCGaCt0PhU5VyePniCQ7UHsbTFiDAtKAKRAM0wZOATuwTlz34UFgeOtQIDAQAB",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "action": {
+    "default_title": "Reconnect VoxType dictation context",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  }
+}

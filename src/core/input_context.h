@@ -8,6 +8,10 @@
 #include <uiautomation.h>
 #include <oleacc.h>
 
+#include "browser_bridge.h"
+#include "browser_target.h"
+#include "accessibility_focus.h"
+
 #include <string>
 #include <set>
 #include <memory>
@@ -50,9 +54,20 @@ inline const char* LayerName(int layer) {
         case 3:  return "L2.5_TEXTPATTERN";
         case 4:  return "L2.7_MSAA";
         case 5:  return "L3_TEXTPATTERN2";
+        case 6:  return "L4_BROWSER_BRIDGE";
         default: return "UNKNOWN";
     }
 }
+
+// Browser companion query budgets and layer tag. Declared up here because the
+// focused-field reader below the layer list uses them.
+//   - the probe runs on its own detached worker and is read when the transcript
+//     arrives, so it can afford more slack than the focused-field read, which must
+//     fit inside the existing 200 ms caller wait in GetInputFieldContext;
+//   - L4 (browser companion) is reported as successLayer = 6.
+inline constexpr DWORD kBrowserProbeDeadlineMs = 400;
+inline constexpr DWORD kBrowserFieldDeadlineMs = 150;
+inline constexpr int kBrowserCompanionLayer = 6;
 
 inline std::wstring TruncateForDisplay(const std::wstring& text, size_t maxLen = 80) {
     if (text.size() <= maxLen) return text;
@@ -420,6 +435,7 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
 
     if (GetGUIThreadInfo(fgTid, &guiInfo)) {
         hwndFocus = guiInfo.hwndFocus;
+        if (hwndFocus && GetAncestor(hwndFocus, GA_ROOT) != GetAncestor(fgWnd, GA_ROOT)) hwndFocus = nullptr;
         if (guiInfo.hwndCaret) {
             caretScreenPt.x = guiInfo.rcCaret.left;
             caretScreenPt.y = guiInfo.rcCaret.top;
@@ -456,6 +472,42 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
         }
     }
 
+    // Root-level browser gate. It sits after the classic Win32 `Edit` fast path
+    // (which issues no accessibility request) and before every accessibility call
+    // below, and it is inside this function on purpose: the focused-field read has
+    // several entry points (Volcengine streaming, Qwen batch/streaming), and only
+    // guarding the UI-layer caller would leave them able to reach UIA.
+    if (const browser_target::Target browser = browser_target::IdentifyWindow(fgWnd);
+        browser.IsBrowser()) {
+        const browser_bridge::QueryResult answer = browser_bridge::Bridge::Instance().Query(
+            fgWnd, browser_bridge::Need::Field, maxTextCharacters, kBrowserFieldDeadlineMs);
+        if (!answer.ok) {
+            // The reason is what the snapshot log prints. The diagnostics carry the
+            // window rectangles that decided the match, so "connected but no window
+            // lined up" is actionable straight from the log instead of needing a
+            // debugger and a guess.
+            result.failReason = answer.diagnostics.empty()
+                                    ? answer.reason
+                                    : answer.reason + " " + answer.diagnostics;
+            return result;
+        }
+        if (answer.isPassword) {
+            // Same containment as the accessibility path: a password control ends
+            // the chain and never yields text.
+            result.isPassword = true;
+            result.failReason = "PASSWORD";
+            return result;
+        }
+        if (!answer.isTextInput || answer.value.empty()) {
+            result.failReason = "BROWSER_NO_VALUE";
+            return result;
+        }
+        result.textLength = static_cast<int>(answer.value.size());
+        result.inputFieldText = TakeLastN(answer.value, maxTextCharacters);
+        result.successLayer = kBrowserCompanionLayer;
+        return result;
+    }
+
     EnsureAccessibilityTree(fgWnd);
 
     IUIAutomation* pAutomation = nullptr;
@@ -476,7 +528,7 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
     }
 
     IUIAutomationElement* pFocused = nullptr;
-    hr = pAutomation->GetFocusedElement(&pFocused);
+    hr = accessibility_focus::FocusedElementWithinWindow(pAutomation, fgWnd, &pFocused);
     if (SUCCEEDED(hr) && pFocused) {
         if (TryReadFromElement(pFocused, uiaPt, hasCaretPt, maxTextCharacters, result)) {
             pFocused->Release();
@@ -507,8 +559,9 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
         return result;
     }
 
+    // HWND fallback stays inside the anchor even if another window covers it.
     IUIAutomationElement* pFromPt = nullptr;
-    hr = pAutomation->ElementFromPoint(uiaPt, &pFromPt);
+    hr = accessibility_focus::ElementFromWindow(pAutomation, hwndFocus ? hwndFocus : fgWnd, &pFromPt);
     if (SUCCEEDED(hr) && pFromPt) {
         if (TryReadFromElement(pFromPt, uiaPt, hasCaretPt, maxTextCharacters, result)) {
             pFromPt->Release();
@@ -536,7 +589,7 @@ inline InputContextResult ReadInputFieldTextUIA(const std::wstring& windowTitle,
         return result;
     }
 
-    if (hwndFocus) {
+    if (hwndFocus && !browser_target::IdentifyTopLevel(hwndFocus).IsBrowser()) {
         IAccessible* pAcc = nullptr;
         hr = AccessibleObjectFromWindow(hwndFocus, OBJID_WINDOW,
                                         IID_IAccessible, (void**)&pAcc);
@@ -601,6 +654,24 @@ inline constexpr int kSensitiveProbeUnknownNoHandle = 14;
 inline constexpr int kSensitiveProbeUnknownFocusMoved = 15;
 inline constexpr int kSensitiveProbeUnknownNoStartFocus = 16;
 inline constexpr int kSensitiveProbeUnknownPasswordQuery = 17;
+
+// Browser companion answers. The browser path never issues an accessibility
+// request, so its failures are "no/ambiguous companion answer" rather than
+// accessibility errors; they stay distinct so a designed skip can be told apart
+// from a broken one in the diagnostic log.
+inline constexpr int kSensitiveProbeUnknownBrowserNotConnected = 18;
+inline constexpr int kSensitiveProbeUnknownBrowserQuery = 19;
+inline constexpr int kSensitiveProbeUnknownBrowserFocus = 20;
+inline constexpr int kSensitiveProbeUnknownBrowserIdentity = 21;
+inline constexpr int kSensitiveProbeUnknownBrowserTimeout = 22;
+// The companion answered, but what it reached is not an editable control - which
+// is also how a closed shadow root looks from the outside. Never Safe.
+inline constexpr int kSensitiveProbeUnknownBrowserNotTextInput = 23;
+// A companion is connected but the window it advertises is not the one we
+// anchored (or several are). Split out from "not connected" because the causes are
+// unrelated: one is an install problem, the other a geometry/binding problem.
+inline constexpr int kSensitiveProbeUnknownBrowserNoWindowMatch = 24;
+inline constexpr int kSensitiveProbeUnknownBrowserWindowAmbiguous = 25;
 
 // Focus identity of the moment recording starts, readable synchronously: the
 // foreground window and the control it reports as focused. It must be captured
@@ -672,6 +743,32 @@ inline int SensitiveProbeAnswerFromUia(int passwordState,
     return anchorMatched ? kSensitiveProbeSafe : kSensitiveProbeUnknownFocusMoved;
 }
 
+// Fail-closed mapping of a browser companion answer. It is the exact analogue of
+// SensitiveProbeAnswerFromUia above: only a fully corroborated "definitely not a
+// password field, still focused, belongs to the window we anchored" answer may
+// become Safe, and every browser failure mode keeps its own unknown code. The
+// decision itself lives in browser_bridge::ClassifyFocus so it stays pure and
+// offline-testable; this function only renames it into the probe's answer space.
+inline int SensitiveProbeAnswerFromBrowser(browser_bridge::FocusState focus) {
+    switch (focus) {
+    case browser_bridge::FocusState::Sensitive: return kSensitiveProbeSensitive;
+    case browser_bridge::FocusState::Safe: return kSensitiveProbeSafe;
+    case browser_bridge::FocusState::UnknownFocus: return kSensitiveProbeUnknownBrowserFocus;
+    case browser_bridge::FocusState::UnknownIdentity: return kSensitiveProbeUnknownBrowserIdentity;
+    case browser_bridge::FocusState::UnknownTimeout: return kSensitiveProbeUnknownBrowserTimeout;
+    case browser_bridge::FocusState::UnknownNotTextInput:
+        return kSensitiveProbeUnknownBrowserNotTextInput;
+    case browser_bridge::FocusState::UnknownNoWindowMatch:
+        return kSensitiveProbeUnknownBrowserNoWindowMatch;
+    case browser_bridge::FocusState::UnknownWindowAmbiguous:
+        return kSensitiveProbeUnknownBrowserWindowAmbiguous;
+    case browser_bridge::FocusState::UnknownNotConnected:
+        return kSensitiveProbeUnknownBrowserNotConnected;
+    case browser_bridge::FocusState::UnknownQuery: return kSensitiveProbeUnknownBrowserQuery;
+    }
+    return kSensitiveProbeUnknownBrowserQuery;
+}
+
 // Starts a detached UI Automation probe and returns a handle that settles to
 // Sensitive, Safe, or one of the unknown codes. Callers start it when recording
 // starts and read the handle when the transcript arrives, so the probe stays off
@@ -696,6 +793,30 @@ inline std::shared_ptr<std::atomic<int>> BeginSensitiveFocusProbe() {
         return state;
     }
 
+    // Root-level browser gate. See browser_target.h for why an accessibility read
+    // must never be issued against a browser process; this check is deliberately
+    // inside the probe (not at the call sites) so no caller can bypass it. The
+    // companion extension answers instead, on the very same detached-worker shape
+    // as the UIA path, so recording start never waits for it. Without a companion
+    // the answer stays "unknown", which keeps the shared history fail-closed.
+    if (const browser_target::Target target = browser_target::IdentifyWindow(anchor.foreground);
+        target.IsBrowser()) {
+        std::thread browserWorker([state, anchorHwnd = anchor.foreground]() {
+            const browser_bridge::QueryResult answer = browser_bridge::Bridge::Instance().Query(
+                anchorHwnd, browser_bridge::Need::Probe, 0, kBrowserProbeDeadlineMs);
+            const browser_bridge::FocusState focus =
+                answer.ok ? browser_bridge::ClassifyFocus(answer.isPassword, true, answer.hasFocus,
+                                                          answer.identityMatched, answer.isTextInput)
+                          : browser_bridge::FocusStateFromFailure(answer.reason);
+            state->store(SensitiveProbeAnswerFromBrowser(focus), std::memory_order_relaxed);
+            // Released by this worker when it really finishes, exactly like the
+            // UIA path: a caller that stopped waiting must not free the slot.
+            s_uiaProbeRunning.store(false, std::memory_order_relaxed);
+        });
+        browserWorker.detach();
+        return state;
+    }
+
     std::thread worker([state, anchor]() {
         int answer = kSensitiveProbeUnknownUiaUnavailable;
         if (SUCCEEDED(CoInitializeEx(NULL, COINIT_MULTITHREADED))) {
@@ -704,7 +825,8 @@ inline std::shared_ptr<std::atomic<int>> BeginSensitiveFocusProbe() {
                                            CLSCTX_INPROC_SERVER, IID_IUIAutomation,
                                            (void**)&pAutomation)) && pAutomation) {
                 IUIAutomationElement* pFocused = nullptr;
-                if (SUCCEEDED(pAutomation->GetFocusedElement(&pFocused)) && pFocused) {
+                if (SUCCEEDED(accessibility_focus::FocusedElementWithinWindow(
+                        pAutomation, anchor.foreground, &pFocused)) && pFocused) {
                     // The password property is read first: an explicit hit is
                     // conclusive on its own and needs no window handle at all.
                     const int passwordState = ReadPasswordQueryState(pFocused);
@@ -757,6 +879,14 @@ inline const char* SensitiveFocusAnswerName(int answer) {
     case kSensitiveProbeUnknownNoProbe: return "unknown_no_probe";
     case kSensitiveProbeUnknownNoStartFocus: return "unknown_no_start_focus";
     case kSensitiveProbeUnknownPasswordQuery: return "unknown_password_query";
+    case kSensitiveProbeUnknownBrowserNotConnected: return "unknown_browser_not_connected";
+    case kSensitiveProbeUnknownBrowserQuery: return "unknown_browser_query";
+    case kSensitiveProbeUnknownBrowserFocus: return "unknown_browser_focus";
+    case kSensitiveProbeUnknownBrowserIdentity: return "unknown_browser_identity";
+    case kSensitiveProbeUnknownBrowserTimeout: return "unknown_browser_timeout";
+    case kSensitiveProbeUnknownBrowserNotTextInput: return "unknown_browser_not_text_input";
+    case kSensitiveProbeUnknownBrowserNoWindowMatch: return "unknown_browser_no_window_match";
+    case kSensitiveProbeUnknownBrowserWindowAmbiguous: return "unknown_browser_window_ambiguous";
     default: return "unknown_not_settled";
     }
 }

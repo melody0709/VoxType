@@ -498,12 +498,13 @@ uint64_t BeginAsrAttempt(const Config& config, SelectionContext selection) {
         attemptConfig.qwenInputContextSnapshot =
             qwen_context::CaptureInputFieldText(&g_inputContextResult);
         asr_runtime_log::Write(
-            "event=input_context_snapshot captured=%d chars=%zu layer=%d timed_out=%d password=%d",
+            "event=input_context_snapshot captured=%d chars=%zu layer=%d timed_out=%d password=%d reason=%s",
             attemptConfig.qwenInputContextSnapshot.empty() ? 0 : 1,
             attemptConfig.qwenInputContextSnapshot.size(),
             g_inputContextResult.successLayer,
             g_inputContextResult.timedOut ? 1 : 0,
-            g_inputContextResult.isPassword ? 1 : 0);
+            g_inputContextResult.isPassword ? 1 : 0,
+            g_inputContextResult.failReason.empty() ? "none" : g_inputContextResult.failReason.c_str());
     }
 
     // Multi-turn context enhancement: gated on the history switch alone, so an

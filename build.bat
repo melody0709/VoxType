@@ -158,7 +158,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     rem replay target from rotting silently. It was unlinkable for a whole
     rem refactor cycle before 2026-09-28 because nothing verified it.
     echo Building offline protocol/request regression tests...
-    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test audio_resampler_test clipboard_test text_post_process_test correction_learning_test asr_audio_replay
+    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test audio_resampler_test clipboard_test text_post_process_test correction_learning_test browser_bridge_test asr_audio_replay
     if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_free_protocol_test.exe"
     if not exist "!VOXTYPE_TEST_EXE!" (
@@ -258,6 +258,16 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running correction learning regression tests...
     "!VOXTYPE_CORRECTION_LEARNING_TEST_EXE!"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    set "VOXTYPE_BROWSER_BRIDGE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\browser_bridge_test.exe"
+    if not exist "!VOXTYPE_BROWSER_BRIDGE_TEST_EXE!" (
+        echo ERROR: Browser bridge test executable was not produced: !VOXTYPE_BROWSER_BRIDGE_TEST_EXE!
+        exit /b 1
+    )
+    echo Running browser bridge isolation regression tests...
+    "!VOXTYPE_BROWSER_BRIDGE_TEST_EXE!"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    "%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\tests\browser_bridge_registration_test.ps1" -RuntimeRoot "%RUNTIME_DIR%"
     if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     "%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\tests\recording_watchdog_regression.ps1" -SourceRoot "%ROOT%"
     if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!

@@ -29,16 +29,19 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 ## 架构重构（2026-09 起，进行中）
 
 - **权威方案**：`.plan\refactor\cxx23-architecture-refactor-plan.md`（含分层契约、CMake 目标骨架、分阶段 Milestone 与退出判据）。
-- **机械守卫**：`tools\check_architecture.ps1`（当前 **20 项检查**，含一条契约检查"`src` 模块必须出现在 `ARCHITECTURE.md` 与 `doc/ARCHITECTURE_zh.md` 中"，按**唯一模块名**（basename 去扩展名、全词匹配）计数，基线按实测值只降不升——`DocEntriesMissingEn=28` / `DocEntriesMissingZh=35`；检查名与判定一律以脚本内的清单为准，构建打印的 `All architecture invariants PASSED (N checks)` 与 `Test-StageGate`/`Record-Result` 名称是唯一事实来源，`"可发送历史必须在写入时按敏感控件过滤"` 是其中的接线检查之一。旧稿里"含 6 项防绕过"这类计数在脚本中无从核对，已删除）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
+- **机械守卫**：`tools\check_architecture.ps1`（当前 **23 项检查**，含一条契约检查"`src` 模块必须出现在 `ARCHITECTURE.md` 与 `doc/ARCHITECTURE_zh.md` 中"，按**唯一模块名**（basename 去扩展名、全词匹配）计数，基线按实测值只降不升——`DocEntriesMissingEn=28` / `DocEntriesMissingZh=35`；检查名与判定一律以脚本内的清单为准，构建打印的 `All architecture invariants PASSED (N checks)` 与 `Test-StageGate`/`Record-Result` 名称是唯一事实来源，`"可发送历史必须在写入时按敏感控件过滤"` 与"浏览器目标不得抵达无障碍读取"是其中的接线检查之一。旧稿里"含 6 项防绕过"这类计数在脚本中无从核对，已删除）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
 - **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。
   守卫脚本里的**基线常量**（`tools/check_architecture.ps1` 的 `$BASELINES`，**decrease-only**）：
   `GlobalsIncluders / GlobalsExterns / GlobalsCrossLayerHeader / MainLines / SettingsLines / LayerViolations`
   = `0 / 0 / 0 / 150 / 400 / 2`。
-  当前**实测值** = `0 / 0 / 0 / 148 / 387 / 1`（`globals.h` 彻底消除；`main.cpp` 148 行，余 2 行；
-  `settings.cpp` 387 行，余 13 行；跨层 include 违规 1 处，余 1 处）。
-  基线自 P0（`847926b`）建立后从未调整过；`main.cpp` 由 150 行收缩至 148 行，故棘轮留有 2 行余量。
+  当前**实测值** = `0 / 0 / 0 / 150 / 387 / 1`（`globals.h` 彻底消除；`main.cpp` 150 行，**已顶到上限、余 0 行**；
+  `settings.cpp` 387 行，余 13 行；跨层 include 违规 1 处，余 1 行）。
+  基线自 P0（`847926b`）建立后从未调整过。**`main.cpp` 现在用满了 150 行**（v0.11.9 为浏览器配套扩展的 host 模式入口
+  加了 1 行 include + 1 行调用），因此**下一次动 `main.cpp` 必须先把它瘦身**——例如把启动期的预加载/预热接线
+  移进 `src/app/` 的专用模块，而不是提高基线。文档欠账实测 = `DocEntriesMissingEn=27` / `DocEntriesMissingZh=34`
+  （v0.11.9 把 `selection_context` 与新增的 `browser_target`、`browser_bridge` 一并登记，欠账各降 1）。
   **基线只降不升**：`main.cpp` / `settings.cpp` 的新代码应进入对应模块，而不是在这两个文件里增长。
 
 - **契约同步是每个阶段的 DoD**：涉及类名、路径、配置项搬迁时，必须同步更新 `ARCHITECTURE.md`、`AGENTS.md`（本文）与守卫脚本里的基线数值。
@@ -48,7 +51,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 - `build/` 完全是可删除、gitignored 的生成输出；禁止存放源码、手工脚本、截图、输入数据、用户数据或人工备份。
 - 顶层白名单仅为 `cmake/`、`run/`、`artifacts/`、`logs/`、`packages/` 和 `README.txt`。新增顶层项必须同步更新 `build.bat`、布局校验脚本和本文档。
-- `build/cmake/x64-release/` 只放 CMake/Ninja 编译中间产物；`build/run/x64-release/` 是唯一规范运行载荷；发布包只进入 `build/packages/`。
+- `build/cmake/x64-release/` 只放 CMake/Ninja 编译中间产物；`build/run/x64-release/` 是唯一规范运行载荷；发布包只进入 `build/packages/`。运行载荷除顶层可执行/动态库外还有 `models/`、`doc/`、`docs/`、`extensions/browser-bridge/`（用户"加载已解压的扩展程序"指向此处）、`native-messaging/`（浏览器读取的 host 清单，`path` 相对清单目录指向 `../VoxType.exe`）与 `scripts/`（`register_browser_bridge.ps1`）；这六个子目录都由 `cmake/VoxTypeRuntime.cmake` 拥有并在每次 install 前整体清除。
 - 测试、诊断和显式日志分别放入 `build/artifacts/`、`build/artifacts/diagnostics/` 和 `build/logs/`。
 - `build.bat --clean` 清理 `cmake`、`run`、`artifacts`、`logs` 和布局说明，但保留已验证的 `packages/`。未知项必须由布局校验报错，不能自动删除或打包。
 
@@ -96,8 +99,10 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 
 ## 不要轻易做的事
 
+- **【A】非浏览器的 UIA 查询也必须限定在捕获的 HWND 内**：统一走 `accessibility_focus::FocusedElementWithinWindow()` / `ElementFromWindow()`（`src/core/accessibility_focus.h`）。禁止 `GetFocusedElement()` 与全局 `ElementFromPoint()`：后台线程查询期间切入 Chrome 会把请求送进浏览器，事后核对 HWND 已经太晚。MSAA 只可读取同根、仍非浏览器的捕获 HWND；页面内坐标只可用于已有元素的 RangeFromPoint。host 检测在单实例互斥体前，桌面管道监听必须在成功拿到互斥体后，避免重复启动偷走连接/清掉 readiness。
 - 不要把 LLM 接成默认纠错，容易乱改用户意思。
 - 不要让 UI 线程加载模型或等待 ASR。
+- 不要为了"恢复浏览器内的字段上下文"而重新启用浏览器 UIA/MSAA，也不要加"临时回落一次"的开关：Chromium 的无障碍模式是进程级的，一次就够且不可撤销（见踩坑规则【A】）。要么走配套扩展 `extensions/browser-bridge/`，要么接受浏览器内没有上下文。
 - 不要在**快捷键输入框正在录入时**继续拦截录音快捷键：全局监听器的挂起粒度是「`VoxType.HotkeyEdit` 是否持有焦点」（`SetHotkeyListenerSuspended`），**不是**「Settings 是否打开」。Settings 打开期间热键保持可用以便现场试听；离开输入框、切页、切到其它应用、关闭 Settings 都必须恢复监听（关闭路径由 `WM_DESTROY` 兜底复位，钩子本体只在启动与进程退出时装卸）。两条"按住期间改变焦点"的约束不得回退：**录入后候选键（刚录入的键——Save 会把它变成当前热键——或当前配置键）仍有按下时，恢复监听必须延迟到它们都松开**（否则该键的 auto-repeat 会被匹配成热键并启动一次录音）；**输入框取得焦点时若录音已开始，挂起必须先补发对应的停止命令**（否则 KEYUP 被透传、录音停不下来）。
 - 不要依赖固定窗口高度放底部按钮。
 - 不要为了美观牺牲控件可读性，高 DPI 优先留空间。
@@ -134,6 +139,8 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **【A】公共 VAD trim 只裁剪头尾静音**，不能裁掉中间停顿；`VadTrimCore::ProcessChunk()` 是**追加输出语义**，调用方要自己清空/使用局部 `outputs`。
 - **【A】Streaming VAD 的 no-speech 判断用 `StreamingVadTrimmer::DetectedSpeech()`**，不要重新引入 provider 专属 `g_xxxVadState`。
 - **【A】转义 JSON 解码**：处理 `\\"` 时不能只看前一个字符，必须统计连续反斜杠数量——偶数个后的 `"` 才是结束符。现状实现在 `src/core/utils.h`（`DecodeJsonStringAt` / `ExtractJsonStringDecoded`）。
+- **【A】浏览器窗口坐标必须使用浏览器的真实界面缩放**：Windows 的 GetDpiForWindow/96、Chrome 的 --force-device-scale-factor 与网页 zoom 是三个不同的量；页面 devicePixelRatio / chrome.tabs.getZoom() 才是浏览器界面缩放（例如 Windows 150%、Chrome 125%、网页 250% 时 DPR=3.125，但界面缩放=1.25）。扩展仅在按需查询时上报该比例、当前窗口矩形与 screen.availLeft/availTop；桌面端先绑定 native host 的浏览器祖先 PID 与最后聚焦窗口，再用 BoundsMatchMonitor() 按显示器工作区原点换算并校验四个矩形分量，成功后才能接受正文或 Safe。不得仅凭宽高比反推比例并认下身份，不得拿页面 DPR 或 Windows DPI 代替浏览器比例。缺字段、非有限/越界比例、矩形不符一律 Unknown；负坐标/混合 DPI 有离线回归，真实双屏仍需验收。另外：windef.h 把 near/far 定义为空宏，禁止用作变量名。
+- **【A】浏览器目标绝不得接收到 UIA/MSAA 请求**：Chromium 把来自平台无障碍消费者的请求按位 OR 进**进程级**模式（`EnableAXModeFromPlatform`），释放我们的 COM 对象**不会**撤销它——退出应用、刷新页面都不恢复，只有重启浏览器才行。所以"减少查询频次"没有意义（一次就够）。判定用 `src/core/browser_target.h`（纯进程名 + 窗口类名，不碰 UIA/MSAA/COM）；门控必须在 `input_context.h` / `selection_context.h` 的**根层**，且位于 `EnsureAccessibilityTree` / `GetFocusedElement` / `ElementFromPoint` / MSAA 回退**之前**（Qwen batch/streaming 与火山流式的入口都从根层经过，只堵 UI 层会被绕过）。失败一律 fail-closed：没有配套扩展时给出"无上下文 + 敏感 Unknown"，**任何失败路径都不得回退到无障碍**。浏览器侧的 Safe 还额外要求"**确实识别到了一个可编辑控件**"（`ClassifyFocus` 的 `textInputIdentified`）：闭合 shadow root 从外面看就是一个普通元素，而 `document.activeElement` 在焦点进入 shadow tree 时会被重定向到宿主——少了这一条，封装成 `<my-password-field>` 的密码框就会被当成"不是密码框"而放行历史。Electron / WebView2 宿主（`Code.exe`、`msedgewebview2.exe`）刻意**不**算浏览器；改名单必须同时改 `tests/browser_bridge_test.cpp` 的边界断言。机械守卫是 `check_architecture.ps1` 的两条 "browser targets never reach accessibility" 与一条 "browser companion identity pinned and never yields a password value"（后者会把扩展 `key` 现算一遍 ID 并与 `allowed_origins` 比对，改 key 而不改基线即失败）；方案、验收依据与未签收项见 `.plan/fix/browser-uia-accessibility-isolation-plan.md`。**改 `extensions/browser-bridge/` 后必须跑 `node tests/browser_bridge_worker_contract.cjs`**（该测试不进 `build.bat`，因为产品构建不依赖 Node）：它钉住"哪一帧真正持有焦点"的判定——`Document.hasFocus()` 在**任一祖先文档**上都为 true，所以含 iframe 的页面必然有多个 frame 报焦点，按"多余即冲突"处理会让所有嵌入式编辑器/第三方登录组件拿不到上下文并 fail-closed 丢历史（v0.11.9 修过一次，测试已用修复前逻辑验证能捕获该回归）。
 - **【A】火山引擎 WebSocket `connected` 必须用 `std::atomic<bool>`**，不能用 `volatile bool`。
 - **【A】火山引擎 `context` 字段值必须是 JSON 字符串**（内部引号转义），不能是原始 JSON 对象。
 - **【B】火山引擎协议层**：**在当前（无测试覆盖）前提下**，不要重写 frame 编解码、三模式 send/drain、`PrewarmConnection()` / `CloseSession()` 行为；可以机械拆薄。**解除条件**：一旦 P3/P6 为该协议层建立了回归测试，本条自动作废，替换为"协议层重构前必须先补测试"。

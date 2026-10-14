@@ -16,7 +16,7 @@
 #include "audio_capture.h"
 #include "audio_diagnostics.h"
 #include "wasapi_capture.h"
-#include "input_context.h"
+#include "browser_bridge.h"
 #include "volcengine_asr.h"
 #include "volcengine_streaming_session.h"
 #include "asr_probe_service_impl.h"
@@ -39,6 +39,7 @@
 bool ProcessSettingsDialogMessage(MSG* msg);
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
+    if (const auto nativeHost = browser_bridge::RunNativeHostIfInvoked(); nativeHost) return *nativeHost;
     HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\VoxType.SingleInstance");
     if (!mutex) {
         MessageBoxW(nullptr, L"Failed to create single-instance mutex.", kAppName, MB_OK | MB_ICONERROR);
@@ -49,6 +50,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         CloseHandle(mutex);
         return 0;
     }
+    browser_bridge::Bridge::Instance().Start();
     g_instance = instance;
     asr_probe::InitializeAsrProbeService();
     SetActiveVadDetector(&g_asrEngine);

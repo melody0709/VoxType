@@ -409,6 +409,26 @@ set_target_properties(text_post_process_test PROPERTIES
 )
 add_test(NAME text_post_process_test COMMAND text_post_process_test)
 
+# Offline regression for the browser accessibility isolation contract: browser
+# classification (including the Electron/WebView2 boundary), the fail-closed
+# focus tri-state, and companion bridge frame/field validation. Both modules are
+# header-only, so nothing but the Windows APIs they use is linked here.
+add_executable(browser_bridge_test
+    tests/browser_bridge_test.cpp
+)
+target_compile_definitions(browser_bridge_test PRIVATE UNICODE _UNICODE)
+target_include_directories(browser_bridge_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/core"
+)
+if(MSVC)
+    target_compile_options(browser_bridge_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+target_link_libraries(browser_bridge_test PRIVATE user32 advapi32)
+set_target_properties(browser_bridge_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME browser_bridge_test COMMAND browser_bridge_test)
+
 add_executable(correction_learning_test
     tests/correction_learning_test.cpp
     src/core/correction_extractor.cpp

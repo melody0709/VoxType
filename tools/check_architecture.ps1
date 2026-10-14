@@ -73,8 +73,8 @@ $BASELINES = @{
     # debt in AGENTS.md; each round should ratchet these numbers DOWN, and the
     # ratchet only forbids NEW undocumented modules. `src/app/resource.*` is
     # build-derived and stays out.
-    DocEntriesMissingEn     = 28
-    DocEntriesMissingZh     = 35
+    DocEntriesMissingEn     = 27
+    DocEntriesMissingZh     = 34
 }
 
 # Allowed layer dependencies: key = layer of the including file,
@@ -572,6 +572,146 @@ Record-Result -Name "Privacy: sendable history gated at write time" `
     -Passed ($privacyMissing.Count -eq 0) `
     -Details $(if ($privacyMissing.Count -eq 0) { "probe + write-time gate wired" } else { "$($privacyMissing.Count) missing wiring" })
 foreach ($p in $privacyMissing) { Write-Host "    ! $p" -ForegroundColor Red }
+
+# 3.6.6b Browser accessibility isolation. Chromium ORs every platform
+# accessibility request into a PROCESS-wide mode, and releasing our objects does
+# not clear it: only a browser restart restores performance. "Reduce the query
+# count" therefore cannot fix it, and the gate has to be structural - both
+# context modules must classify the target as a browser and route it to the
+# companion bridge BEFORE the first accessibility call, and a missing companion
+# must stay fail-closed (an unknown probe answer).
+$browserGateMissing = @()
+$inputContextGatePath = Join-Path $RepoRoot "src\core\input_context.h"
+if (Test-Path $inputContextGatePath) {
+    $gateText = Read-Text -Path $inputContextGatePath
+    foreach ($needle in @('browser_target::IdentifyWindow',
+                          'browser_bridge::Bridge::Instance().Query',
+                          'SensitiveProbeAnswerFromBrowser',
+                          'kSensitiveProbeUnknownBrowserNotConnected',
+                          'kSensitiveProbeUnknownBrowserIdentity')) {
+        if ($gateText -notmatch [regex]::Escape($needle)) {
+            $browserGateMissing += "input_context.h lacks $needle"
+        }
+    }
+    # The first classification must precede the first accessibility call, so the
+    # browser short-circuit cannot drift below EnsureAccessibilityTree again.
+    $gateIndex = $gateText.IndexOf('browser_target::IdentifyWindow')
+    $accessibilityIndex = $gateText.IndexOf('EnsureAccessibilityTree(fgWnd)')
+    if ($gateIndex -lt 0 -or $accessibilityIndex -lt 0 -or $gateIndex -gt $accessibilityIndex) {
+        $browserGateMissing += "input_context.h reaches EnsureAccessibilityTree(fgWnd) before the browser gate"
+    }
+    if ($gateText -match '->(?:GetFocusedElement|ElementFromPoint)\s*\(') {
+        $browserGateMissing += "input_context.h uses global UIA focus/point queries that can switch into a browser"
+    }
+    if ($gateText -notmatch 'accessibility_focus::FocusedElementWithinWindow') {
+        $browserGateMissing += "input_context.h lacks HWND-scoped focus queries"
+    }
+} else {
+    $browserGateMissing += "src/core/input_context.h missing"
+}
+Record-Result -Name "Contract: browser targets never reach accessibility from input_context.h" `
+    -Passed ($browserGateMissing.Count -eq 0) `
+    -Details $(if ($browserGateMissing.Count -eq 0) { "gate precedes accessibility read" } else { "$($browserGateMissing.Count) missing gate(s)" })
+foreach ($g in $browserGateMissing) { Write-Host "    ! $g" -ForegroundColor Red }
+
+$selectionGateMissing = @()
+$selectionGatePath = Join-Path $RepoRoot "src\core\selection_context.h"
+if (Test-Path $selectionGatePath) {
+    $gateText = Read-Text -Path $selectionGatePath
+    foreach ($needle in @('IsBrowserTarget', 'kBrowserSkippedReason')) {
+        if ($gateText -notmatch [regex]::Escape($needle)) {
+            $selectionGateMissing += "selection_context.h lacks $needle"
+        }
+    }
+    $gateIndex = $gateText.IndexOf('IsBrowserTarget(focusWindow)')
+    $accessibilityIndex = $gateText.IndexOf('CLSID_CUIAutomation')
+    if ($gateIndex -lt 0 -or $accessibilityIndex -lt 0 -or $gateIndex -gt $accessibilityIndex) {
+        $selectionGateMissing += "selection_context.h creates a UIA client before the browser gate"
+    }
+    if ($gateText -match '->(?:GetFocusedElement|ElementFromPoint)\s*\(') {
+        $selectionGateMissing += "selection_context.h uses global UIA focus/point queries that can switch into a browser"
+    }
+    if ($gateText -notmatch 'accessibility_focus::FocusedElementWithinWindow') {
+        $selectionGateMissing += "selection_context.h lacks HWND-scoped focus queries"
+    }
+} else {
+    $selectionGateMissing += "src/core/selection_context.h missing"
+}
+Record-Result -Name "Contract: browser targets never reach accessibility from selection_context.h" `
+    -Passed ($selectionGateMissing.Count -eq 0) `
+    -Details $(if ($selectionGateMissing.Count -eq 0) { "gate precedes UIA client creation" } else { "$($selectionGateMissing.Count) missing gate(s)" })
+foreach ($g in $selectionGateMissing) { Write-Host "    ! $g" -ForegroundColor Red }
+
+# 3.6.6c The companion channel has two contracts that must hold together:
+#   - identity: the host name and the extension id are written in four artifacts
+#     (browser_bridge.h, the extension manifest's `key`, the host manifest's
+#     allowed_origins, worker.js), and a rotation in one of them silently turns
+#     the whole channel into "no context". The id is therefore re-derived from the
+#     manifest `key` here instead of being trusted.
+#   - privacy: the answer carries a field value, so a password value must never
+#     reach this process. The extension has its own structural guard; this is the
+#     desktop-side last line of defence.
+$bridgePrivacyMissing = @()
+$bridgeGuardPath = Join-Path $RepoRoot "src\core\browser_bridge.h"
+$extensionManifestPath = Join-Path $RepoRoot "extensions\browser-bridge\manifest.json"
+$workerPath = Join-Path $RepoRoot "extensions\browser-bridge\worker.js"
+if (Test-Path $bridgeGuardPath) {
+    $bridgeText = Read-Text -Path $bridgeGuardPath
+    if ($bridgeText -notmatch [regex]::Escape('need == Need::Field && !result.isPassword')) {
+        $bridgePrivacyMissing += "browser_bridge.h extracts the field value without the isPassword gate"
+    }
+    $hostNameMatch = [regex]::Match($bridgeText, 'kHostName\[\]\s*=\s*L"([^"]+)"')
+    $idMatch = [regex]::Match($bridgeText, 'kExtensionIdUtf8\[\]\s*=\s*"([^"]+)"')
+    if (!$hostNameMatch.Success) { $bridgePrivacyMissing += "browser_bridge.h has no pinned host name" }
+    if (!$idMatch.Success) { $bridgePrivacyMissing += "browser_bridge.h has no pinned extension id" }
+    # A CLOSED shadow root is indistinguishable from a plain non-editable element
+    # from the outside, so "it does not look like a password" must never be enough
+    # for Safe: the classification has to require a positively identified editable
+    # control.
+    if ($bridgeText -notmatch [regex]::Escape('!textInputIdentified')) {
+        $bridgePrivacyMissing += "browser_bridge.h may answer Safe without identifying an editable control"
+    }
+    if ($hostNameMatch.Success) {
+        $hostName = $hostNameMatch.Groups[1].Value
+        if (!(Test-Path $workerPath) -or (Read-Text -Path $workerPath) -notmatch [regex]::Escape($hostName)) {
+            $bridgePrivacyMissing += "worker.js does not use the pinned host name"
+        }
+        $hostManifestPath = Join-Path $RepoRoot "packaging\native-messaging\$hostName.json"
+        if (!(Test-Path $hostManifestPath)) {
+            $bridgePrivacyMissing += "native messaging manifest missing for '$hostName'"
+        } elseif ($idMatch.Success) {
+            $origin = "chrome-extension://$($idMatch.Groups[1].Value)/"
+            if ((Read-Text -Path $hostManifestPath) -notmatch [regex]::Escape($origin)) {
+                $bridgePrivacyMissing += "the native messaging manifest does not allow the pinned extension id"
+            }
+        }
+    }
+    if ($idMatch.Success) {
+        # The extension id must really be derived from the manifest `key`, or
+        # allowed_origins would pin an id the browser never assigns.
+        if (!(Test-Path $extensionManifestPath)) {
+            $bridgePrivacyMissing += "extensions/browser-bridge/manifest.json missing"
+        } else {
+            $keyMatch = [regex]::Match((Read-Text -Path $extensionManifestPath), '"key"\s*:\s*"([^"]+)"')
+            if (!$keyMatch.Success) {
+                $bridgePrivacyMissing += "the extension manifest has no `key`, so its id is not stable"
+            } else {
+                $derived = -join ([System.Security.Cryptography.SHA256]::HashData(
+                        [Convert]::FromBase64String($keyMatch.Groups[1].Value))[0..15] |
+                    ForEach-Object { 'abcdefghijklmnop'[($_ -shr 4)]; 'abcdefghijklmnop'[($_ -band 0x0f)] })
+                if ($derived -ne $idMatch.Groups[1].Value) {
+                    $bridgePrivacyMissing += "the manifest key derives id '$derived', not the pinned id"
+                }
+            }
+        }
+    }
+} else {
+    $bridgePrivacyMissing += "src/core/browser_bridge.h missing"
+}
+Record-Result -Name "Contract: browser companion identity pinned and never yields a password value" `
+    -Passed ($bridgePrivacyMissing.Count -eq 0) `
+    -Details $(if ($bridgePrivacyMissing.Count -eq 0) { "host/id derived and pinned; value gated on isPassword" } else { "$($bridgePrivacyMissing.Count) missing guard(s)" })
+foreach ($g in $bridgePrivacyMissing) { Write-Host "    ! $g" -ForegroundColor Red }
 
 # -----------------------------------------------------------------------------
 # 4. Stage gates (-Stage P1..P6). Turns each milestone DoD into a machine check.

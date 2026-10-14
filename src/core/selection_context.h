@@ -10,6 +10,9 @@
 #include <objidl.h>
 #include <shlobj_core.h>
 
+#include "browser_target.h"
+#include "accessibility_focus.h"
+
 #include <algorithm>
 #include <cwctype>
 #include <cstring>
@@ -276,11 +279,31 @@ inline bool IsSelectionPasswordReadable(HRESULT queryResult, BOOL isPassword) {
     return queryResult == S_OK && isPassword == FALSE;
 }
 
+// Root-level browser gate for this module. See browser_target.h for why a browser
+// process must never receive an accessibility request from this tool: the request
+// turns on a PROCESS-wide Chromium accessibility mode that outlives our objects
+// and only a browser restart clears.
+//
+// Scope note: the companion bridge serves the focused FIELD (input_context), not
+// the selection yet. Browser targets therefore report no selection instead of
+// paying the accessibility cost, and callers already treat "no selection" as a
+// normal outcome. Routing selection through the bridge is a deliberate follow-up,
+// not an omission hidden behind a silent fallback.
+inline bool IsBrowserTarget(HWND window) {
+    return browser_target::IdentifyWindow(TopLevelWindow(window)).IsBrowser();
+}
+
+inline constexpr const char* kBrowserSkippedReason = "browser_skipped";
+
 inline bool TryReadSelectionWithUiAutomation(HWND focusWindow,
                                              std::wstring& selectedText,
                                              std::string& error) {
     selectedText.clear();
     error.clear();
+    if (IsBrowserTarget(focusWindow)) {
+        error = kBrowserSkippedReason;
+        return false;
+    }
 
     HRESULT initHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const bool shouldUninitialize = SUCCEEDED(initHr);
@@ -303,7 +326,7 @@ inline bool TryReadSelectionWithUiAutomation(HWND focusWindow,
             error = "UIA_CREATE_FAILED";
             break;
         }
-        hr = automation->GetFocusedElement(&focused);
+        hr = accessibility_focus::FocusedElementWithinWindow(automation, focusWindow, &focused);
         if (FAILED(hr) || !focused) {
             error = "UIA_NO_FOCUS";
             break;
@@ -431,6 +454,14 @@ inline SelectionContext Capture() {
         result.error = "NO_FOREGROUND_WINDOW";
         return result;
     }
+    // Root-level browser gate: stop before both readers. The accessibility path
+    // would activate the browser's process-wide accessibility mode, and the Win32
+    // fallback (EM_GETSEL / WM_GETTEXT against the render widget) cannot answer
+    // for web content anyway while blocking for its own send timeouts.
+    if (IsBrowserTarget(result.targetWindow)) {
+        result.error = kBrowserSkippedReason;
+        return result;
+    }
     result.focusThreadId = GetWindowThreadProcessId(result.targetWindow,
                                                     &result.processId);
 
@@ -495,6 +526,10 @@ inline bool TryReadFocusedDocumentTextWithUiAutomation(HWND focusWindow,
                                                        std::string& error) {
     documentText.clear();
     error.clear();
+    if (IsBrowserTarget(focusWindow)) {
+        error = kBrowserSkippedReason;
+        return false;
+    }
 
     HRESULT initHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const bool shouldUninitialize = SUCCEEDED(initHr);
@@ -517,7 +552,7 @@ inline bool TryReadFocusedDocumentTextWithUiAutomation(HWND focusWindow,
             error = "UIA_CREATE_FAILED";
             break;
         }
-        hr = automation->GetFocusedElement(&focused);
+        hr = accessibility_focus::FocusedElementWithinWindow(automation, focusWindow, &focused);
         if (FAILED(hr) || !focused) {
             error = "UIA_NO_FOCUS";
             break;
@@ -625,6 +660,15 @@ inline bool TryReadFocusedDocumentText(HWND focusWindow,
                                        std::wstring& documentText,
                                        std::string& error,
                                        size_t maxChars = 20000) {
+    documentText.clear();
+    error.clear();
+    // Guarded here as well as inside the two readers: browsers must not pay the
+    // accessibility cost, and the Win32 fallback would only add its send timeouts
+    // without being able to read web content.
+    if (IsBrowserTarget(focusWindow)) {
+        error = kBrowserSkippedReason;
+        return false;
+    }
     std::string uiaError;
     if (TryReadFocusedDocumentTextWithUiAutomation(focusWindow, documentText, maxChars, uiaError)) {
         return true;

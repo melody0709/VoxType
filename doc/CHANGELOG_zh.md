@@ -2,6 +2,22 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.11.9 (2026-10-13)
+
+### 浏览器无障碍隔离与可选的浏览器配套扩展
+
+- **审查加固。** host 检测仍在单实例互斥体之前；桌面监听移到成功获取互斥体之后，避免重复启动偷走桥连接或复位 readiness。断线先在 250ms 后快速重试一次，持续失败再退避。窗口快照丢弃乱序结果，区分多 profile 的实际焦点与保留的最后焦点。普通应用 UIA 查询统一限定于捕获 HWND 及其后代（`accessibility_focus`），删除切应用后仍可能触达 Chrome 的全局焦点/坐标查询。缺失密码布尔值、小数 ID、超量窗口清单均 fail-closed；管道取消覆盖退出期间刚开始的读取。
+- **修复强制浏览器缩放与网页缩放混用。** 配套扩展 1.0.1 用页面 DPR / tab zoom 上报真实界面缩放，同时携带显示器工作区原点和当前窗口矩形。桌面端先绑定原生浏览器 PID 与最后聚焦窗口，再校验四个矩形分量，之后才接受字段文本或 Safe 隐私判定；Windows 150%、Chrome 强制 125%、网页 250% 不再混淆。浏览器失焦期间重连会恢复最后聚焦窗口；无焦点帧不再读取字段值。升级桌面端后需同步重载已解压扩展。
+- **VoxType 不再向浏览器索取无障碍能力 —— 任何路径都不会，包括所有失败路径。** Chromium 会把来自平台无障碍消费者的请求按位 OR 进**进程级**模式，我们释放 COM 对象并不会撤销它，因此关闭 VoxType 或刷新页面都不会恢复性能，只有重启浏览器才行。`src/core/browser_target.h` 仅凭进程镜像名与窗口类名判定前台顶层窗口（不使用 UIA/MSAA/COM）；一旦判定为浏览器，`input_context.h` / `selection_context.h` 会在 `EnsureAccessibilityTree`、`GetFocusedElement`、`ElementFromPoint` 与 MSAA 回退**之前**终止。门控放在两个模块的根层（Qwen batch/streaming 与火山流式的入口都会经过它，没有任何调用方可以绕过），并新增架构检查：门控一旦漂移到无障碍调用之下，构建直接失败。Electron 与 WebView2 宿主（VS Code、Slack、`msedgewebview2.exe`）刻意**不**算浏览器，行为保持不变。
+- **可选的 Chrome/Edge 配套扩展补回被门控去掉的能力。** `extensions/browser-bridge/` 是 Manifest V3 扩展，直接读 `document.activeElement` 回答"焦点元素是不是密码框、内容是什么"。桌面端每次录音做敏感探测，并按开关读取字段文本；仅在查询时按需 `chrome.scripting.executeScript`：无常驻 content script、无观察者、无轮询，空闲时页面零工作。`src/core/browser_bridge.h` 承载分帧、按用户 SID 隔离的命名管道与 Native Messaging host 模式；host 模式由**同一个 EXE** 在单实例互斥体**之前**进入，因此浏览器可以在托盘程序已运行时启动它。
+- **没有扩展时 fail-closed。** 所有浏览器侧结果 —— 未安装、未连接、超时、焦点帧歧义、页面不可注入、窗口身份无法核实 —— 都各自映射到独立的 unknown 答案码，与"UIA 读取不可判定"一样把转写挡在共享可上传历史之外。任何失败路径都不会重新启用无障碍；焦点字段读取只是报告"没有上下文"，并记录原因。
+- **密码框的值永不离开页面。** 注入函数先判密码再读值，因此密码控件走不到读值分支；桌面端也只从"非密码"的答案里取 `value`。配套测试锁定 fail-closed 真值表，守卫锁定桌面端分支。
+- **嵌套 frame 里的焦点改为被正确解析，而不是被当成冲突拒绝。** `Document.hasFocus()` 在"文档**或文档内任一元素**持有焦点"时为 true，因此焦点落在 iframe 内的控件时，每一层祖先文档都会回答"我有焦点"。把这种必然出现的情况当成歧义，会让**所有含 iframe 的页面**（嵌入式编辑器、第三方登录与支付组件）取不到答案，桌面端随之 fail-closed，把该次转写挡在共享历史之外。现在会丢弃 `activeElement` 是 frame 宿主元素的"透传"文档，并要求恰好剩下一个真正持有控件的 frame；控件落在扩展无法注入的 frame 里时，返回它自己的原因而不是猜。
+- **shadow 边界后的控件只有"被识别"或"被拒绝"，绝不被假定。** 焦点落在 shadow tree 内时，`document.activeElement` 会被重定向到宿主元素，因此 `<my-password-field>` 这类封装组件此前会被报成"不是密码框"，其转写会进入共享历史。现在页面函数会（限深）穿过开放 shadow root 找到真正持有焦点的控件；而**闭合** shadow root 从外面看与普通非可编辑元素无法区分，所以桌面端只对"被明确识别的可编辑控件"给出 Safe。焦点落在普通元素（页面 body、按钮）上时会报 unknown 并跳过共享历史——这是 fail-closed 的方向。
+- **窗口绑定改为显式把 Chrome 的 DIP 边界换算成物理像素。** Chrome 用设备无关像素（DIP）报告窗口边界，而本进程是 PerMonitorV2、读到的 `GetWindowRect` 是物理像素。第一版试图用 `SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE)` 来抹平两者——**该调用对 PerMonitorV2 进程不做虚拟化**，于是在 125% 缩放下每次都拿 `1925x2089` 去比 `1540x1672`，永远不匹配，浏览器口述直接报 `no_window_match` 拿不到上下文。现在比较逻辑是纯函数（缩放 × DIP，容差 16 DIP，由 `lastFocused` 过滤保证安全），并用失败机器上的原始矩形对做回归测试。
+- **窗口切换即时生效。** `hello` 快照携带桌面端用于匹配锚定窗口的 `lastFocused` 标记，而它此前与窗口缩放共用 200 ms 防抖，导致"切窗口后立刻口述"可能被上一个窗口的旧快照回答。现在焦点变化立即发送一次，并在防抖时长后再补发一次（以防浏览器自身窗口状态尚未更新）。
+- **验证。** `tests/browser_bridge_test.cpp` 锁定分类表（含 Electron/WebView2 边界）、fail-closed 焦点真值表、分帧校验与 `hello` 解析。**本版本未签收**：本机浏览器前后性能实测、配套扩展的设置页状态行（推迟：需要在 DPI/布局规范下单独做一轮 UI）、以及商店/企业分发 —— 当前安装方式为手动"加载已解压的扩展程序"。
+
 ## v0.11.8 (2026-10-12)
 
 ### 语音管线：本地文本清理、本地学习、可选的会话上下文上传

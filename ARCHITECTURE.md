@@ -115,7 +115,11 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `tools/doubao_ime_probe.bat` / `tools/doubao_ime_probe.cpp` | Standalone Doubao IME diagnostic probe: reuses saved credentials when available, runs a live protocol check, optionally runs a 16kHz mono WAV recognition check, and supports a real-time-ish streaming send/drain probe |
 | `tools/asr_audio_replay.bat` / `tools/asr_audio_replay.cpp` | Developer-only canonical-WAV validator and multi-backend replay runner using the production batch/streaming sessions |
 | `src/audio/firered_vad.h` | FireRed VAD module (header-only) |
-| `src/core/input_context.h` | Input field context reading module (header-only, UIA/MSAA/WM_GETTEXT layered fallback) |
+| `src/core/input_context.h` | Input field context reading module (header-only, UIA/MSAA/WM_GETTEXT layered fallback, plus the root-level browser gate that routes browser targets to the companion bridge instead of accessibility) |
+| `src/core/browser_target.h` | Browser classification for the accessibility-free path (header-only, pure): process-image-name and window-class matching that decides whether the focused top-level window is a Chromium- or Gecko-family browser, using no UIA, MSAA or COM. Electron/WebView2 hosts are deliberately not browsers |
+| `src/core/accessibility_focus.h` | UIA queries scoped to a captured non-browser HWND: resolve its element, then find keyboard focus within its descendants. Shared by input_context and selection_context; never asks for global focus or a screen-point hit, so switching to a browser cannot redirect a pending query |
+| `src/core/browser_bridge.h` | Browser companion bridge (header-only): length-prefixed JSON framing, SID/session-scoped named pipe server, the fail-closed `ClassifyFocus` tri-state, and native messaging host mode for this same executable. Routing pins the native browser PID and last-focused window; replies verify monitor-relative geometry using browser DPR divided by tab zoom, independently of Windows DPI. The replacement for browser accessibility reads |
+| `src/core/selection_context.h` | Selection and focused-document snapshot (header-only, UIA then Win32), with the same root-level browser gate so a browser never receives an accessibility request |
 | `src/core/startup_registration.h` / `src/core/startup_registration.cpp` | Current-user Windows Run registration, including stale Portable-path detection and repair |
 | `src/core/utils.h` | Shared utility functions (WideToUtf8, Utf8ToWide, EscapeJson, Trim) |
 
