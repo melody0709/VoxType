@@ -63,6 +63,17 @@ $startupGap = Get-UiInt 'GeneralStartupGroupGap'
 $startupHeight = Get-UiInt 'GeneralStartupGroupH'
 $startupHintOffsetY = Get-UiInt 'GeneralStartupHintOffsetY'
 $hintWidth = Get-UiInt 'GeneralStartupHintW'
+$browserGap = Get-UiInt 'GeneralBrowserGroupGap'
+$browserHeight = Get-UiInt 'GeneralBrowserGroupH'
+$browserHintOffsetY = Get-UiInt 'GeneralBrowserHintOffsetY'
+$browserHintWidth = Get-UiInt 'GeneralBrowserHintW'
+$browserStatusOffsetY = Get-UiInt 'GeneralBrowserStatusOffsetY'
+$browserStatusWidth = Get-UiInt 'GeneralBrowserStatusW'
+$browserActionsOffsetY = Get-UiInt 'GeneralBrowserActionsOffsetY'
+$browserBtnWidth = Get-UiInt 'GeneralBrowserBtnW'
+$browserFolderBtnWidth = Get-UiInt 'GeneralBrowserFolderBtnW'
+$browserGuideBtnWidth = Get-UiInt 'GeneralBrowserGuideBtnW'
+$browserButtonGap = Get-UiInt 'GeneralBrowserButtonGap'
 $learningCheckW = Get-UiInt 'GeneralLearningCheckW'
 $learningClearOffsetX = Get-UiInt 'GeneralLearningClearOffsetX'
 $learningClearW = Get-UiInt 'GeneralLearningClearW'
@@ -233,7 +244,8 @@ $tabContentBottom = $footerMinTop - 4 - $margin
 # --- Tab 1: General & Input -------------------------------------------------
 $generalInputY = $firstRowY + $shortcutHeight + $inputGroupGap
 $generalStartupY = $generalInputY + $inputGroupH + $startupGap
-$generalBottom = $generalStartupY + $startupHeight
+$generalBrowserY = $generalStartupY + $startupHeight + $browserGap
+$generalBottom = $generalBrowserY + $browserHeight
 if ($generalBottom -gt $tabContentBottom) {
     throw "Tab 1 reaches the tab work-area bottom: bottom=$generalBottom, limit=$tabContentBottom"
 }
@@ -245,6 +257,37 @@ if (($contentLeft + $hintWidth) -gt ($groupX + $groupWidth)) {
 }
 if (($startupHintOffsetY + $qwenHint2LineHeight) -gt $startupHeight) {
     throw 'Startup explanatory text keeps a single-line box and would clip its second line'
+}
+if (($contentLeft + $browserHintWidth) -gt ($groupX + $groupWidth)) {
+    throw 'Browser explanatory text exceeds the General group width'
+}
+if (($contentLeft + $browserStatusWidth) -gt ($groupX + $groupWidth)) {
+    throw 'Browser status text exceeds the General group width'
+}
+if (($contentLeft + $browserBtnWidth + $browserButtonGap + $browserFolderBtnWidth + $browserButtonGap + $browserGuideBtnWidth) -gt ($groupX + $groupWidth)) {
+    throw 'Browser action controls exceed the General group width'
+}
+# The three browser rows are stacked, so each one's bottom edge must clear the
+# next one's top edge. A box-level overlap is invisible at 150% DPI (the status
+# label is centred and its glyphs clear the buttons) and only shows up as clipped
+# descenders on the hint line at 96 DPI, where LabelH becomes 20 physical pixels.
+if (($browserHintOffsetY + $labelHeight) -gt $browserStatusOffsetY) {
+    throw "Browser hint box overlaps the host status line (hint bottom $($browserHintOffsetY + $labelHeight), status top $browserStatusOffsetY)"
+}
+if (($browserStatusOffsetY + $labelHeight) -gt $browserActionsOffsetY) {
+    throw "Browser host status box overlaps the action row (status bottom $($browserStatusOffsetY + $labelHeight), actions top $browserActionsOffsetY)"
+}
+if (($browserActionsOffsetY + $actionBtnH) -gt $browserHeight) {
+    throw "Browser action row exceeds the browser group height (actions bottom $($browserActionsOffsetY + $actionBtnH), group height $browserHeight)"
+}
+# The registry cannot tell whether the extension is loaded, so the status line
+# reports per-browser host state ("Host status: Chrome <state> / Edge <state>").
+# This static pass cannot measure rendered text, so it pins the box geometry only;
+# the longest wording fits with room to spare, and a longer one is caught by eye
+# rather than here. Keep the box at the content left edge so the two rows above
+# stay aligned with it.
+if ($browserStatusWidth -lt $browserHintWidth) {
+    throw 'Browser host status line is narrower than the explanatory text above it'
 }
 
 # Row 3 of the input group (local learning loop). The toggle label is a privacy

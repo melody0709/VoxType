@@ -47,8 +47,8 @@ constexpr int CheckH = 26;
 constexpr int HotkeyEditH = 38;
 constexpr int GeneralGroupX = 30;
 constexpr int GeneralGroupW = 788;
-constexpr int GeneralShortcutGroupH = 170;
-constexpr int GeneralInputGroupGap = 16;
+constexpr int GeneralShortcutGroupH = 144;
+constexpr int GeneralInputGroupGap = 10;
 // Two rows: the input-preview toggles, then the voice text cleanup row
 // (punctuation mode + spacing). Keeping both inside the existing group lets the
 // static layout validator derive the tab bottom from the same constants.
@@ -74,12 +74,29 @@ constexpr int GeneralLearningCheckW = 440;
 // the button at 742, inside the group's ~806 usable right edge.
 constexpr int GeneralLearningClearOffsetX = 480;
 constexpr int GeneralLearningClearW = 220;
-constexpr int GeneralStartupGroupGap = 16;
-constexpr int GeneralStartupGroupH = 112;
-constexpr int GeneralStartupCheckOffsetY = 24;
-constexpr int GeneralStartupHintOffsetY = 62;
+constexpr int GeneralStartupGroupGap = 10;
+constexpr int GeneralStartupGroupH = 104;
+constexpr int GeneralStartupCheckOffsetY = 20;
+constexpr int GeneralStartupHintOffsetY = 52;
 constexpr int GeneralStartupCheckW = 430;
 constexpr int GeneralStartupHintW = 760;
+constexpr int GeneralBrowserGroupGap = 10;
+constexpr int GeneralBrowserGroupH = 118;
+// Rows inside this group are stacked without overlapping: the hint and the status
+// line each occupy LabelH (30), and the action row occupies ActionBtnH (36), so
+// 20 + 30 = 50 and 50 + 30 = 80, leaving 118 as the group bottom. These stay
+// plain integers because the layout validator reads them with a numeric regex,
+// and it now asserts each bottom edge explicitly: a box-level overlap here is
+// invisible at 150% DPI and only surfaces as clipped descenders at 96 DPI.
+constexpr int GeneralBrowserHintOffsetY = 20;
+constexpr int GeneralBrowserHintW = 740;
+constexpr int GeneralBrowserStatusOffsetY = 50;
+constexpr int GeneralBrowserStatusW = 740;
+constexpr int GeneralBrowserActionsOffsetY = 80;
+constexpr int GeneralBrowserBtnW = 190;
+constexpr int GeneralBrowserFolderBtnW = 210;
+constexpr int GeneralBrowserGuideBtnW = 140;
+constexpr int GeneralBrowserButtonGap = 16;
 // Tab 5 (Audio & Advanced): VAD group owns the top of the page, the recording
 // diagnostics block moves here from Tab 1 and keeps its internal geometry.
 constexpr int AdvancedVadGroupH = 260;
@@ -183,7 +200,7 @@ constexpr int VolcContextY = 256;
 constexpr int VolcReuseVocabW = 460;
 constexpr int VolcInputContextY = 300;
 constexpr int VolcInputContextX = 188;
-constexpr int VolcInputContextW = 460;
+constexpr int VolcInputContextW = 560;
 constexpr int VolcActionY = 344;
 constexpr int VolcAdvancedBtnW = 140;
 constexpr int VolcTestBtnX = 340;
@@ -336,6 +353,7 @@ constexpr int RowLabelY(int row) { return FirstRowY + LabelYOffset + row * RowHe
 constexpr int GeneralShortcutGroupY = RowInputY(0);
 constexpr int GeneralInputGroupY = GeneralShortcutGroupY + GeneralShortcutGroupH + GeneralInputGroupGap;
 constexpr int GeneralStartupGroupY = GeneralInputGroupY + GeneralInputGroupH + GeneralStartupGroupGap;
+constexpr int GeneralBrowserGroupY = GeneralStartupGroupY + GeneralStartupGroupH + GeneralBrowserGroupGap;
 constexpr int AdvancedVadGroupY = RowInputY(0);
 constexpr int AdvancedDiagnosticsGroupY = AdvancedVadGroupY + AdvancedVadGroupH + AdvancedDiagnosticsGroupGap;
 // UiStyle constants are designed for 150% DPI (144 dpi).
@@ -497,3 +515,7 @@ constexpr int IDC_LEARNING_ENABLED = 2251;
 constexpr int IDC_LEARNING_CLEAR = 2252;
 constexpr int IDC_DOUBAO_CONTEXT_ENABLED = 2253;
 constexpr int IDC_LLM_ORGANIZE = 2254;
+constexpr int IDC_BROWSER_OPEN_FOLDER = 2255;
+constexpr int IDC_BROWSER_REGISTER_BRIDGE = 2256;
+constexpr int IDC_BROWSER_SETUP_GUIDE = 2257;
+constexpr int IDC_BROWSER_STATUS = 2258;

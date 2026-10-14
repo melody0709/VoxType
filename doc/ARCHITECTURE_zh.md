@@ -114,7 +114,10 @@ flowchart LR
 | `src/core/browser_bridge.h` | 浏览器配套扩展桥（header-only）：长度前缀 JSON 分帧、按 SID+会话隔离的命名管道服务端、fail-closed 的 `ClassifyFocus` 三态判定，以及本 EXE 的 Native Messaging host 模式。路由绑定原生浏览器 PID 与最后聚焦窗口；应答用页面 DPR / tab zoom 得到浏览器真实界面缩放，按显示器工作区原点校验矩形，不依赖 Windows DPI。用于替代浏览器无障碍读取 |
 | `src/core/selection_context.h` | 选区与焦点文档快照（header-only，先 UIA 后 Win32），带同样的根层浏览器门控，浏览器永不收到无障碍请求 |
 | `src/core/startup_registration.h` / `src/core/startup_registration.cpp` | 当前用户 Windows 开机自启注册表管理，支持旧版便携路径探测与修复 |
+| `src/core/browser_bridge_registration.h` / `src/core/browser_bridge_registration.cpp` | 浏览器配套扩展的 Native Messaging host 注册。读路径严格只读：按 HKCU→HKLM、32 位→64 位视图解析各浏览器键，Edge 额外按 Edge/Chromium/Chrome 顺序尝试兼容键，接受 `REG_SZ` / `REG_EXPAND_SZ`；两侧路径都规范化（分隔符、`.` / `..`、8.3 短名），并把 Chrome 与 Edge **各自独立**判为未注册 / 就绪 / 其他路径 / 清单缺失——"就绪"还要求清单确实存在于磁盘。写路径与 `tools/register_browser_bridge.ps1` 同契约：拒绝覆盖不是本程序创建的注册、先记录原值以便 `-Action Unregister` 还原、并拒绝未声明本 host / 本 EXE / stdio 的清单 |
 | `src/core/utils.h` | 共享工具函数（WideToUtf8、Utf8ToWide、EscapeJson、Trim） |
+
+注册记录逐对象解析，不依赖 JSON 字段顺序。每条记录的可选 `priorManifest` 保存本次写入前已确认归属的路径；GUI 与脚本均先原子替换记录文件，再写注册表，支持目录移动中断后的重试与撤销。
 
 全局状态变量拆解封装在所属分层模块中（`app_state.*`、`config_store.*`、`audio_capture.*`、`engine_local.*`、`asr_metrics.*`、`ui_theme.*`），具有清晰的访问边界。
 

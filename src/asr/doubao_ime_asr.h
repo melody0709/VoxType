@@ -35,8 +35,8 @@ struct DoubaoImeConfig {
     audio_diagnostics::StageKind diagnosticStageKind =
         audio_diagnostics::StageKind::Primary;
     unsigned diagnosticStageIndex = 0;
-    // Base64 AsrContext uploaded as extra["context"]. Empty (the default) keeps
-    // the payload byte-identical to a session without context enhancement.
+    // Base64 AsrContext uploaded as extra["context"]. Empty keeps the
+    // production payload unchanged when dialog context is disabled.
     std::string contextBase64;
 };
 

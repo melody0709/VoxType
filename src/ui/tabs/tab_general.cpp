@@ -10,8 +10,12 @@
 #include "injection_ledger.h"
 #include "learning_store.h"
 #include "startup_registration.h"
+#include "browser_bridge_registration.h"
 
 #include <windowsx.h>
+#include <shellapi.h>
+
+#include <format>
 
 namespace ui_tab {
 
@@ -49,6 +53,57 @@ std::wstring DescribeWin32Error(DWORD error) {
     if (message) LocalFree(message);
     while (!result.empty() && (result.back() == L'\r' || result.back() == L'\n')) result.pop_back();
     return result;
+}
+
+// Chrome and Edge are reported separately: one browser having a usable host must
+// never be presented as "ready" for both, and the registry cannot tell whether
+// the extension itself is loaded, so the label claims registration only.
+const wchar_t* HostStateText(browser_bridge_registration::HostState state) {
+    switch (state) {
+    case browser_bridge_registration::HostState::Ready:
+        return L"registered";
+    case browser_bridge_registration::HostState::PathMismatch:
+        return L"other path";
+    case browser_bridge_registration::HostState::TargetMissing:
+        return L"manifest missing";
+    case browser_bridge_registration::HostState::NotRegistered:
+    default:
+        return L"not registered";
+    }
+}
+
+void RefreshBrowserBridgeControl(HWND parent) {
+    HWND statusLabel = GetDlgItem(parent, IDC_BROWSER_STATUS);
+    if (!statusLabel) return;
+
+    const browser_bridge_registration::BridgeState state =
+        browser_bridge_registration::QueryBridgeState();
+    const bool fullyRegistered =
+        state.chrome == browser_bridge_registration::HostState::Ready &&
+        state.edge == browser_bridge_registration::HostState::Ready;
+    EnableWindow(GetDlgItem(parent, IDC_BROWSER_REGISTER_BRIDGE), fullyRegistered ? FALSE : TRUE);
+    const std::wstring text = std::format(L"Bridge: Chrome {} / Edge {}",
+                                          HostStateText(state.chrome), HostStateText(state.edge));
+    SetWindowTextW(statusLabel, text.c_str());
+}
+
+// Opens a file or folder and reports the real outcome. The "Opened ..." status
+// must not be printed when the shell refused, which is the normal case for a
+// development run whose runtime payload is not installed yet.
+void OpenWithShell(HWND parent, const std::wstring& target, const wchar_t* successText,
+                   const wchar_t* missingText) {
+    if (GetFileAttributesW(target.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        SetStatus(parent, missingText);
+        return;
+    }
+    const HINSTANCE result = ShellExecuteW(parent, L"open", target.c_str(), nullptr, nullptr,
+                                           SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+        SetStatus(parent, std::format(L"Could not open {} (shell error {}).",
+                                      target, reinterpret_cast<INT_PTR>(result)));
+        return;
+    }
+    SetStatus(parent, successText);
 }
 
 } // namespace
@@ -167,6 +222,37 @@ void TabGeneral::CreateControls(HWND parent) {
     control = CreateLabel(parent, S(UiStyle::ContentLeft), startupY + S(UiStyle::GeneralStartupHintOffsetY), S(UiStyle::GeneralStartupHintW), S(UiStyle::QwenHint2LineH),
                           L"Uses your Windows account startup list. Moving a Portable copy is corrected when you save.");
     AddGeneralControl(control);
+
+    const int browserY = S(UiStyle::GeneralBrowserGroupY);
+    HWND browserGroup = CreateWindowW(L"BUTTON", L"Browser integration (Chrome / Edge)", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                      S(UiStyle::GeneralGroupX), browserY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralBrowserGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
+    ApplyUiFont(browserGroup);
+    AddGeneralControl(browserGroup);
+
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), browserY + S(UiStyle::GeneralBrowserHintOffsetY), S(UiStyle::GeneralBrowserHintW), S(UiStyle::LabelH),
+                          L"Chrome & Edge need the companion extension for field context.");
+    AddGeneralControl(control);
+
+    HWND statusLabel = CreateWindowW(L"STATIC", L"Bridge: checking...", WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX,
+                                     S(UiStyle::ContentLeft), browserY + S(UiStyle::GeneralBrowserStatusOffsetY), S(UiStyle::GeneralBrowserStatusW), S(UiStyle::LabelH),
+                                     parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_BROWSER_STATUS)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(statusLabel);
+    AddGeneralControl(statusLabel);
+
+    const int browserActionsY = browserY + S(UiStyle::GeneralBrowserActionsOffsetY);
+    HWND regBtn = CreateButton(parent, IDC_BROWSER_REGISTER_BRIDGE, S(UiStyle::ContentLeft), browserActionsY,
+                               S(UiStyle::GeneralBrowserBtnW), S(UiStyle::ActionBtnH), L"Register Bridge");
+    AddGeneralControl(regBtn);
+
+    const int folderBtnX = UiStyle::ContentLeft + UiStyle::GeneralBrowserBtnW + UiStyle::GeneralBrowserButtonGap;
+    HWND folderBtn = CreateButton(parent, IDC_BROWSER_OPEN_FOLDER, S(folderBtnX), browserActionsY,
+                                  S(UiStyle::GeneralBrowserFolderBtnW), S(UiStyle::ActionBtnH), L"Open Extension Folder");
+    AddGeneralControl(folderBtn);
+
+    const int guideBtnX = folderBtnX + UiStyle::GeneralBrowserFolderBtnW + UiStyle::GeneralBrowserButtonGap;
+    HWND guideBtn = CreateButton(parent, IDC_BROWSER_SETUP_GUIDE, S(guideBtnX), browserActionsY,
+                                 S(UiStyle::GeneralBrowserGuideBtnW), S(UiStyle::ActionBtnH), L"Setup Guide");
+    AddGeneralControl(guideBtn);
 }
 
 void TabGeneral::DestroyControls() {
@@ -192,6 +278,7 @@ void TabGeneral::LoadControls(HWND parent, const Config& cfg) {
     }
 
     RefreshStartupRegistrationControl(g_settingsWindow ? g_settingsWindow : parent, true);
+    RefreshBrowserBridgeControl(parent);
     Button_SetCheck(GetDlgItem(parent, IDC_PARTIAL), cfg.enablePartial ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(GetDlgItem(parent, IDC_RESTORE_CLIPBOARD), cfg.restoreClipboardAfterPaste ? BST_UNCHECKED : BST_CHECKED);
     ComboBox_SetCurSel(GetDlgItem(parent, IDC_VOICE_PUNCT_MODE), PunctModeIndexFromValue(cfg.voicePunctMode));
@@ -220,6 +307,42 @@ bool TabGeneral::SaveStartupRegistration(HWND parent) {
 bool TabGeneral::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
     (void)notifyCode;
     (void)control;
+    if (controlId == IDC_BROWSER_REGISTER_BRIDGE) {
+        const std::wstring manifest = browser_bridge_registration::ManifestPath();
+        const auto registered = browser_bridge_registration::RegisterHost(manifest);
+        if (registered) {
+            RefreshBrowserBridgeControl(parent);
+            SetStatus(parent, L"Bridge registered. Reload the extension or click its icon to reconnect.");
+            MessageBoxW(parent,
+                        L"The browser host is registered for Chrome and Edge.\n\n"
+                        L"If the companion extension is not loaded yet, open chrome://extensions "
+                        L"(or edge://extensions), enable Developer mode, and use 'Load unpacked' to "
+                        L"select the extensions\\browser-bridge folder. Reload the extension after "
+                        L"registering, otherwise it keeps the connection state from before. You can also "
+                        L"click the extension icon to reconnect.",
+                        L"VoxType Browser Integration", MB_OK | MB_ICONINFORMATION);
+        } else {
+            SetStatus(parent, L"Registration failed: " + registered.error());
+            MessageBoxW(parent, registered.error().c_str(), L"VoxType Browser Integration",
+                        MB_OK | MB_ICONERROR);
+        }
+        return true;
+    }
+    if (controlId == IDC_BROWSER_OPEN_FOLDER) {
+        OpenWithShell(parent, browser_bridge_registration::ExtensionDir(),
+                      L"Opened extensions\\browser-bridge folder.",
+                      L"the companion extension folder is missing; run build.bat to install the "
+                      L"runtime payload.");
+        return true;
+    }
+    if (controlId == IDC_BROWSER_SETUP_GUIDE) {
+        OpenWithShell(parent,
+                      browser_bridge_registration::ExtensionDir() + L"\\README.md",
+                      L"Opened browser companion setup guide.",
+                      L"the companion setup guide is missing; run build.bat to install the runtime "
+                      L"payload.");
+        return true;
+    }
     if (controlId != IDC_LEARNING_CLEAR) return false;
     if (MessageBoxW(parent,
                     L"Delete every correction learned on this PC? The vocabulary file is not touched.",

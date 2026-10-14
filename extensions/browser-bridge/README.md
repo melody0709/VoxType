@@ -59,16 +59,32 @@ reconnects on load.
 
 1. Build and install the runtime: `build.bat` (payload lands in
    `build/run/x64-release/`).
-2. Register the native messaging host for Chrome and Edge:
+2. Register the native messaging host for Chrome and Edge. Either path is
+   equivalent — they share one contract and one registration record:
+
+- **Settings → General → Browser integration → Register Bridge.** It reports
+  the host state for Chrome and Edge separately and refuses to replace a
+  registration it did not create. When both browsers already point at this
+  runtime, the button is disabled; after a successful registration, reload an
+  already-loaded extension (or click its extension icon) so it reconnects.
+   - Or run the script:
 
    ```powershell
    pwsh -File build\run\x64-release\scripts\register_browser_bridge.ps1 -Action Register
    ```
 
-   The script owns exactly two HKCU values, records what it overwrote, refuses to
-   replace a registration it did not create, and needs no administrator rights.
-   `-Action Unregister` restores the previous state. It must point at the
-   *installed* runtime, so re-run it after moving that directory.
+  Both own exactly two HKCU values, record what they overwrote, refuse to
+   replace a registration they did not create, and need no administrator rights.
+   `-Action Unregister` restores the previous state. Registering from the
+   settings window writes the same record file, so the script can still undo a
+   registration made there. The registration must point at the *installed*
+   runtime, so re-run it after moving that directory.
+The status query checks HKCU before HKLM, both 32-bit and 64-bit registry views,
+and Edge's Edge/Chromium/Chrome fallback keys. An empty or stale higher-priority
+entry is reported instead of being hidden by a lower-priority entry.
+   Interrupted registration can be retried or undone with `-Action Unregister`:
+   each record retains the owned path from before the attempt. The shared JSON
+   record accepts any field order and is replaced atomically before registry writes.
 3. Open `chrome://extensions` (or `edge://extensions`), enable **Developer
    mode**, choose **Load unpacked**, and select the installed folder
    `build\run\x64-release\extensions\browser-bridge`.

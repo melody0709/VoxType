@@ -90,6 +90,7 @@ add_executable(VoxType WIN32
     src/asr/volcengine_streaming_session.cpp
     src/asr/asr_metrics.cpp
     src/core/startup_registration.cpp
+    src/core/browser_bridge_registration.cpp
     src/ui/hud.cpp
     src/ui/hotkey.cpp
     src/ui/form_builder.cpp
@@ -411,10 +412,16 @@ add_test(NAME text_post_process_test COMMAND text_post_process_test)
 
 # Offline regression for the browser accessibility isolation contract: browser
 # classification (including the Electron/WebView2 boundary), the fail-closed
-# focus tri-state, and companion bridge frame/field validation. Both modules are
-# header-only, so nothing but the Windows APIs they use is linked here.
+# focus tri-state, companion bridge frame/field validation, and the native
+# messaging host registration module — per-browser classification, the state
+# file codec in both the C++ and the PowerShell-written shape, the manifest
+# check, and the write path (refuse-to-overwrite and the recorded prior values)
+# against a redirected HKCU subtree. tests/browser_bridge_registration_test.ps1
+# covers the PowerShell script separately; it does not link this module.
 add_executable(browser_bridge_test
     tests/browser_bridge_test.cpp
+    src/core/browser_bridge_registration.cpp
+    src/core/path_service.cpp
 )
 target_compile_definitions(browser_bridge_test PRIVATE UNICODE _UNICODE)
 target_include_directories(browser_bridge_test PRIVATE
@@ -423,7 +430,7 @@ target_include_directories(browser_bridge_test PRIVATE
 if(MSVC)
     target_compile_options(browser_bridge_test PRIVATE /O2 /EHsc /utf-8)
 endif()
-target_link_libraries(browser_bridge_test PRIVATE user32 advapi32)
+target_link_libraries(browser_bridge_test PRIVATE user32 advapi32 shell32 ole32)
 set_target_properties(browser_bridge_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )

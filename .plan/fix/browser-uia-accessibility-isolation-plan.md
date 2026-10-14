@@ -451,13 +451,21 @@ inline int SensitiveProbeAnswerFromBrowser(bool passwordHit,
 - 遵循 §"开发约定"：新增配置项走强类型注册表三步规范；UI 走 `UiStyle::*` + `S()` + `UpdateUiScale`，不得私设局部 `k*` 常量。
 - 失败不弹窗、不阻塞录音，只在状态行与日志中体现。
 
+> **2026-10-14 实现纠偏**：上面这一行**做不到**，已按可证伪的事实改写。
+> - **注册表无法区分"扩展已安装/已连接"**。它能回答的只有"host 键指向哪里、那个清单在不在磁盘上"；"已连接"只存在于录音路径的日志（`peers=` / `reason=`）。因此状态行改为**逐浏览器**的 host 注册态：`Host status: Chrome <state> / Edge <state>`，`<state> ∈ {registered, other path, manifest missing, not registered}`。把"键写对了"说成"已就绪/已连接"就是自证。
+> - 判定模块落在 `src/core/browser_bridge_registration.*`（不是就地写在 tab 里），读路径为 HKCU→HKLM + `KEY_WOW64_64KEY` + `REG_SZ`/`REG_EXPAND_SZ` + 先查 size；Chrome 与 Edge **各自独立**判定，"就绪"额外要求清单在磁盘上，两侧路径先规范化再比较。
+> - **状态行只在打开设置页时算一次**（与 ZenCrop 同），因此加载扩展后需要重开设置页才会更新；这不影响录音路径。
+> - 未实施项不变：`未安装扩展 / 已安装未连接 / 已连接` 三态、以及"扩展是否已加载"的任何展示，都需要新通道，不在本轮。
+
 ---
 
 ### 5.2 P2：交付与安装
 
 - CMake install 把扩展资产与 host manifest 装进唯一运行目录（`build/run/x64-release/...`）；**不得**手工向运行目录复制文件。
 - 开发用注册/取消脚本只操作本功能自己的 HKCU 键，记录并保留未知值。
+- **2026-10-14 补**：设置页的 "Register Bridge" 按钮曾绕过上面这条契约（不读原值、不记录、不拒绝覆盖、不校验清单），于本轮修正为经 `src/core/browser_bridge_registration.*` 走与脚本**同一份**契约与**同一个**状态文件（`%LOCALAPPDATA%\VoxType\browser-bridge-registration.json`）。两条路径现在可互相还原：GUI 写的记录脚本能 Unregister，脚本写的注册 GUI 也能识别为已有归属并在移动后重新注册。
 - 便携目录移动后注册路径失效 → 提供显式重新注册，不擅自创建 `portable.flag`。
+- **2026-10-14 恢复回归**：注册记录改为逐对象解析（PowerShell 字段顺序可变）；逐条 `priorManifest` 保存本次写入前已确认归属的路径。GUI/脚本先原子替换状态记录再修改注册表，覆盖两侧写入前/之间中断后的重试与撤销。
 - 发布收尾按 `AGENTS.md`：版本号 → 两份 README、两份 CHANGELOG → `git tag -a`。
 - 商店发布与正式 MSI 升级矩阵**单独排期**，不在本次签收范围内。
 

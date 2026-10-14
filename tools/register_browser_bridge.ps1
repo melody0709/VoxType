@@ -46,7 +46,12 @@ try {
             $key = $root.OpenSubKey($path)
             $value = if ($key) { $key.GetValue('') } else { $null }
             $prior = if ($saved) { @($saved.records | Where-Object { $_.key -eq $path })[0] } else { $null }
-            if ($null -ne $value -and $value -ne $manifest -and (!$prior -or $value -ne $saved.manifest)) {
+            $priorManifest = if ($prior -and $prior.PSObject.Properties['priorManifest']) {
+                $prior.priorManifest
+            } else { $null }
+            if ($null -ne $value -and $value -ne $manifest -and
+                (!$prior -or ($value -ne $saved.manifest -and
+                             ([string]::IsNullOrEmpty($priorManifest) -or $value -ne $priorManifest)))) {
                 if ($key) { $key.Dispose() }
                 throw "Refusing to replace an unknown registration: $path"
             }
@@ -54,12 +59,19 @@ try {
                 key = $path
                 existed = if ($prior) { $prior.existed } else { $null -ne $key }
                 previous = if ($prior) { $prior.previous } else { $value }
+                priorManifest = $value
             }
             if ($key) { $key.Dispose() }
         }
         [IO.Directory]::CreateDirectory((Split-Path $statePath -Parent)) | Out-Null
-        [IO.File]::WriteAllText($statePath,
-            (@{manifest = $manifest; records = $records} | ConvertTo-Json -Depth 4), $utf8)
+        $temporary = "$statePath.tmp"
+        try {
+            [IO.File]::WriteAllText($temporary,
+                (@{manifest = $manifest; records = $records} | ConvertTo-Json -Depth 4), $utf8)
+            [IO.File]::Move($temporary, $statePath, $true)
+        } finally {
+            if (Test-Path -LiteralPath $temporary) { [IO.File]::Delete($temporary) }
+        }
         foreach ($path in $keys) {
             $key = $root.CreateSubKey($path)
             try { $key.SetValue('', $manifest, 'String') } finally { $key.Dispose() }
@@ -78,7 +90,10 @@ try {
             try {
                 $current = $key.GetValue('')
                 $previous = if ($record.previous -eq $saved.manifest) { $null } else { $record.previous }
-                if ($current -ne $saved.manifest -and $current -ne $previous) {
+                $priorManifest = if ($record.PSObject.Properties['priorManifest']) { $record.priorManifest } else { $null }
+                $owned = $current -eq $saved.manifest -or
+                         (![string]::IsNullOrEmpty($priorManifest) -and $current -eq $priorManifest)
+                if (!$owned -and $current -ne $previous) {
                     throw "Registration changed; leaving it untouched: $($record.key)"
                 }
             } finally { $key.Dispose() }
@@ -91,7 +106,10 @@ try {
                 $current = $key.GetValue('')
                 $previous = if ($record.previous -eq $saved.manifest) { $null } else { $record.previous }
                 if ($current -eq $previous) { continue }
-                if ($current -ne $saved.manifest) {
+                $priorManifest = if ($record.PSObject.Properties['priorManifest']) { $record.priorManifest } else { $null }
+                $owned = $current -eq $saved.manifest -or
+                         (![string]::IsNullOrEmpty($priorManifest) -and $current -eq $priorManifest)
+                if (!$owned) {
                     throw "Registration changed; leaving it untouched: $($record.key)"
                 }
                 if ($null -ne $record.previous -and $record.previous -ne $saved.manifest) {

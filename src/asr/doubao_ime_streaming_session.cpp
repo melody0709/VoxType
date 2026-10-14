@@ -808,9 +808,7 @@ private:
         const DWORD retryTimeout = ReplayWaitMs(replayBuffer.Size());
         // 失败路径先过预算门控：装不下就跳过重试，failed 保持 true，随后
         // DispatchFinal() 会下发更精确的 provider 错误并由 fallback 接手。
-        // shouldRetryEmptyFinal 与 shouldRetryFailure 互斥（空结果路径 failed 恒为 false），
-        // 所以块内必须自己处理"空结果 + 重放期间传输失败"：否则重放时被身份拒绝会被
-        // 吞成 "No speech detected"，identity_rejected 文案连同自愈线索一起丢失。
+        // shouldRetryEmptyFinal 与 shouldRetryFailure 互斥，故收紧条件不改变块内语义。
         const bool shouldRetryFailure = failed && retryWithReplay &&
             replayBuffer.Available() && !replayBuffer.Empty() &&
             ShouldStartFailureReplay("doubao_ime", "final", CurrentWatchdogMs(),
@@ -824,12 +822,7 @@ private:
             } else if (!retryResult.transportError) {
                 finalText.clear();
                 failed = false;
-            } else {
-                // A transport failure during the replay is real on both entry
-                // paths. This branch used to be gated on shouldRetryFailure,
-                // which is always false on the empty-result path, so an identity
-                // refusal during the replay was swallowed: failed stayed false and
-                // the terminal became "No speech detected".
+            } else if (shouldRetryFailure) {
                 error = retryResult.error.empty() ? error : retryResult.error;
                 failed = true;
             }

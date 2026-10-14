@@ -40,10 +40,45 @@ try {
     if ((Read-Default "$testRegistryPath\Edge") -or (Test-Path -LiteralPath $testStatePath)) {
         throw 'Interrupted uninstall could not resume.'
     }
-    Write-Output 'browser_bridge_registration_test: preflight and interrupted-uninstall recovery passed'
+    foreach ($resume in @('Register', 'Unregister')) {
+        foreach ($firstKeyUpdated in @($false, $true)) {
+            $oldManifest = 'previous-owned-runtime'
+            Set-Default "$testRegistryPath\Chrome" $(if ($firstKeyUpdated) { $owned } else { $oldManifest })
+            Set-Default "$testRegistryPath\Edge" $oldManifest
+            $pending = @{
+                manifest = $owned
+                records = @(
+                    [ordered]@{previous=$null; existed=$true; priorManifest=$oldManifest; key="$testRegistryPath\Chrome"},
+                    [ordered]@{existed=$false; priorManifest=$oldManifest; previous=$null; key="$testRegistryPath\Edge"}
+                )
+            }
+            [IO.File]::WriteAllText($testStatePath, ($pending | ConvertTo-Json -Depth 4))
+            if ($resume -eq 'Register') {
+                & $script -Action Register -RuntimeRoot $RuntimeRoot | Out-Null
+                if ((Read-Default "$testRegistryPath\Chrome") -ne $owned -or
+                    (Read-Default "$testRegistryPath\Edge") -ne $owned) {
+                    throw 'Interrupted move could not resume registration.'
+                }
+            }
+            & $script -Action Unregister -RuntimeRoot $RuntimeRoot | Out-Null
+            $chrome = $registry.OpenSubKey("$testRegistryPath\Chrome")
+            $edge = $registry.OpenSubKey("$testRegistryPath\Edge")
+            try {
+                if (!$chrome -or $null -ne $chrome.GetValue('') -or $edge -or
+                    (Test-Path -LiteralPath $testStatePath)) {
+                    throw 'Interrupted move did not restore the original empty/absent keys.'
+                }
+            } finally {
+                if ($chrome) { $chrome.Dispose() }
+                if ($edge) { $edge.Dispose() }
+            }
+        }
+    }
+    Write-Output 'browser_bridge_registration_test: preflight, interrupted move/register/unregister recovery passed'
 } finally {
     # Delete only the unique test subtree created above, never native host keys.
     $registry.DeleteSubKeyTree($testRegistryPath, $false)
     $registry.Dispose()
     if (Test-Path -LiteralPath $testStatePath) { Remove-Item -LiteralPath $testStatePath }
+    if (Test-Path -LiteralPath "$testStatePath.tmp") { Remove-Item -LiteralPath "$testStatePath.tmp" }
 }

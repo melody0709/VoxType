@@ -82,7 +82,7 @@ void ProviderVolcengine::CreateControls(HWND parent) {
     AddVolcControl(volcReuseVocab);
     control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::VolcInputContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Input context");
     AddVolcControl(control);
-    HWND volcEnableInputContext = CreateWindowW(L"BUTTON", L"Use focused input field text as context", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+    HWND volcEnableInputContext = CreateWindowW(L"BUTTON", L"Use focused input text (needs browser extension)", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                 S(UiStyle::VolcInputContextX), S(UiStyle::VolcInputContextY), S(UiStyle::VolcInputContextW), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_ENABLE_INPUT_CONTEXT)), GetParentInstance(parent), nullptr);
     ApplyUiFont(volcEnableInputContext);
     AddVolcControl(volcEnableInputContext);

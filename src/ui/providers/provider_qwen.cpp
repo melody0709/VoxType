@@ -111,7 +111,7 @@ void ProviderQwen::CreateControls(HWND parent) {
     AddQwenAudio3Control(qwenInputContext);
     control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenInputContextHintY),
                          S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
-                         L"Sends up to 400 chars of focused input text.");
+                         L"Sends up to 400 chars (Chrome/Edge companion required).");
     AddQwenAudio3Control(control);
 
     // Multi-turn context enhancement sits on its own row: it forwards previous

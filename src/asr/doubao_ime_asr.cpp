@@ -4,7 +4,6 @@
 
 #include "doubao_ime_asr.h"
 
-#include "asr_runtime_log.h"
 #include "audio_diagnostics.h"
 #include "cloud_http_common.h"
 #include "doubao_ime_payload.h"
@@ -949,108 +948,14 @@ bool GetAsrToken(DoubaoConnection& conn, DoubaoImeConfig& cfg, std::wstring& err
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// S4 carrier experiment hook (retained diagnostic tool, not a migration path).
-//
-// Lets tools\asr_audio_replay.bat exercise the real StartSession payload with an
-// AsrContext base64 without adding production config/UI surface first. With no
-// environment variables set the payload is byte-identical to production.
-//   VOXTYPE_DOUBAO_CTX_B64  : base64 AsrContext; empty/absent -> disabled
-//   VOXTYPE_DOUBAO_CTX_SLOT : extra (default) | top | bad_json | bad_type |
-//                             extra_full (replace the whole extra object body)
-//   VOXTYPE_DOUBAO_EXTRA_JSON : raw extra object body used by extra_full
-// "bad_json"/"bad_type" are deliberately invalid controls: they only pass if the
-// server really parses the start payload, which proves the instrument works.
-//   VOXTYPE_DOUBAO_PUNCT     : "0"/"1" override of enable_punctuation (absent ->
-//                              the configured value). Used by the A/B recipe in
-//                              doc/volcengine/README.md to answer "does the
-//                              service punctuate on its own?" without touching
-//                              the hardcoded default in doubao_ime_config.h.
-// ---------------------------------------------------------------------------
-std::wstring ReadEnvironmentValue(const wchar_t* name) {
-    const DWORD needed = GetEnvironmentVariableW(name, nullptr, 0);
-    if (needed == 0) return {};
-    std::wstring value(needed, L'\0');
-    const DWORD written = GetEnvironmentVariableW(name, value.data(), needed);
-    if (written == 0 || written >= needed) return {};
-    value.resize(written);
-    return value;
-}
-
-// Returns true when the environment pinned enable_punctuation; `enabled` then
-// carries the pinned value. Only "0" and "1" are accepted so a stray variable
-// cannot silently flip the wire field.
-bool ReadDoubaoPunctuationOverride(bool& enabled) {
-    const std::wstring raw = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_PUNCT");
-    if (raw == L"0" || raw == L"1") {
-        enabled = raw == L"1";
-        return true;
-    }
-    return false;
-}
-
-struct DoubaoContextExperiment {
-    std::string base64;
-    std::string slot = "extra";
-    std::string extraJson;
-};
-
-DoubaoContextExperiment ReadDoubaoContextExperiment() {
-    DoubaoContextExperiment experiment;
-    const std::wstring raw = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_CTX_B64");
-    const std::wstring extraJson = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_EXTRA_JSON");
-    if (raw.empty() && extraJson.empty()) return experiment;
-    if (!raw.empty()) experiment.base64 = WideToUtf8(raw);
-    if (!extraJson.empty()) experiment.extraJson = WideToUtf8(extraJson);
-    std::wstring slot = ReadEnvironmentValue(L"VOXTYPE_DOUBAO_CTX_SLOT");
-    if (!slot.empty()) {
-        for (wchar_t& ch : slot) {
-            ch = static_cast<wchar_t>(towlower(ch));
-        }
-        experiment.slot = WideToUtf8(slot);
-    }
-    return experiment;
-}
-
 std::string BuildStartSessionPayload(const DoubaoImeConfig& cfg) {
-    const DoubaoContextExperiment experiment = ReadDoubaoContextExperiment();
-
-    // The JSON assembly itself lives in doubao_ime_payload.h (pure, no Config,
-    // no logging) so an offline test can freeze the exact production bytes.
     doubao_ime_payload::Fields fields;
     fields.channels = cfg.channels;
     fields.sampleRate = cfg.sampleRate;
     fields.enablePunctuation = cfg.enablePunctuation;
-    if (ReadDoubaoPunctuationOverride(fields.enablePunctuation)) {
-        asr_runtime_log::Write("event=doubao_punct_experiment enable_punctuation=%d",
-                               fields.enablePunctuation ? 1 : 0);
-    }
     fields.deviceIdEscaped = EscapeJson(cfg.deviceId);
     fields.contextBase64 = cfg.contextBase64;
-
-    doubao_ime_payload::ContextOverride override;
-    if (!experiment.base64.empty() || !experiment.extraJson.empty()) {
-        override.active = true;
-        override.base64 = experiment.base64;
-        if (experiment.slot == "extra_full" && !experiment.extraJson.empty()) {
-            // Caller-supplied extra body (official-equivalent carrier probe).
-            override.extraBodyOverride = experiment.extraJson;
-        } else if (experiment.slot == "top") {
-            override.slot = doubao_ime_payload::ContextOverride::Slot::TopLevel;
-        } else if (experiment.slot == "bad_json") {
-            override.slot = doubao_ime_payload::ContextOverride::Slot::MalformedJson;
-        } else if (experiment.slot == "bad_type") {
-            override.slot = doubao_ime_payload::ContextOverride::Slot::WrongType;
-        }
-    }
-
-    const std::string payload = doubao_ime_payload::BuildStartSessionPayload(fields, override);
-    if (!experiment.base64.empty()) {
-        asr_runtime_log::Write(
-            "event=doubao_context_experiment slot=%s b64_len=%zu payload_len=%zu",
-            experiment.slot.c_str(), experiment.base64.size(), payload.size());
-    }
-    return payload;
+    return doubao_ime_payload::BuildStartSessionPayload(fields);
 }
 
 std::string BuildAudioPayload(long long timestampMs) {
