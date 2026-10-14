@@ -37,6 +37,8 @@ const EXT_WAIT_MS = parseInt(process.env.CDP_EXT_WAIT_MS || '2500', 10);
 const CMD_TIMEOUT_MS = parseInt(process.env.CDP_CMD_TIMEOUT_MS || '20000', 10);
 const CDP_CONNECT_TIMEOUT_MS = parseInt(process.env.CDP_CONNECT_TIMEOUT_MS || '60000', 10);
 const EXT_PING_MS = 20000;
+const EXTENSION_ID = process.env.BRIDGE_EXTENSION_ID || 'dfhibbeifejiggbnkmijoiedldgiijih';
+const CLIENT_TIMEOUT_MS = CDP_CONNECT_TIMEOUT_MS + 2 * CMD_TIMEOUT_MS + EXT_WAIT_MS + 8000;
 const MAX_FRAME_BYTES = 32 * 1024 * 1024;
 
 const STATE_FILE = path.join(os.tmpdir(), 'chrome-cdp-daemon.json');
@@ -80,12 +82,12 @@ function writeFrame(socket, opcode, payload) {
 function createWsServer(onClient) {
   const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('chrome-cdp extension bridge OK');
+    res.end(JSON.stringify({ service: 'chrome-cdp', protocol: 2 }));
   });
 
   server.on('upgrade', (req, socket) => {
     const key = req.headers['sec-websocket-key'];
-    if (!key) {
+    if (req.headers.origin !== `chrome-extension://${EXTENSION_ID}` || !key) {
       socket.destroy();
       return;
     }
@@ -243,7 +245,7 @@ function getDevToolsEndpoint() {
   return `ws://127.0.0.1:${port}${browserPath}`;
 }
 
-/** 守护进程生命周期内只连一次：Chrome 的「允许远程调试」因此只需点一次。 */
+/** 连接由守护进程复用；浏览器或连接重建后可能需要重新授权。 */
 function connectCdp() {
   return new Promise((resolve, reject) => {
     let wsUrl;
@@ -266,13 +268,19 @@ function connectCdp() {
       send(method, params = {}, sessionId = undefined) {
         const id = ++seq;
         return new Promise((res, rej) => {
-          pending.set(id, { res, rej });
+          if (conn.closed) return rej(new Error('CDP connection closed'));
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            rej(new Error(`CDP command timeout: ${method}`));
+          }, CMD_TIMEOUT_MS);
+          pending.set(id, { res, rej, timer });
           const msg = { id, method, params };
           if (sessionId) msg.sessionId = sessionId;
           try {
             ws.send(JSON.stringify(msg));
           } catch (err) {
             pending.delete(id);
+            clearTimeout(timer);
             rej(err);
           }
         });
@@ -293,7 +301,8 @@ function connectCdp() {
         return;
       }
       if (data.id && pending.has(data.id)) {
-        const { res, rej } = pending.get(data.id);
+        const { res, rej, timer } = pending.get(data.id);
+        clearTimeout(timer);
         pending.delete(data.id);
         if (data.error) rej(new Error(data.error.message || JSON.stringify(data.error)));
         else res(data.result === undefined ? null : data.result);
@@ -301,7 +310,10 @@ function connectCdp() {
     };
     ws.onclose = () => {
       conn.closed = true;
-      for (const { rej } of pending.values()) rej(new Error('CDP connection closed'));
+      for (const { rej, timer } of pending.values()) {
+        clearTimeout(timer);
+        rej(new Error('CDP connection closed'));
+      }
       pending.clear();
     };
     ws.onerror = () => {
@@ -342,6 +354,13 @@ function connectCdp() {
     };
     ws.addEventListener?.('open', done, { once: true });
     ws.addEventListener?.('error', done, { once: true });
+    ws.addEventListener?.('close', () => {
+      done();
+      if (!settled) {
+        settled = true;
+        reject(new Error('CDP closed before connection completed'));
+      }
+    }, { once: true });
   });
 }
 
@@ -364,9 +383,10 @@ async function cdpExecute(conn, action, payload) {
 
   const resTargets = await conn.send('Target.getTargets');
   const pages = (resTargets.targetInfos || []).filter((t) => t.type === 'page');
-  const target = pages.find(
-    (p) => (p.url && String(query) && p.url.includes(query)) || (p.title && String(query) && p.title.includes(query))
-  );
+  const matches = pages.filter((p) =>
+    !query || [p.url, p.title, p.targetId].some((v) => String(v || '').toLowerCase().includes(String(query).toLowerCase())));
+  if (matches.length > 1) throw new Error(`Ambiguous page query "${query}"; use a unique URL or target ID`);
+  const target = matches[0];
   if (!target) {
     const available = pages.map((p) => ` - [${p.title}] (${p.url})`).join('\n');
     throw new Error(`No page found matching "${query}". Available pages:\n${available}`);
@@ -379,18 +399,25 @@ async function cdpExecute(conn, action, payload) {
 
   const attached = await conn.send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
   const sessionId = attached.sessionId;
+  const evaluate = async (expression) => {
+    const result = await conn.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, sessionId);
+    if (result.exceptionDetails) {
+      const detail = result.exceptionDetails;
+      throw new Error(detail.exception?.description || detail.text || 'JavaScript evaluation failed');
+    }
+    if (result.result?.type === 'undefined') return null;
+    if (result.result?.unserializableValue !== undefined) return result.result.unserializableValue;
+    return result.result?.value ?? null;
+  };
   try {
     if (action === 'text') {
-      const res = await conn.send('Runtime.evaluate', { expression: 'document.body ? document.body.innerText : ""', returnByValue: true }, sessionId);
-      return (res && res.result && res.result.value) || '';
+      return await evaluate('document.body ? document.body.innerText : ""');
     }
     if (action === 'html') {
-      const res = await conn.send('Runtime.evaluate', { expression: 'document.documentElement.outerHTML', returnByValue: true }, sessionId);
-      return (res && res.result && res.result.value) || '';
+      return await evaluate('document.documentElement.outerHTML');
     }
     if (action === 'eval') {
-      const res = await conn.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId);
-      return res && res.result ? res.result.value : null;
+      return await evaluate(expr);
     }
     if (action === 'navigate') {
       await conn.send('Page.navigate', { url: url || expr }, sessionId);
@@ -399,8 +426,7 @@ async function cdpExecute(conn, action, payload) {
     if (action === 'click') {
       const sel = payload.selector || expr;
       const js = `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return false; el.scrollIntoView({block:'center'}); el.click(); return true; })()`;
-      const res = await conn.send('Runtime.evaluate', { expression: js, returnByValue: true }, sessionId);
-      return { clicked: !!(res && res.result && res.result.value) };
+      return { clicked: !!(await evaluate(js)) };
     }
     throw new Error(`Unknown command: ${action}`);
   } finally {
@@ -432,6 +458,7 @@ function callExtension(hub, action, payload, timeoutMs) {
     const id = ++hub.seq;
     const timer = setTimeout(() => {
       hub.pending.delete(id);
+      hub.chunks.delete(id);
       reject(Object.assign(new Error(`extension timeout after ${timeoutMs}ms`), { code: 'ext_timeout' }));
     }, timeoutMs);
 
@@ -440,8 +467,10 @@ function callExtension(hub, action, payload, timeoutMs) {
         clearTimeout(timer);
         resolve(data);
       },
+      client,
       reject: (err) => {
         clearTimeout(timer);
+        hub.chunks.delete(id);
         reject(err);
       }
     });
@@ -458,7 +487,8 @@ function callExtension(hub, action, payload, timeoutMs) {
 
 function isEvalCspError(action, err) {
   if (action !== 'eval') return false;
-  return /unsafe-eval|EvalError|Refused to evaluate|Content Security Policy/i.test(String(err && err.message));
+  if (err?.code === 'script_error') return false;
+  return err?.code === 'eval_unavailable' || /unsafe-eval|Refused to evaluate|Content Security Policy/i.test(String(err && err.message));
 }
 
 function jsonResponse(res, code, body) {
@@ -496,6 +526,7 @@ function runDaemon() {
   const token = crypto.randomBytes(16).toString('hex');
   const hub = { client: null, ready: new Set(), connectedSince: 0, seq: 0, pending: new Map(), chunks: new Map(), caps: null };
   let cdpConn = null;
+  let cdpConnecting = null;
   let lastActivity = Date.now();
   const touch = () => {
     lastActivity = Date.now();
@@ -515,7 +546,23 @@ function runDaemon() {
 
       // 扩展对大回复分片发送：攒齐后当成一条正常回复
       if (msg.chunk && msg.id) {
-        const entry = hub.chunks.get(msg.id) || { parts: new Array(msg.chunk.total), received: 0, total: msg.chunk.total };
+        if (hub.pending.get(msg.id)?.client !== client) return;
+        const c = msg.chunk;
+        if (!Number.isInteger(c.total) || c.total < 1 || c.total > 1024 ||
+            !Number.isInteger(c.i) || c.i < 0 || c.i >= c.total || typeof c.part !== 'string' || c.part.length > 40000) {
+          const pending = hub.pending.get(msg.id);
+          hub.pending.delete(msg.id);
+          pending.reject(new Error('Invalid chunked reply'));
+          return;
+        }
+        const entry = hub.chunks.get(msg.id) || { parts: new Array(c.total), received: 0, total: c.total, bytes: 0 };
+        entry.bytes += Buffer.byteLength(c.part);
+        if (entry.total !== c.total || entry.bytes > MAX_FRAME_BYTES) {
+          const pending = hub.pending.get(msg.id);
+          hub.pending.delete(msg.id);
+          pending.reject(new Error('Chunked reply too large or inconsistent'));
+          return;
+        }
         if (msg.chunk.i >= 0 && msg.chunk.i < entry.total) {
           if (entry.parts[msg.chunk.i] === undefined) entry.received++;
           entry.parts[msg.chunk.i] = msg.chunk.part;
@@ -542,6 +589,7 @@ function runDaemon() {
         hub.ready.add(client);
         hub.client = client;
         if (first || hub.connectedSince === 0) hub.connectedSince = Date.now();
+        hub.caps = msg.caps || null;
         log(`extension connected (executor)`);
         try {
           client.send(JSON.stringify({ type: 'ping' })); // 立刻取一次能力探测
@@ -561,18 +609,25 @@ function runDaemon() {
       if (!msg.id) return;
 
       const entry = hub.pending.get(msg.id);
-      if (!entry) return;
+      if (!entry || entry.client !== client) return;
       hub.pending.delete(msg.id);
       if (msg.ok) entry.resolve(msg.data);
-      else entry.reject(new Error(msg.error || 'extension error'));
+      else entry.reject(Object.assign(new Error(msg.error || 'extension error'), { code: msg.code }));
     };
     client.onclose = () => {
       hub.ready.delete(client);
+      for (const [id, entry] of hub.pending) {
+        if (entry.client !== client) continue;
+        hub.pending.delete(id);
+        entry.reject(new Error('Extension disconnected; command was not retried'));
+      }
       if (hub.client !== client) return;
       // 一条连接断开不代表扩展离线（可能还有别的窗口/实例连着）：改认领仍然存活的那条
       let next = null;
       for (const c of hub.ready) if (!c.closed) next = c;
       hub.client = next;
+      hub.caps = null;
+      if (next) next.send(JSON.stringify({ type: 'ping' }));
       hub.connectedSince = next ? Date.now() : 0;
       log(next ? 'executor connection closed —— switched to a live one' : 'extension disconnected');
     };
@@ -605,7 +660,10 @@ function runDaemon() {
           sinceMs: hub.connectedSince ? Date.now() - hub.connectedSince : 0,
           caps: hub.caps
         },
-        cdp: { connected: !!cdpConn && !cdpConn.closed },
+        cdp: { connected: !!cdpConn && !cdpConn.closed, connecting: !!cdpConnecting },
+        protocol: 2,
+        script: __filename,
+        expectedExtensionId: EXTENSION_ID,
         logFile: LOG_FILE
       });
       return;
@@ -650,13 +708,19 @@ function runDaemon() {
 
   async function getCdp() {
     if (cdpConn && !cdpConn.closed) return cdpConn;
-    cdpConn = null;
-    cdpConn = await connectCdp();
-    return cdpConn;
+    if (!cdpConnecting) {
+      cdpConnecting = connectCdp().then((conn) => { cdpConn = conn; return conn; })
+        .finally(() => { cdpConnecting = null; });
+    }
+    return cdpConnecting;
   }
 
   async function handleCommand(hubRef, body) {
     const action = body.action || 'list';
+    if (!['list', 'open', 'navigate', 'text', 'html', 'eval', 'click', 'close'].includes(action)) {
+      throw new Error(`Unknown command: ${action}`);
+    }
+    let fallbackReason = body.transport === 'cdp' ? 'requested' : 'extension_offline';
     const payload = {
       query: body.query,
       url: body.url,
@@ -665,9 +729,9 @@ function runDaemon() {
       tabId: body.tabId
     };
 
-    if (!hubRef.client) await waitForExtension(hubRef, EXT_WAIT_MS);
+    if (body.transport !== 'cdp' && !hubRef.client) await waitForExtension(hubRef, EXT_WAIT_MS);
 
-    if (hubRef.client) {
+    if (body.transport !== 'cdp' && hubRef.client) {
       try {
         const data = await callExtension(hubRef, action, payload, CMD_TIMEOUT_MS);
         return { ok: true, via: 'extension', data };
@@ -680,19 +744,22 @@ function runDaemon() {
             hint: err.code === 'ext_timeout' ? '扩展执行超时（页面可能未加载完或标签页不可注入）' : undefined
           };
         }
-        log(`extension eval blocked (${err.message}) —— 回落 CDP`);
+        fallbackReason = 'extension_eval_unavailable';
+        log(`extension eval unavailable (${err.message}) —— reuse CDP`);
       }
     }
 
     try {
       const data = await cdpExecute(await getCdp(), action, payload);
-      return { ok: true, via: 'cdp', data };
+      return { ok: true, via: 'cdp', fallbackReason, data };
     } catch (err) {
       return {
         ok: false,
         via: 'cdp',
         error: err.message,
-        hint: '没有扩展在线，只能走直连 CDP；请确认扩展已启用（chrome://extensions）'
+        hint: fallbackReason === 'extension_offline'
+          ? '扩展离线；检查扩展是否启用与本机服务是否在线'
+          : '扩展在线但无法执行此脚本；检查扩展详情中的“允许运行用户脚本”，或允许本次 CDP 连接'
       };
     }
   }
@@ -828,19 +895,19 @@ async function sendViaDaemon(payload) {
   const hint = setTimeout(() => {
     process.stderr.write(
       '[chrome-cdp] 仍在等待……若 Chrome 弹出「要允许远程调试吗？ / Allow remote debugging?」，' +
-        '点一次「允许」即可；守护进程会复用这条连接，后续命令不会再问。\n'
+        '本次连接点一次「允许」即可；连接存续期间后续命令共用它。\n'
     );
   }, 3000);
   try {
     try {
-      return await ctlRequest('POST', '/cmd', payload, CMD_TIMEOUT_MS + 8000);
+      return await ctlRequest('POST', '/cmd', payload, CLIENT_TIMEOUT_MS);
     } catch (err) {
       if (!isConnRefused(err)) throw err;
     }
     spawnDaemon();
     const health = await waitForHealth(8000);
     if (!health) throw new Error('守护进程未能启动，请看日志：' + LOG_FILE);
-    return await ctlRequest('POST', '/cmd', payload, CMD_TIMEOUT_MS + 8000);
+    return await ctlRequest('POST', '/cmd', payload, CLIENT_TIMEOUT_MS);
   } finally {
     clearTimeout(hint);
   }
@@ -859,7 +926,8 @@ function outputResult(command, data) {
 async function main() {
   const argv = process.argv.slice(2);
   const noDaemon = argv[0] === '--no-daemon';
-  const rest = noDaemon ? argv.slice(1) : argv;
+  const forceCdp = argv[0] === '--cdp';
+  const rest = noDaemon || forceCdp ? argv.slice(1) : argv;
   const command = rest[0] || 'list';
   const query = rest[1];
   const expr = rest.slice(2).join(' ');
@@ -889,7 +957,7 @@ async function main() {
     return;
   }
 
-  const payload = { action: command };
+  const payload = { action: command, ...(forceCdp ? { transport: 'cdp' } : {}) };
   if (command === 'open') {
     payload.url = query;
   } else if (command === 'navigate') {
@@ -922,12 +990,16 @@ async function main() {
     throw new Error(`${res.error}${res.hint ? `\n[提示] ${res.hint}` : ''}`);
   }
   if (res.via === 'cdp') {
-    process.stderr.write('[chrome-cdp] 本次走直连 CDP（扩展未在线）。若 Chrome 弹窗请只点一次「允许」，守护进程会复用该连接。\n');
+    const reason = res.fallbackReason === 'requested' ? '按要求使用 CDP'
+      : res.fallbackReason === 'extension_eval_unavailable' ? '扩展在线，脚本执行能力不可用' : '扩展离线';
+    process.stderr.write(`[chrome-cdp] 本次复用 CDP（${reason}）；连接重建时可能需要一次 Allow。\n`);
   }
   outputResult(command, res.data);
 }
 
-main().catch((err) => {
+module.exports = { createWsServer, connectCdp, cdpExecute, callExtension, isEvalCspError };
+
+if (require.main === module) main().catch((err) => {
   console.error('Browser Control Error:', err.message || err);
   console.error(
     '\n[Tip] 两条通道：\n' +
