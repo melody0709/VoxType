@@ -20,10 +20,12 @@ function(voxtype_install_runtime target)
         "${_src}/doc/README_zh.md"
         "${_src}/doc/volcengine/volcengine_asr_guide_zh.md"
         # Browser companion payload: the MV3 extension the user loads unpacked,
-        # the native messaging host manifest the browser reads, and the
+        # the short-lived native pairing host manifest the browser reads, and the
         # registration helper that owns the two HKCU values.
         "${_src}/extensions/browser-bridge/manifest.json"
         "${_src}/extensions/browser-bridge/worker.js"
+        "${_src}/extensions/browser-bridge/connection.html"
+        "${_src}/extensions/browser-bridge/connection.js"
         "${_src}/extensions/browser-bridge/README.md"
         "${_src}/extensions/browser-bridge/icons/icon-16.png"
         "${_src}/extensions/browser-bridge/icons/icon-32.png"

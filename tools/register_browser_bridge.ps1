@@ -2,7 +2,7 @@ param(
     [ValidateSet('Register', 'Unregister')][string]$Action = 'Register',
     [string]$RuntimeRoot = ''
 )
-# Development registration for the VoxType browser companion native messaging host.
+# Registration for the short-lived pairing bootstrap (and legacy 1.x host).
 #
 # Scope contract (do not widen it):
 #   - it owns exactly two HKCU values, one for Chrome and one for Edge;

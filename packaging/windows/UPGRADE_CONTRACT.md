@@ -21,6 +21,14 @@ components, install-folder registry value, and Start Menu shortcut. It never
 owns or removes `%LOCALAPPDATA%\VoxType` configuration, downloaded models, or
 logs. Windows startup is an HKCU application setting and is not created by MSI.
 
+Browser integration follows the same ownership boundary: MSI distributes the
+extension, pairing-host manifest and registration script, but does not create
+Native Messaging registry values. Settings/the helper own only their recorded
+HKCU entries. Pairing credentials are current-user DPAPI data under LocalAppData
+and are preserved on repair/upgrade/uninstall; explicit Unpair all revokes them.
+Normal extension 2.0 connections use WebSocket. The 1.x host path remains for
+compatibility until the pending browser/session/VM acceptance is signed off.
+
 Before publishing an upgrade, validate first install (including a custom
 folder), N-1-to-N upgrade, repair, uninstall, rollback/files-in-use behavior,
 and preservation of `%LOCALAPPDATA%\VoxType` in an isolated Windows VM.

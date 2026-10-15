@@ -18,7 +18,7 @@
 //   3. Never guess. An ambiguous or missing focused frame is reported as a miss;
 //      the desktop side treats every miss as "unknown", which stays fail-closed
 //      for the shared recognition history.
-//   4. The idle cost is one native port plus this service worker. It is measured
+//   4. The idle cost is one WebSocket and a 20-second heartbeat. It is measured
 //      and disclosed, not claimed to be zero.
 
 const HOST_NAME = "com.voxtype.browser_bridge";
@@ -28,6 +28,10 @@ const RECONNECT_MINUTES = 0.5;
 const RECONNECT_MAX_MINUTES = 5;
 const MAX_VALUE_CHARS = 400; // matches browser_bridge::kMaxValueCharacters
 const HELLO_DEBOUNCE_MS = 200;
+const WS_URL = "ws://127.0.0.1:19226/voxtype/browser/v2";
+const WS_SUBPROTOCOL = "voxtype-context-v2";
+const PAIRING_KEY = "voxtypePairingV2";
+const MAX_MESSAGE_BYTES = 65536;
 
 // Reasons the desktop side recognises; anything else becomes "query_failed".
 const KNOWN_REASONS = [
@@ -44,6 +48,48 @@ let reconnectMinutes = RECONNECT_MINUTES;
 let lastFocusedWindowId = -1;
 let helloTimer = 0;
 let helloRevision = 0;
+let socket = null;
+let connectPending = null;
+let pairingPending = null;
+let keepaliveTimer = 0;
+let connectionStatus = {state: "unpaired", reason: ""};
+
+function showStatus(state, reason = "") {
+  connectionStatus = {state, reason};
+  void chrome.action.setBadgeText({text: state === "connected" ? "ON" : state === "unpaired" ? "PAIR" : state === "error" ? "ERR" : "WAIT"});
+  void chrome.action.setTitle({title: "VoxType: " + state + (reason ? " (" + reason + ")" : "") + ". Click to pair again."});
+}
+
+function validHex(value, bytes) {
+  return typeof value === "string" && value.length === bytes * 2 && /^[0-9a-f]+$/.test(value);
+}
+
+function randomHex(bytes) {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function hexBytes(value) {
+  return Uint8Array.from(value.match(/../g), (b) => parseInt(b, 16));
+}
+
+async function pairingKey(secret) {
+  return crypto.subtle.importKey("raw", hexBytes(secret), {name: "HMAC", hash: "SHA-256"}, false, ["sign", "verify"]);
+}
+
+async function signProof(key, message) {
+  const bytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function loadPairing() {
+  await chrome.storage.local.setAccessLevel({accessLevel: "TRUSTED_CONTEXTS"});
+  return (await chrome.storage.local.get(PAIRING_KEY))[PAIRING_KEY];
+}
+
+function validPairing(value) {
+  return value?.wsVersion === 2 && value?.port === 19226 && validHex(value.instance, 16) &&
+    validHex(value.profile, 16) && validHex(value.secret, 32);
+}
 
 function post(message, expectedPort = port) {
   if (!expectedPort || port !== expectedPort) return false;
@@ -255,8 +301,10 @@ async function handleQuery(message) {
   }
 }
 
-function disconnect() {
+function disconnect(reason = "") {
   port = null;
+  if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = 0; }
+  showStatus(reason ? "error" : "disconnected", reason);
   // A desktop restart should reconnect once promptly; repeated failures back off.
   if (reconnectMinutes === RECONNECT_MINUTES) setTimeout(connect, 250);
   chrome.alarms.create(RECONNECT_ALARM, {delayInMinutes: reconnectMinutes});
@@ -264,42 +312,140 @@ function disconnect() {
 }
 
 function connect() {
-  if (port) return;
-  try {
-    port = chrome.runtime.connectNative(HOST_NAME);
-  } catch (error) {
-    // Do not swallow this: "Specified native messaging host not found" means the
-    // registration step was skipped or points at a path that moved, and it is the
-    // single most likely reason the desktop side reports "not connected".
-    console.error("[voxtype] connectNative(" + HOST_NAME + ") failed:",
-                  String((error && error.message) || error));
+  if (socket || connectPending || pairingPending) return connectPending;
+  connectPending = connectWebSocket().catch(() => showStatus("error", "credential_storage_unavailable"))
+    .finally(() => { connectPending = null; });
+  return connectPending;
+}
+
+async function connectWebSocket() {
+  const credential = await loadPairing();
+  if (!validPairing(credential)) { showStatus("unpaired"); return; }
+  const key = await pairingKey(credential.secret);
+  if (socket || pairingPending) return;
+  const connection = new WebSocket(WS_URL, WS_SUBPROTOCOL);
+  socket = connection;
+  showStatus("connecting");
+  let state = "challenge";
+  let failure = "";
+  let transcript = "";
+  let lastPong = Date.now();
+  const authTimer = setTimeout(() => { if (socket === connection && state !== "ready") connection.close(); }, 5000);
+  const expectedPort = {postMessage: (message) => {
+    if (socket !== connection || state !== "ready" || connection.readyState !== WebSocket.OPEN) throw new Error("disconnected");
+    const json = JSON.stringify(message);
+    if (json.length > MAX_MESSAGE_BYTES || connection.bufferedAmount > MAX_MESSAGE_BYTES) throw new Error("backpressure");
+    connection.send(json);
+  }};
+  connection.onmessage = (event) => {
+    void (async () => {
+      if (socket !== connection) return;
+      if (typeof event.data !== "string" || event.data.length > MAX_MESSAGE_BYTES) throw new Error("invalid_message");
+      const message = JSON.parse(event.data);
+      if (state === "challenge") {
+        if (message.version !== 2 || message.type !== "challenge" || message.instance !== credential.instance || !validHex(message.nonce, 32)) throw new Error("pair_again");
+        transcript = credential.instance + ":" + randomHex(32) + ":" + message.nonce;
+        state = "server";
+        connection.send(JSON.stringify({version: 2, type: "auth_start", profile: credential.profile, nonce: transcript.split(":")[1]}));
+      } else if (state === "server") {
+        if (message.version !== 2 || message.type !== "auth_server" || !validHex(message.proof, 32)) throw new Error("authentication_failed");
+        state = "verifying";
+        const verified = await crypto.subtle.verify("HMAC", key, hexBytes(message.proof), new TextEncoder().encode("server:" + transcript));
+        if (socket !== connection) return;
+        if (!verified) throw new Error("authentication_failed");
+        const proof = await signProof(key, "client:" + transcript);
+        if (socket !== connection) return;
+        state = "accepted";
+        connection.send(JSON.stringify({version: 2, type: "auth_client", proof}));
+      } else if (state === "accepted") {
+        if (message.version !== 2 || message.type !== "auth_ok") throw new Error("authentication_failed");
+        state = "ready";
+        clearTimeout(authTimer);
+        port = expectedPort;
+        reconnectMinutes = RECONNECT_MINUTES;
+        showStatus("connected");
+        void sendHello();
+        keepaliveTimer = setInterval(() => {
+          if (socket !== connection || connection.readyState !== WebSocket.OPEN) return;
+          if (Date.now() - lastPong > 60000) { connection.close(); return; }
+          connection.send(JSON.stringify({version: 2, type: "ping"}));
+        }, 20000);
+      } else if (state === "ready" && message.version === 2 && message.type === "pong") {
+        lastPong = Date.now();
+      } else if (state === "ready" && message.version === PROTOCOL_VERSION && message.type === "query" &&
+                 Number.isSafeInteger(message.id) && message.id >= 0 && message.id <= 1000000000000 &&
+                 ["probe", "field"].includes(message.need)) {
+        void handleQuery(message);
+      } else throw new Error("invalid_message");
+    })().catch((error) => {
+      if (socket !== connection) return;
+      console.warn("[voxtype] WebSocket rejected: " + error.message);
+      failure = ["pair_again", "authentication_failed", "invalid_message"].includes(error.message) ? error.message : "invalid_message";
+      connection.close();
+    });
+  };
+  connection.onclose = () => {
+    clearTimeout(authTimer);
+    if (socket !== connection) return;
+    socket = null;
+    disconnect(failure);
+  };
+  connection.onerror = () => { if (socket === connection) connection.close(); };
+}
+
+// Native Messaging is only an explicit, bounded pairing bootstrap. No alarm,
+// startup event or connection failure may repeatedly launch a host process.
+function pair() {
+  if (pairingPending) return pairingPending;
+  let reconnectAfterPairing = false;
+  pairingPending = (async () => {
+    await chrome.alarms.clear(RECONNECT_ALARM);
+    const old = socket;
+    socket = null;
     port = null;
-    disconnect();
-    return;
-  }
-  console.log("[voxtype] native host connected:", HOST_NAME);
-  const connection = port;
-  port.onMessage.addListener((message) => {
-    if (port !== connection) return;
-    if (!message || message.version !== PROTOCOL_VERSION) return;
-    reconnectMinutes = RECONNECT_MINUTES;
-    if (message.type === "query") void handleQuery(message);
-  });
-  port.onDisconnect.addListener(() => {
-    if (port !== connection) return;
-    const error = chrome.runtime.lastError;
-    console.warn("[voxtype] native host disconnected:",
-                 (error && error.message) || "no detail");
-    disconnect();
-  });
-  void sendHello();
+    if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = 0; }
+    if (old) old.close();
+    const previous = await loadPairing();
+    reconnectAfterPairing = validPairing(previous);
+    const profile = validHex(previous?.profile, 16) ? previous.profile : randomHex(16);
+    const credential = await new Promise((resolve, reject) => {
+      const bootstrap = chrome.runtime.connectNative(HOST_NAME);
+      let settled = false;
+      const finish = (error, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        bootstrap.disconnect();
+        if (error) reject(error); else resolve(value);
+      };
+      const timer = setTimeout(() => finish(new Error("pairing_timeout")), 7000);
+      bootstrap.onMessage.addListener((message) => {
+        if (message?.version !== 1 || message.type !== "paired" || !validPairing(message) || message.profile !== profile) {
+          finish(new Error(message?.reason || "incompatible_desktop"));
+        } else finish(null, message);
+      });
+      bootstrap.onDisconnect.addListener(() => {
+        const error = chrome.runtime.lastError;
+        if (!settled) finish(new Error(error?.message || "pairing_disconnected"));
+      });
+      bootstrap.postMessage({version: 1, type: "pair", ext: chrome.runtime.id, profile});
+    });
+    await chrome.storage.local.set({[PAIRING_KEY]: credential});
+    reconnectAfterPairing = true;
+  })().catch((error) => {
+    showStatus("error", error.message);
+    console.warn("[voxtype] Pairing failed: " + error.message);
+  }).finally(() => { pairingPending = null; if (reconnectAfterPairing) void connect(); });
+  return pairingPending;
 }
 
 chrome.runtime.onInstalled.addListener(connect);
 chrome.runtime.onStartup.addListener(connect);
-chrome.action.onClicked.addListener(() => {
-  if (port) void sendHello();
-  else connect();
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL("connection.html")) return false;
+  if (message?.type === "connection_status") { respond(connectionStatus); return false; }
+  if (message?.type === "pair") { void pair().then(() => respond(connectionStatus)); return true; }
+  return false;
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RECONNECT_ALARM) connect();

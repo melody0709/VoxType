@@ -32,6 +32,17 @@ set(SHERPA_DIR "${CMAKE_SOURCE_DIR}/third_party/sherpa-onnx")
 set(KNF_DIR "${CMAKE_SOURCE_DIR}/third_party/kaldi_native_fbank")
 set(OPUS_DIR "${CMAKE_SOURCE_DIR}/third_party/opus")
 
+add_library(voxtype_browser_transport STATIC
+    src/core/browser_websocket.cpp
+    src/core/browser_pairing.cpp
+)
+target_include_directories(voxtype_browser_transport PUBLIC "${CMAKE_SOURCE_DIR}/src/core")
+target_compile_definitions(voxtype_browser_transport PRIVATE UNICODE _UNICODE)
+if(MSVC)
+    target_compile_options(voxtype_browser_transport PRIVATE /O2 /EHsc /utf-8)
+endif()
+target_link_libraries(voxtype_browser_transport PUBLIC ws2_32 websocket iphlpapi crypt32 bcrypt advapi32 shell32 ole32)
+
 add_executable(VoxType WIN32
     src/app/main.cpp
     src/app/main_window.cpp
@@ -138,6 +149,7 @@ target_link_directories(VoxType PRIVATE
     "${OPUS_DIR}/lib"
 )
 target_link_libraries(VoxType PRIVATE
+    voxtype_browser_transport
     sherpa-onnx-cxx-api
     onnxruntime
     kaldi-native-fbank-core
@@ -218,7 +230,7 @@ target_include_directories(qwen_audio_json_test PRIVATE
 if(MSVC)
     target_compile_options(qwen_audio_json_test PRIVATE /O2 /EHsc /utf-8)
 endif()
-target_link_libraries(qwen_audio_json_test PRIVATE winhttp crypt32 bcrypt ole32 ws2_32)
+target_link_libraries(qwen_audio_json_test PRIVATE voxtype_browser_transport winhttp crypt32 bcrypt ole32 ws2_32)
 set_target_properties(qwen_audio_json_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
@@ -284,7 +296,7 @@ if(MSVC)
     target_compile_options(asr_json_protocol_test PRIVATE /O2 /EHsc /utf-8)
 endif()
 target_link_libraries(asr_json_protocol_test PRIVATE
-    winhttp crypt32 rpcrt4 bcrypt shell32)
+    voxtype_browser_transport winhttp crypt32 rpcrt4 bcrypt shell32)
 set_target_properties(asr_json_protocol_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
@@ -388,7 +400,7 @@ target_include_directories(clipboard_test PRIVATE
 if(MSVC)
     target_compile_options(clipboard_test PRIVATE /O2 /EHsc /utf-8)
 endif()
-target_link_libraries(clipboard_test PRIVATE user32 ole32 oleaut32 imm32)
+target_link_libraries(clipboard_test PRIVATE voxtype_browser_transport user32 ole32 oleaut32 imm32)
 set_target_properties(clipboard_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
@@ -420,6 +432,7 @@ add_test(NAME text_post_process_test COMMAND text_post_process_test)
 # covers the PowerShell script separately; it does not link this module.
 add_executable(browser_bridge_test
     tests/browser_bridge_test.cpp
+    tests/browser_websocket_contract.cpp
     src/core/browser_bridge_registration.cpp
     src/core/path_service.cpp
 )
@@ -430,7 +443,7 @@ target_include_directories(browser_bridge_test PRIVATE
 if(MSVC)
     target_compile_options(browser_bridge_test PRIVATE /O2 /EHsc /utf-8)
 endif()
-target_link_libraries(browser_bridge_test PRIVATE user32 advapi32 shell32 ole32)
+target_link_libraries(browser_bridge_test PRIVATE voxtype_browser_transport user32 advapi32 shell32 ole32)
 set_target_properties(browser_bridge_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
@@ -524,6 +537,7 @@ target_link_directories(asr_audio_replay PRIVATE
     "${OPUS_DIR}/lib"
 )
 target_link_libraries(asr_audio_replay PRIVATE
+    voxtype_browser_transport
     sherpa-onnx-cxx-api
     onnxruntime
     kaldi-native-fbank-core

@@ -1,0 +1,62 @@
+{
+  "utc": "2026-10-14T16:30:50.897Z",
+  "workerSha256": "8d98ffd2f871bfaada527ba8d201d73a244237219ca2b912d2ca23cec5f4269f",
+  "results": [
+    {
+      "case": "plain",
+      "passed": true,
+      "password": false,
+      "textInput": true,
+      "frameId": 0,
+      "scaleMicros": 1250000
+    },
+    {
+      "case": "password",
+      "passed": true,
+      "password": true,
+      "textInput": true,
+      "frameId": 0,
+      "scaleMicros": 1250000
+    },
+    {
+      "case": "frame",
+      "passed": true,
+      "password": false,
+      "textInput": true,
+      "frameId": 74,
+      "scaleMicros": 1250000
+    },
+    {
+      "case": "nested",
+      "passed": true,
+      "password": false,
+      "textInput": true,
+      "frameId": 75,
+      "scaleMicros": 1250000
+    },
+    {
+      "case": "open",
+      "passed": true,
+      "password": false,
+      "textInput": true,
+      "frameId": 0,
+      "scaleMicros": 1250000
+    },
+    {
+      "case": "closed",
+      "passed": true,
+      "password": false,
+      "textInput": false,
+      "frameId": 0,
+      "scaleMicros": 1250000
+    },
+    {
+      "case": "zoom",
+      "passed": true,
+      "password": false,
+      "textInput": true,
+      "frameId": 0,
+      "scaleMicros": 1250000
+    }
+  ]
+}

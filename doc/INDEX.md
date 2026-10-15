@@ -4,6 +4,8 @@
 
 ---
 
+浏览器配套扩展：详见 [WebSocket 直连实施与验收记录](../.plan/feat/browser-websocket-direct-connection-plan.md) 与 [配对/回滚指南](../extensions/browser-bridge/README.md)。Chrome 已实测，Edge/多配置等剩余项目显式列为待验收。
+
 ## 1. 模型提供商与文档分类导航
 
 | 厂商 / 生态 | 核心能力 | 接入模型 | 协议类型 | 文档专区 |

@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.11.9</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.12.0</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -88,6 +88,7 @@ https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
 <summary><strong>⚙️ Settings 说明</strong></summary>
 
 **General & Input tab**（常规与输入）
+- `Browser integration` — 用 `Pair / Refresh` 准备配对，加载 2.0 配套扩展，点击扩展图标并选择 `Pair with VoxType`，每个浏览器配置只需配对一次。日常连接改走经过认证的本机 WebSocket，仅保留一个 VoxType 常驻进程；短暂配对 host 自动退出。Chrome/Edge 分别显示已连接、已配对离线或未配对；`Unpair all` 撤销凭据。[安装与回滚指南](../extensions/browser-bridge/README.md)。本轮已实测 Chrome，Edge 与多配置仍待验收。
 - `Hold hotkey` — 点击输入框后按快捷键录入
   - `Esc` 取消本次录入，`Backspace/Delete` 清空快捷键
   - 默认 CapsLock：短按切换大小写，长按 300ms 触发语音输入

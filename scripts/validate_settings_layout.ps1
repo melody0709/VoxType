@@ -73,6 +73,7 @@ $browserActionsOffsetY = Get-UiInt 'GeneralBrowserActionsOffsetY'
 $browserBtnWidth = Get-UiInt 'GeneralBrowserBtnW'
 $browserFolderBtnWidth = Get-UiInt 'GeneralBrowserFolderBtnW'
 $browserGuideBtnWidth = Get-UiInt 'GeneralBrowserGuideBtnW'
+$browserRevokeBtnWidth = Get-UiInt 'GeneralBrowserRevokeBtnW'
 $browserButtonGap = Get-UiInt 'GeneralBrowserButtonGap'
 $learningCheckW = Get-UiInt 'GeneralLearningCheckW'
 $learningClearOffsetX = Get-UiInt 'GeneralLearningClearOffsetX'
@@ -264,7 +265,7 @@ if (($contentLeft + $browserHintWidth) -gt ($groupX + $groupWidth)) {
 if (($contentLeft + $browserStatusWidth) -gt ($groupX + $groupWidth)) {
     throw 'Browser status text exceeds the General group width'
 }
-if (($contentLeft + $browserBtnWidth + $browserButtonGap + $browserFolderBtnWidth + $browserButtonGap + $browserGuideBtnWidth) -gt ($groupX + $groupWidth)) {
+if (($contentLeft + $browserBtnWidth + $browserButtonGap + $browserFolderBtnWidth + $browserButtonGap + $browserGuideBtnWidth + $browserButtonGap + $browserRevokeBtnWidth) -gt ($groupX + $groupWidth)) {
     throw 'Browser action controls exceed the General group width'
 }
 # The three browser rows are stacked, so each one's bottom edge must clear the

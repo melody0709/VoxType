@@ -1,0 +1,2515 @@
+[
+  {
+    "utc": "2026-10-14T16:08:42.6539765Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39792640,
+        "workingSetBytes": 62877696,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 79020032,
+        "workingSetBytes": 130285568,
+        "cpuSeconds": 2.296875
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183713792,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 229609472,
+        "workingSetBytes": 332611584,
+        "cpuSeconds": 3.875
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53182464,
+        "workingSetBytes": 84582400,
+        "cpuSeconds": 0.15625
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 194093056,
+        "workingSetBytes": 227119104,
+        "cpuSeconds": 3.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73826304,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206741504,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 214974464,
+        "workingSetBytes": 403144704,
+        "cpuSeconds": 23.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 779026432,
+        "workingSetBytes": 772481024,
+        "cpuSeconds": 10.609375
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 15699968,
+        "workingSetBytes": 33906688,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39518208,
+        "workingSetBytes": 87535616,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31657984,
+        "workingSetBytes": 67100672,
+        "cpuSeconds": 0.484375
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235728896,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 343539712,
+        "workingSetBytes": 452399104,
+        "cpuSeconds": 13.59375
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 11452416,
+        "workingSetBytes": 22089728,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.453125
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 932712448,
+        "workingSetBytes": 1170153472,
+        "cpuSeconds": 11.6875
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.453125
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 47710208,
+        "workingSetBytes": 103628800,
+        "cpuSeconds": 0.203125
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 26337280,
+        "workingSetBytes": 61739008,
+        "cpuSeconds": 3.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22056960,
+        "workingSetBytes": 44670976,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.53125
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184418304,
+        "cpuSeconds": 1.078125
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 33128448,
+        "workingSetBytes": 76505088,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 85929984,
+        "workingSetBytes": 124424192,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 25358336,
+        "workingSetBytes": 60211200,
+        "cpuSeconds": 7.078125
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 232513536,
+        "workingSetBytes": 327065600,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5248,
+        "privateBytes": 23416832,
+        "workingSetBytes": 44388352,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 340230144,
+        "workingSetBytes": 411783168,
+        "cpuSeconds": 38.25
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36126720,
+        "workingSetBytes": 76742656,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 216047616,
+        "workingSetBytes": 308506624,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 43606016,
+        "workingSetBytes": 77201408,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 200536064,
+        "workingSetBytes": 230428672,
+        "cpuSeconds": 7.34375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 216772608,
+        "workingSetBytes": 313552896,
+        "cpuSeconds": 53.328125
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47431680,
+        "workingSetBytes": 99004416,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10534912,
+        "workingSetBytes": 22921216,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 556802048,
+        "workingSetBytes": 567873536,
+        "cpuSeconds": 19.734375
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 224866304,
+        "workingSetBytes": 318509056,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71921664,
+        "workingSetBytes": 131526656,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 185143296,
+        "workingSetBytes": 360235008,
+        "cpuSeconds": 39.140625
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8200192,
+        "workingSetBytes": 27459584,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 38400000,
+        "workingSetBytes": 64872448,
+        "cpuSeconds": 0.34375
+      }
+    ]
+  },
+  {
+    "utc": "2026-10-14T16:08:47.6859529Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39800832,
+        "workingSetBytes": 62885888,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 79020032,
+        "workingSetBytes": 130289664,
+        "cpuSeconds": 2.296875
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183713792,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 392929280,
+        "workingSetBytes": 492376064,
+        "cpuSeconds": 5.125
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53821440,
+        "workingSetBytes": 85327872,
+        "cpuSeconds": 0.15625
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 199659520,
+        "workingSetBytes": 231706624,
+        "cpuSeconds": 3.15625
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73834496,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206741504,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 223612928,
+        "workingSetBytes": 413007872,
+        "cpuSeconds": 23.734375
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 1023467520,
+        "workingSetBytes": 984739840,
+        "cpuSeconds": 10.765625
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 16183296,
+        "workingSetBytes": 34734080,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39817216,
+        "workingSetBytes": 87789568,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31662080,
+        "workingSetBytes": 67112960,
+        "cpuSeconds": 0.484375
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235728896,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 343818240,
+        "workingSetBytes": 452706304,
+        "cpuSeconds": 13.609375
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 11661312,
+        "workingSetBytes": 22302720,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16148,
+        "privateBytes": 21725184,
+        "workingSetBytes": 44249088,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.453125
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 1085399040,
+        "workingSetBytes": 1304473600,
+        "cpuSeconds": 12.125
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.453125
+      },
+      {
+        "name": "chrome",
+        "pid": 17368,
+        "privateBytes": 22257664,
+        "workingSetBytes": 45350912,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 48078848,
+        "workingSetBytes": 103972864,
+        "cpuSeconds": 0.203125
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 26931200,
+        "workingSetBytes": 62234624,
+        "cpuSeconds": 3.890625
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22061056,
+        "workingSetBytes": 44675072,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.53125
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184418304,
+        "cpuSeconds": 1.078125
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 34828288,
+        "workingSetBytes": 78090240,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "chrome",
+        "pid": 25100,
+        "privateBytes": 24506368,
+        "workingSetBytes": 52686848,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 86454272,
+        "workingSetBytes": 124657664,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 25358336,
+        "workingSetBytes": 60211200,
+        "cpuSeconds": 7.078125
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 232513536,
+        "workingSetBytes": 327065600,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5248,
+        "privateBytes": 23416832,
+        "workingSetBytes": 44388352,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 340230144,
+        "workingSetBytes": 411783168,
+        "cpuSeconds": 38.25
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36126720,
+        "workingSetBytes": 76742656,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 216047616,
+        "workingSetBytes": 308506624,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 43606016,
+        "workingSetBytes": 77201408,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 200536064,
+        "workingSetBytes": 230428672,
+        "cpuSeconds": 7.34375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 213377024,
+        "workingSetBytes": 310886400,
+        "cpuSeconds": 53.453125
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47431680,
+        "workingSetBytes": 99004416,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10534912,
+        "workingSetBytes": 22921216,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 554205184,
+        "workingSetBytes": 566427648,
+        "cpuSeconds": 19.734375
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 224866304,
+        "workingSetBytes": 318509056,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71921664,
+        "workingSetBytes": 131526656,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 184934400,
+        "workingSetBytes": 359862272,
+        "cpuSeconds": 39.203125
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8200192,
+        "workingSetBytes": 27459584,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 37826560,
+        "workingSetBytes": 65282048,
+        "cpuSeconds": 0.359375
+      }
+    ]
+  },
+  {
+    "utc": "2026-10-14T16:08:52.6958763Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39800832,
+        "workingSetBytes": 62885888,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 79020032,
+        "workingSetBytes": 130289664,
+        "cpuSeconds": 2.296875
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183750656,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 450240512,
+        "workingSetBytes": 554090496,
+        "cpuSeconds": 6.234375
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53862400,
+        "workingSetBytes": 87101440,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 200142848,
+        "workingSetBytes": 232128512,
+        "cpuSeconds": 3.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73834496,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206774272,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 247296000,
+        "workingSetBytes": 438542336,
+        "cpuSeconds": 24.078125
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 1003102208,
+        "workingSetBytes": 986025984,
+        "cpuSeconds": 10.96875
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 16183296,
+        "workingSetBytes": 34738176,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39817216,
+        "workingSetBytes": 87789568,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31662080,
+        "workingSetBytes": 67112960,
+        "cpuSeconds": 0.484375
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235732992,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 345337856,
+        "workingSetBytes": 454340608,
+        "cpuSeconds": 13.625
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 11554816,
+        "workingSetBytes": 22196224,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16148,
+        "privateBytes": 21725184,
+        "workingSetBytes": 44355584,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 974831616,
+        "workingSetBytes": 1214291968,
+        "cpuSeconds": 12.875
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17368,
+        "privateBytes": 22257664,
+        "workingSetBytes": 45412352,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.125
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 48078848,
+        "workingSetBytes": 103972864,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 26415104,
+        "workingSetBytes": 61857792,
+        "cpuSeconds": 3.96875
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22061056,
+        "workingSetBytes": 44675072,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184455168,
+        "cpuSeconds": 1.09375
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 34832384,
+        "workingSetBytes": 78118912,
+        "cpuSeconds": 0.328125
+      },
+      {
+        "name": "chrome",
+        "pid": 25100,
+        "privateBytes": 24506368,
+        "workingSetBytes": 52744192,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 86458368,
+        "workingSetBytes": 124661760,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "chrome",
+        "pid": 27140,
+        "privateBytes": 51056640,
+        "workingSetBytes": 69832704,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 24174592,
+        "workingSetBytes": 59252736,
+        "cpuSeconds": 7.078125
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 232632320,
+        "workingSetBytes": 327184384,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 338046976,
+        "workingSetBytes": 410439680,
+        "cpuSeconds": 38.25
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36126720,
+        "workingSetBytes": 76742656,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 216166400,
+        "workingSetBytes": 308625408,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 43606016,
+        "workingSetBytes": 77201408,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 199749632,
+        "workingSetBytes": 229822464,
+        "cpuSeconds": 7.359375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 216674304,
+        "workingSetBytes": 313503744,
+        "cpuSeconds": 53.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47431680,
+        "workingSetBytes": 99004416,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10543104,
+        "workingSetBytes": 22933504,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 555454464,
+        "workingSetBytes": 566525952,
+        "cpuSeconds": 19.75
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 224985088,
+        "workingSetBytes": 318627840,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71921664,
+        "workingSetBytes": 131526656,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 184983552,
+        "workingSetBytes": 359800832,
+        "cpuSeconds": 39.25
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8200192,
+        "workingSetBytes": 27459584,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 38109184,
+        "workingSetBytes": 65839104,
+        "cpuSeconds": 0.46875
+      }
+    ]
+  },
+  {
+    "utc": "2026-10-14T16:08:57.7086663Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39800832,
+        "workingSetBytes": 62885888,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 79020032,
+        "workingSetBytes": 130289664,
+        "cpuSeconds": 2.296875
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183750656,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 445698048,
+        "workingSetBytes": 548896768,
+        "cpuSeconds": 6.453125
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53862400,
+        "workingSetBytes": 87101440,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 198397952,
+        "workingSetBytes": 230866944,
+        "cpuSeconds": 3.234375
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73834496,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206774272,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 248778752,
+        "workingSetBytes": 440111104,
+        "cpuSeconds": 24.234375
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 968097792,
+        "workingSetBytes": 960483328,
+        "cpuSeconds": 10.984375
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 16183296,
+        "workingSetBytes": 34738176,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39817216,
+        "workingSetBytes": 87789568,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31662080,
+        "workingSetBytes": 67112960,
+        "cpuSeconds": 0.484375
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235732992,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 345546752,
+        "workingSetBytes": 454557696,
+        "cpuSeconds": 13.640625
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 11603968,
+        "workingSetBytes": 22245376,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16148,
+        "privateBytes": 21155840,
+        "workingSetBytes": 43753472,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 952950784,
+        "workingSetBytes": 1190440960,
+        "cpuSeconds": 13.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17368,
+        "privateBytes": 21544960,
+        "workingSetBytes": 44703744,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.125
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 48078848,
+        "workingSetBytes": 103972864,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 27144192,
+        "workingSetBytes": 62447616,
+        "cpuSeconds": 3.96875
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22061056,
+        "workingSetBytes": 44675072,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184455168,
+        "cpuSeconds": 1.09375
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 34287616,
+        "workingSetBytes": 77697024,
+        "cpuSeconds": 0.359375
+      },
+      {
+        "name": "chrome",
+        "pid": 25100,
+        "privateBytes": 23420928,
+        "workingSetBytes": 51765248,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 86458368,
+        "workingSetBytes": 124661760,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "chrome",
+        "pid": 27140,
+        "privateBytes": 51056640,
+        "workingSetBytes": 69832704,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 24297472,
+        "workingSetBytes": 59351040,
+        "cpuSeconds": 7.09375
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 233144320,
+        "workingSetBytes": 327405568,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 338051072,
+        "workingSetBytes": 410640384,
+        "cpuSeconds": 38.25
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36126720,
+        "workingSetBytes": 76742656,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 215506944,
+        "workingSetBytes": 308023296,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 42946560,
+        "workingSetBytes": 76480512,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 199749632,
+        "workingSetBytes": 229822464,
+        "cpuSeconds": 7.359375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 218546176,
+        "workingSetBytes": 315088896,
+        "cpuSeconds": 53.71875
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47407104,
+        "workingSetBytes": 98992128,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10543104,
+        "workingSetBytes": 22929408,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 556126208,
+        "workingSetBytes": 562425856,
+        "cpuSeconds": 19.75
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 225165312,
+        "workingSetBytes": 318812160,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71925760,
+        "workingSetBytes": 131530752,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 185466880,
+        "workingSetBytes": 360361984,
+        "cpuSeconds": 39.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8200192,
+        "workingSetBytes": 27459584,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 38002688,
+        "workingSetBytes": 65863680,
+        "cpuSeconds": 0.546875
+      }
+    ]
+  },
+  {
+    "utc": "2026-10-14T16:09:02.7200379Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39800832,
+        "workingSetBytes": 62885888,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 79020032,
+        "workingSetBytes": 130289664,
+        "cpuSeconds": 2.296875
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183750656,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 451301376,
+        "workingSetBytes": 554594304,
+        "cpuSeconds": 6.59375
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53874688,
+        "workingSetBytes": 87109632,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 198397952,
+        "workingSetBytes": 230871040,
+        "cpuSeconds": 3.234375
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73834496,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206774272,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 250609664,
+        "workingSetBytes": 441769984,
+        "cpuSeconds": 24.3125
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 892923904,
+        "workingSetBytes": 885374976,
+        "cpuSeconds": 11.0
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 16183296,
+        "workingSetBytes": 34738176,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39817216,
+        "workingSetBytes": 87789568,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31662080,
+        "workingSetBytes": 67112960,
+        "cpuSeconds": 0.484375
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235732992,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 345714688,
+        "workingSetBytes": 454717440,
+        "cpuSeconds": 13.640625
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 12042240,
+        "workingSetBytes": 22679552,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16148,
+        "privateBytes": 21155840,
+        "workingSetBytes": 43753472,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 947146752,
+        "workingSetBytes": 1184186368,
+        "cpuSeconds": 13.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17368,
+        "privateBytes": 21544960,
+        "workingSetBytes": 44703744,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.125
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 43409408,
+        "workingSetBytes": 99893248,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 26775552,
+        "workingSetBytes": 62160896,
+        "cpuSeconds": 3.984375
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22061056,
+        "workingSetBytes": 44675072,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184455168,
+        "cpuSeconds": 1.09375
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 34287616,
+        "workingSetBytes": 77697024,
+        "cpuSeconds": 0.359375
+      },
+      {
+        "name": "chrome",
+        "pid": 25100,
+        "privateBytes": 23420928,
+        "workingSetBytes": 51765248,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 86458368,
+        "workingSetBytes": 124661760,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "chrome",
+        "pid": 27140,
+        "privateBytes": 51056640,
+        "workingSetBytes": 69840896,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 27344896,
+        "workingSetBytes": 59748352,
+        "cpuSeconds": 7.09375
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 233144320,
+        "workingSetBytes": 327405568,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 338513920,
+        "workingSetBytes": 411316224,
+        "cpuSeconds": 38.421875
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36130816,
+        "workingSetBytes": 76754944,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 215511040,
+        "workingSetBytes": 308027392,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10368,
+        "privateBytes": 23875584,
+        "workingSetBytes": 45719552,
+        "cpuSeconds": 0.09375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 42946560,
+        "workingSetBytes": 76480512,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 200368128,
+        "workingSetBytes": 230412288,
+        "cpuSeconds": 7.375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 215482368,
+        "workingSetBytes": 312242176,
+        "cpuSeconds": 53.734375
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 18772,
+        "privateBytes": 27308032,
+        "workingSetBytes": 48304128,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47439872,
+        "workingSetBytes": 99028992,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10543104,
+        "workingSetBytes": 22929408,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 648921088,
+        "workingSetBytes": 648511488,
+        "cpuSeconds": 19.796875
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 225169408,
+        "workingSetBytes": 318816256,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71925760,
+        "workingSetBytes": 131530752,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 193728512,
+        "workingSetBytes": 368668672,
+        "cpuSeconds": 39.390625
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8200192,
+        "workingSetBytes": 27459584,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 38002688,
+        "workingSetBytes": 65863680,
+        "cpuSeconds": 0.546875
+      }
+    ]
+  },
+  {
+    "utc": "2026-10-14T16:09:07.7301969Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39800832,
+        "workingSetBytes": 62885888,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 79020032,
+        "workingSetBytes": 130289664,
+        "cpuSeconds": 2.296875
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183750656,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 458244096,
+        "workingSetBytes": 561721344,
+        "cpuSeconds": 6.75
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53874688,
+        "workingSetBytes": 87109632,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 198397952,
+        "workingSetBytes": 230871040,
+        "cpuSeconds": 3.234375
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73834496,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206774272,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 248016896,
+        "workingSetBytes": 439283712,
+        "cpuSeconds": 24.359375
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 876466176,
+        "workingSetBytes": 868880384,
+        "cpuSeconds": 11.0
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 16183296,
+        "workingSetBytes": 34738176,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39817216,
+        "workingSetBytes": 87789568,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31662080,
+        "workingSetBytes": 67117056,
+        "cpuSeconds": 0.515625
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235732992,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 345849856,
+        "workingSetBytes": 454852608,
+        "cpuSeconds": 13.640625
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 11554816,
+        "workingSetBytes": 22196224,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16148,
+        "privateBytes": 21155840,
+        "workingSetBytes": 43753472,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 947146752,
+        "workingSetBytes": 1184186368,
+        "cpuSeconds": 13.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17368,
+        "privateBytes": 21544960,
+        "workingSetBytes": 44703744,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.125
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 43409408,
+        "workingSetBytes": 99893248,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 26652672,
+        "workingSetBytes": 62091264,
+        "cpuSeconds": 3.984375
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22061056,
+        "workingSetBytes": 44675072,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184455168,
+        "cpuSeconds": 1.09375
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 34287616,
+        "workingSetBytes": 77697024,
+        "cpuSeconds": 0.375
+      },
+      {
+        "name": "chrome",
+        "pid": 25100,
+        "privateBytes": 23429120,
+        "workingSetBytes": 51769344,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 86458368,
+        "workingSetBytes": 124665856,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "chrome",
+        "pid": 27140,
+        "privateBytes": 51056640,
+        "workingSetBytes": 69840896,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 27361280,
+        "workingSetBytes": 59760640,
+        "cpuSeconds": 7.109375
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 233263104,
+        "workingSetBytes": 327524352,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 338583552,
+        "workingSetBytes": 411324416,
+        "cpuSeconds": 38.5
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36130816,
+        "workingSetBytes": 76754944,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 215625728,
+        "workingSetBytes": 308142080,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10368,
+        "privateBytes": 23875584,
+        "workingSetBytes": 45740032,
+        "cpuSeconds": 0.09375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 42946560,
+        "workingSetBytes": 76480512,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 200368128,
+        "workingSetBytes": 230412288,
+        "cpuSeconds": 7.375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 213696512,
+        "workingSetBytes": 310018048,
+        "cpuSeconds": 53.8125
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 18772,
+        "privateBytes": 27308032,
+        "workingSetBytes": 48324608,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47439872,
+        "workingSetBytes": 99028992,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10534912,
+        "workingSetBytes": 22921216,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 673767424,
+        "workingSetBytes": 680771584,
+        "cpuSeconds": 19.796875
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 225292288,
+        "workingSetBytes": 318930944,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71925760,
+        "workingSetBytes": 131530752,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 194572288,
+        "workingSetBytes": 369639424,
+        "cpuSeconds": 39.484375
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8200192,
+        "workingSetBytes": 27459584,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 38002688,
+        "workingSetBytes": 65863680,
+        "cpuSeconds": 0.546875
+      }
+    ]
+  },
+  {
+    "utc": "2026-10-14T16:09:12.7377480Z",
+    "scenario": "websocket-chrome",
+    "processes": [
+      {
+        "name": "chrome",
+        "pid": 3388,
+        "privateBytes": 39800832,
+        "workingSetBytes": 62885888,
+        "cpuSeconds": 0.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 4124,
+        "privateBytes": 78303232,
+        "workingSetBytes": 129703936,
+        "cpuSeconds": 2.3125
+      },
+      {
+        "name": "chrome",
+        "pid": 5044,
+        "privateBytes": 106758144,
+        "workingSetBytes": 183750656,
+        "cpuSeconds": 0.84375
+      },
+      {
+        "name": "chrome",
+        "pid": 7220,
+        "privateBytes": 459051008,
+        "workingSetBytes": 564170752,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 7272,
+        "privateBytes": 53874688,
+        "workingSetBytes": 87175168,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 8312,
+        "privateBytes": 197611520,
+        "workingSetBytes": 230301696,
+        "cpuSeconds": 3.234375
+      },
+      {
+        "name": "chrome",
+        "pid": 9580,
+        "privateBytes": 29708288,
+        "workingSetBytes": 73834496,
+        "cpuSeconds": 0.171875
+      },
+      {
+        "name": "chrome",
+        "pid": 10784,
+        "privateBytes": 122843136,
+        "workingSetBytes": 206774272,
+        "cpuSeconds": 1.78125
+      },
+      {
+        "name": "chrome",
+        "pid": 11128,
+        "privateBytes": 249307136,
+        "workingSetBytes": 440561664,
+        "cpuSeconds": 24.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 11372,
+        "privateBytes": 880861184,
+        "workingSetBytes": 863764480,
+        "cpuSeconds": 11.140625
+      },
+      {
+        "name": "chrome",
+        "pid": 11432,
+        "privateBytes": 16183296,
+        "workingSetBytes": 34738176,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "chrome",
+        "pid": 12476,
+        "privateBytes": 39817216,
+        "workingSetBytes": 87789568,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 13184,
+        "privateBytes": 31662080,
+        "workingSetBytes": 67117056,
+        "cpuSeconds": 0.515625
+      },
+      {
+        "name": "chrome",
+        "pid": 13280,
+        "privateBytes": 163360768,
+        "workingSetBytes": 235732992,
+        "cpuSeconds": 0.8125
+      },
+      {
+        "name": "chrome",
+        "pid": 14716,
+        "privateBytes": 346009600,
+        "workingSetBytes": 455012352,
+        "cpuSeconds": 13.640625
+      },
+      {
+        "name": "chrome",
+        "pid": 15012,
+        "privateBytes": 11558912,
+        "workingSetBytes": 22200320,
+        "cpuSeconds": 0.34375
+      },
+      {
+        "name": "chrome",
+        "pid": 16148,
+        "privateBytes": 21155840,
+        "workingSetBytes": 43753472,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 16552,
+        "privateBytes": 114225152,
+        "workingSetBytes": 188395520,
+        "cpuSeconds": 1.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17008,
+        "privateBytes": 947146752,
+        "workingSetBytes": 1184186368,
+        "cpuSeconds": 13.109375
+      },
+      {
+        "name": "chrome",
+        "pid": 17312,
+        "privateBytes": 66281472,
+        "workingSetBytes": 125992960,
+        "cpuSeconds": 0.46875
+      },
+      {
+        "name": "chrome",
+        "pid": 17368,
+        "privateBytes": 21544960,
+        "workingSetBytes": 44703744,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 18644,
+        "privateBytes": 9011200,
+        "workingSetBytes": 23252992,
+        "cpuSeconds": 0.125
+      },
+      {
+        "name": "chrome",
+        "pid": 19084,
+        "privateBytes": 43409408,
+        "workingSetBytes": 99893248,
+        "cpuSeconds": 0.21875
+      },
+      {
+        "name": "chrome",
+        "pid": 21376,
+        "privateBytes": 26361856,
+        "workingSetBytes": 61800448,
+        "cpuSeconds": 4.0
+      },
+      {
+        "name": "chrome",
+        "pid": 21648,
+        "privateBytes": 22061056,
+        "workingSetBytes": 44675072,
+        "cpuSeconds": 0.046875
+      },
+      {
+        "name": "chrome",
+        "pid": 22032,
+        "privateBytes": 61411328,
+        "workingSetBytes": 120160256,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "chrome",
+        "pid": 22272,
+        "privateBytes": 106946560,
+        "workingSetBytes": 184455168,
+        "cpuSeconds": 1.09375
+      },
+      {
+        "name": "chrome",
+        "pid": 23720,
+        "privateBytes": 2605056,
+        "workingSetBytes": 10395648,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "chrome",
+        "pid": 24980,
+        "privateBytes": 34287616,
+        "workingSetBytes": 77697024,
+        "cpuSeconds": 0.375
+      },
+      {
+        "name": "chrome",
+        "pid": 25100,
+        "privateBytes": 23429120,
+        "workingSetBytes": 51769344,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "chrome",
+        "pid": 25920,
+        "privateBytes": 86458368,
+        "workingSetBytes": 124665856,
+        "cpuSeconds": 0.859375
+      },
+      {
+        "name": "chrome",
+        "pid": 27140,
+        "privateBytes": 51056640,
+        "workingSetBytes": 69840896,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 3652,
+        "privateBytes": 27561984,
+        "workingSetBytes": 59961344,
+        "cpuSeconds": 7.140625
+      },
+      {
+        "name": "msedge",
+        "pid": 5116,
+        "privateBytes": 233271296,
+        "workingSetBytes": 327532544,
+        "cpuSeconds": 7.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 5528,
+        "privateBytes": 338583552,
+        "workingSetBytes": 411324416,
+        "cpuSeconds": 38.5
+      },
+      {
+        "name": "msedge",
+        "pid": 5576,
+        "privateBytes": 36130816,
+        "workingSetBytes": 76754944,
+        "cpuSeconds": 0.3125
+      },
+      {
+        "name": "msedge",
+        "pid": 9664,
+        "privateBytes": 215662592,
+        "workingSetBytes": 308178944,
+        "cpuSeconds": 3.859375
+      },
+      {
+        "name": "msedge",
+        "pid": 10368,
+        "privateBytes": 23261184,
+        "workingSetBytes": 45064192,
+        "cpuSeconds": 0.09375
+      },
+      {
+        "name": "msedge",
+        "pid": 10876,
+        "privateBytes": 42946560,
+        "workingSetBytes": 76480512,
+        "cpuSeconds": 0.546875
+      },
+      {
+        "name": "msedge",
+        "pid": 13052,
+        "privateBytes": 200458240,
+        "workingSetBytes": 230502400,
+        "cpuSeconds": 7.375
+      },
+      {
+        "name": "msedge",
+        "pid": 14348,
+        "privateBytes": 215683072,
+        "workingSetBytes": 313004032,
+        "cpuSeconds": 53.9375
+      },
+      {
+        "name": "msedge",
+        "pid": 14680,
+        "privateBytes": 2965504,
+        "workingSetBytes": 13418496,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 17160,
+        "privateBytes": 18051072,
+        "workingSetBytes": 35700736,
+        "cpuSeconds": 0.0625
+      },
+      {
+        "name": "msedge",
+        "pid": 18772,
+        "privateBytes": 26251264,
+        "workingSetBytes": 47222784,
+        "cpuSeconds": 0.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 19924,
+        "privateBytes": 47439872,
+        "workingSetBytes": 99028992,
+        "cpuSeconds": 0.609375
+      },
+      {
+        "name": "msedge",
+        "pid": 21300,
+        "privateBytes": 10362880,
+        "workingSetBytes": 22753280,
+        "cpuSeconds": 1.03125
+      },
+      {
+        "name": "msedge",
+        "pid": 22776,
+        "privateBytes": 632193024,
+        "workingSetBytes": 645599232,
+        "cpuSeconds": 19.8125
+      },
+      {
+        "name": "msedge",
+        "pid": 24508,
+        "privateBytes": 225308672,
+        "workingSetBytes": 318947328,
+        "cpuSeconds": 7.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 24888,
+        "privateBytes": 71925760,
+        "workingSetBytes": 131530752,
+        "cpuSeconds": 1.296875
+      },
+      {
+        "name": "msedge",
+        "pid": 25596,
+        "privateBytes": 184569856,
+        "workingSetBytes": 359743488,
+        "cpuSeconds": 39.640625
+      },
+      {
+        "name": "msedge",
+        "pid": 27308,
+        "privateBytes": 8187904,
+        "workingSetBytes": 27447296,
+        "cpuSeconds": 0.015625
+      },
+      {
+        "name": "VoxType",
+        "pid": 7380,
+        "privateBytes": 37945344,
+        "workingSetBytes": 65789952,
+        "cpuSeconds": 0.546875
+      }
+    ]
+  }
+]

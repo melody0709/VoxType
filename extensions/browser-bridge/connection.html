@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VoxType browser connection</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; min-width: 290px; max-width: 460px; color: #202124; }
+    h1 { font-size: 19px; }
+    button { font: inherit; padding: 8px 16px; cursor: pointer; }
+    #status { font-weight: 600; overflow-wrap: anywhere; }
+    @media (prefers-color-scheme: dark) { body { background: #202124; color: #e8eaed; } }
+  </style>
+  <script src="connection.js" defer></script>
+</head>
+<body>
+  <h1>VoxType browser connection</h1>
+  <p id="status" role="status" aria-live="polite">Checking connection…</p>
+  <button id="pair" type="button">Pair with VoxType</button>
+  <p>Keep VoxType running. Pair once in each browser profile. It reconnects automatically afterward.</p>
+  <p>To revoke access, use VoxType → Settings → General → Unpair all.</p>
+</body>
+</html>

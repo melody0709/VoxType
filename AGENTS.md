@@ -29,7 +29,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 ## 架构重构（2026-09 起，进行中）
 
 - **权威方案**：`.plan\refactor\cxx23-architecture-refactor-plan.md`（含分层契约、CMake 目标骨架、分阶段 Milestone 与退出判据）。
-- **机械守卫**：`tools\check_architecture.ps1`（当前 **23 项检查**，含一条契约检查"`src` 模块必须出现在 `ARCHITECTURE.md` 与 `doc/ARCHITECTURE_zh.md` 中"，按**唯一模块名**（basename 去扩展名、全词匹配）计数，基线按实测值只降不升——`DocEntriesMissingEn=28` / `DocEntriesMissingZh=35`；检查名与判定一律以脚本内的清单为准，构建打印的 `All architecture invariants PASSED (N checks)` 与 `Test-StageGate`/`Record-Result` 名称是唯一事实来源，`"可发送历史必须在写入时按敏感控件过滤"` 与"浏览器目标不得抵达无障碍读取"是其中的接线检查之一。旧稿里"含 6 项防绕过"这类计数在脚本中无从核对，已删除）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
+- **机械守卫**：`tools\check_architecture.ps1`（当前 **24 项检查**，含一条契约检查"`src` 模块必须出现在 `ARCHITECTURE.md` 与 `doc/ARCHITECTURE_zh.md` 中"，按**唯一模块名**（basename 去扩展名、全词匹配）计数，基线按实测值只降不升——`DocEntriesMissingEn=27` / `DocEntriesMissingZh=34`；检查名与判定一律以脚本内的清单为准，构建打印的 `All architecture invariants PASSED (N checks)` 与 `Test-StageGate`/`Record-Result` 名称是唯一事实来源，`"可发送历史必须在写入时按敏感控件过滤"` 与"浏览器目标不得抵达无障碍读取"是其中的接线检查之一。新增 WebSocket 契约钉住 loopback、Origin、内核 PID、双向认证、DPAPI 和有限队列。旧稿里"含 6 项防绕过"这类计数在脚本中无从核对，已删除）。`build.bat` 已在主流程内置调用，**每次构建都会执行**；任何导致「globals.h 包含者 / extern 数 / 跨层越权 include / main.cpp 行数 / settings.cpp 行数」反弹，或产生零源文件 target、缺 `/utf-8` 的 target、越界产物目录的改动，一律视为构建失败。
 - **禁止绕过守卫**：不得删测试、不得注释掉 `build.bat` 里的守卫调用、不得用 `file(GLOB)`、不得提高守卫基线（相对上一提交上调即 FAIL，需人工确认）、不得在 `src/` 下新建未在分层矩阵中声明的目录。
 - **P6 语法收敛的排除清单**（不得以"统一风格"为名去动）：`src/asr/volcengine_asr.h` 协议层、`src/asr/qwen_free_proto_*` 系列、`src/asr/doubao_ime_asr.cpp` 的 protobuf/Opus 部分。这些受"踩坑规则【B】"保护——**收敛前必须先有回归测试**。
 - **阶段判据**：各阶段 P1~P6 均已完成并通过；Settings 模块化重构已完成。
@@ -146,9 +146,11 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
   - **注册前必须校验清单**（存在、`name` 为本 host、`path` 为 `../VoxType.exe`、`type` 为 `stdio`）。"写完再回读自己写的值"**不是证据**（那是自证）：缺清单时浏览器仍报 host not found，而 UI 显示成功。
   - **读路径**：HKCU→HKLM、32 位→64 位注册表视图、接受 `REG_SZ`/`REG_EXPAND_SZ`（后者要展开）、**先查 size 再读值**（定长缓冲会把超长路径静默变成"未注册"）。Edge 额外按 Edge→Chromium→Chrome 顺序尝试兼容键。键存在但无默认值 = `TargetMissing`；更高优先级的空/旧项不会被低优先级项静默覆盖。
   - **Chrome 与 Edge 必须各自独立判定**，一侧就绪不得代表另一侧；"就绪"还要求清单确实在磁盘上，且两侧路径都规范化（分隔符、`.`/`..`、8.3 短名）后才比较——否则 `PROGRA~1` 或反斜杠差异会误报为"路径变了"。
-  - **状态行只陈述注册表能证明的事**：注册表**区分不了**扩展是否已加载，"已连接"只能在录音日志里看（`peers=` / `reason=`）。不得把"键写对了"写成"已就绪/已连接"。
+  - **注册、配对与连接状态必须各有证据**：注册表**区分不了**扩展是否已加载；注册状态只来自注册查询，已配对来自 DPAPI 凭据存储，已连接只能来自 `Bridge::Status()` 的已认证且存活 peer。Chrome/Edge 独立显示，不得把"键写对了"写成"已连接"。GUI 入口现在是 `Pair / Refresh`；准备注册后还要在扩展配对页点击 `Pair with VoxType`。
   - **注册记录与恢复**：JSON 字段顺序不得影响 `existed` / `previous`；每个记录的可选 `priorManifest` 保留本次写入前已确认归属的 host 路径，使移动目录后在两侧注册表写入前/之间中断仍能重试或撤销。C++ 与脚本均先原子替换状态文件，再改注册表；未知注册仍拒绝覆盖。
   - 离线回归：`tests/browser_bridge_test.cpp`（逐浏览器分类、状态文件乱序/往返、清单校验，以及隔离 HKCU 子树内的 C++ 注册与中断恢复）；`tests/browser_bridge_registration_test.ps1` 独立覆盖脚本的注册、撤销和中断恢复。**改 `extensions/browser-bridge/README.md` 的安装步骤时必须同步这里**，两条注册路径（GUI 按钮与脚本）共享同一份记录文件。
+- **【A】本机 WebSocket 的 Origin 与端口不能代替认证**：本机程序可伪造 Origin；接受正文前必须同时验证当前用户/会话的内核 TCP 对端、浏览器身份及双向随机挑战。未经认证不得发送窗口清单或字段文本；凭据不得进入 URL、日志或页面 DOM。只绑定 loopback，端口冲突和任何未知身份均返回无上下文/Unknown，不回退到浏览器无障碍。
+- **【C】浏览器配套扩展 2.0（2026-10-14）**：`browser_websocket` 用 Windows 原生协议组件 + Winsock 事件，只监听 `127.0.0.1:19226`；`browser_pairing` 用按安装路径/配置区分的 owner-only DPAPI 文件保存凭据。显式配对短暂启动本 EXE 的 Native host；启动/重连/20s 心跳均不启动 host。`Unpair all` 撤销并断开直连；旧 1.x 常驻转发仅保留兼容/回滚。MSI 分发配套资产但不自动写 host 注册，HKCU 注册仍由 GUI/脚本拥有；卸载保留配对数据，撤销须显式操作。新增模块已登记两份架构文档，六项源码基线与文档欠账基线均未上调。Chrome 字段/iframe/shadow/zoom 与窗口几何已实测；Edge、多配置、睡眠/会话与 MSI VM 安装升级按用户决定保留待验收。执行说明见 `.plan/feat/browser-websocket-direct-connection-plan.md`，证据见其同级 `evidence/browser-websocket/`；改扩展仍须跑 worker contract，实测脚本为 `tools/browser_bridge_live_contract.cjs`。
 - **【A】火山引擎 WebSocket `connected` 必须用 `std::atomic<bool>`**，不能用 `volatile bool`。
 - **【A】火山引擎 `context` 字段值必须是 JSON 字符串**（内部引号转义），不能是原始 JSON 对象。
 - **【B】火山引擎协议层**：**在当前（无测试覆盖）前提下**，不要重写 frame 编解码、三模式 send/drain、`PrewarmConnection()` / `CloseSession()` 行为；可以机械拆薄。**解除条件**：一旦 P3/P6 为该协议层建立了回归测试，本条自动作废，替换为"协议层重构前必须先补测试"。
@@ -200,8 +202,8 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 - **【C】提示词家族版本 `llm::kPromptPresetVersion` 的递增条件**（2026-10-12）：只在**既有** `kPreset*` 文案发生变化时递增。`MigratePromptConfig()` 对任何带 preset id 的已存配置会**重写 `llmPrompt`**，因此无谓递增会波及所有后端用户的提示词；新增提示词（如 `kOrganizeSystemPrompt`）不属于 preset 家族，不递增。断言：`tests/llm_refine_test.cpp`（版本号 + `SelectRefineSystemPrompt` 选择器行为）。
 - **【B】注入反思链路的分层**：`src/platform/text_injector.cpp` **只观察**（记录注入台账 + 延时读回前台文档）并通过 `kInjectionReflectionMessage` 上报，**不决定**学不学；策略（敏感拒绝、定位/裁剪、落盘上限）全部在 `src/app/learning_intake.cpp`。解除条件：若将来反射改为异步线程内直接落盘，需先为策略层建立等价测试。
 
-- **【C】架构文档欠账（2026-10-12 实测，每轮收口时重审并下调基线）**：守卫契约检查（`DocEntriesMissingEn=28` / `DocEntriesMissingZh=35`，唯一模块名 + 全词匹配）允许存量欠账，但**新模块必须登记**。欠账清单（修一个 = 两份文档各补一行 + 基线各下调 1）：
-  - 两份文档都缺（28）：`asr_result_policy`、`asr_streaming_session`、`asr_streaming_session_base`、`audio_chunk_sink`、`batch_vad_trimmer`、`cloud_http_common`、`doubao_ime_config`、`pending_pcm_buffer`、`qwen_audio_json`、`qwen_context`、`qwen_finalize_policy`、`qwen_free_asr_json`、`qwen_free_diagnostics`、`qwen_free_json`、`qwen_free_llm_json`、`qwen_free_postprocess`、`qwen_free_recovery_policy`、`qwen_special_word_filter`、`qwen_streaming_session`、`selection_context`、`settings_dialogs`、`ui_utils`、`vad_detector`、`vad_trim_core`、`volcengine_net_diag`、`volcengine_streaming_session`、`wasapi_capture`、`winhttp_websocket_transport`
+- **【C】架构文档欠账（2026-10-14 实测，每轮收口时重审并下调基线）**：守卫契约检查（`DocEntriesMissingEn=27` / `DocEntriesMissingZh=34`，唯一模块名 + 全词匹配）允许存量欠账，但**新模块必须登记**。欠账清单（修一个 = 两份文档各补一行 + 基线各下调 1）：
+  - 两份文档都缺（27）：`asr_result_policy`、`asr_streaming_session`、`asr_streaming_session_base`、`audio_chunk_sink`、`batch_vad_trimmer`、`cloud_http_common`、`doubao_ime_config`、`pending_pcm_buffer`、`qwen_audio_json`、`qwen_context`、`qwen_finalize_policy`、`qwen_free_asr_json`、`qwen_free_diagnostics`、`qwen_free_json`、`qwen_free_llm_json`、`qwen_free_postprocess`、`qwen_free_recovery_policy`、`qwen_special_word_filter`、`qwen_streaming_session`、`settings_dialogs`、`ui_utils`、`vad_detector`、`vad_trim_core`、`volcengine_net_diag`、`volcengine_streaming_session`、`wasapi_capture`、`winhttp_websocket_transport`
   - 仅中文版缺（另 7）：`asr_context`、`asr_probe_service`、`asr_probe_service_impl`、`config_registry`、`dialog_positioning`、`form_builder`、`mai_transcribe`
   - 登记方式：分组行必须在行内**枚举成员名**（如 `src/ui/tabs/` 行内列 `tab_general`、`tab_advanced`…），守卫的 basename 匹配即可命中；**不要**为了让数字变小而把分组行拆成逐文件行——那是把好文档改坏。
 

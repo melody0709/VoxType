@@ -11,6 +11,7 @@
 #include "learning_store.h"
 #include "startup_registration.h"
 #include "browser_bridge_registration.h"
+#include "browser_bridge.h"
 
 #include <windowsx.h>
 #include <shellapi.h>
@@ -55,35 +56,24 @@ std::wstring DescribeWin32Error(DWORD error) {
     return result;
 }
 
-// Chrome and Edge are reported separately: one browser having a usable host must
-// never be presented as "ready" for both, and the registry cannot tell whether
-// the extension itself is loaded, so the label claims registration only.
-const wchar_t* HostStateText(browser_bridge_registration::HostState state) {
-    switch (state) {
-    case browser_bridge_registration::HostState::Ready:
-        return L"registered";
-    case browser_bridge_registration::HostState::PathMismatch:
-        return L"other path";
-    case browser_bridge_registration::HostState::TargetMissing:
-        return L"manifest missing";
-    case browser_bridge_registration::HostState::NotRegistered:
-    default:
-        return L"not registered";
-    }
-}
-
 void RefreshBrowserBridgeControl(HWND parent) {
     HWND statusLabel = GetDlgItem(parent, IDC_BROWSER_STATUS);
     if (!statusLabel) return;
 
     const browser_bridge_registration::BridgeState state =
         browser_bridge_registration::QueryBridgeState();
-    const bool fullyRegistered =
-        state.chrome == browser_bridge_registration::HostState::Ready &&
-        state.edge == browser_bridge_registration::HostState::Ready;
-    EnableWindow(GetDlgItem(parent, IDC_BROWSER_REGISTER_BRIDGE), fullyRegistered ? FALSE : TRUE);
-    const std::wstring text = std::format(L"Bridge: Chrome {} / Edge {}",
-                                          HostStateText(state.chrome), HostStateText(state.edge));
+    const auto connection = browser_bridge::Bridge::Instance().Status();
+    const auto browserState = [](size_t connected, size_t paired,
+                                  browser_bridge_registration::HostState registered) {
+        if (connected) return L"connected";
+        if (paired) return L"paired (offline)";
+        return registered == browser_bridge_registration::HostState::Ready ? L"not paired" : L"setup needed";
+    };
+    const std::wstring text = connection.error.empty() ? std::format(L"Chrome: {} / Edge: {}{}",
+        browserState(connection.chrome, connection.pairedChrome, state.chrome),
+        browserState(connection.edge, connection.pairedEdge, state.edge),
+        connection.legacy ? L" (legacy host active)" : L"") :
+        L"Browser connection unavailable: " + Utf8ToWide(connection.error);
     SetWindowTextW(statusLabel, text.c_str());
 }
 
@@ -141,6 +131,7 @@ bool SaveStartupRegistrationControl(HWND hwnd) {
 }
 
 void TabGeneral::CreateControls(HWND parent) {
+    m_parent = parent;
     m_controls.clear();
     const int shortcutY = S(UiStyle::GeneralShortcutGroupY);
     HWND shortcutGroup = CreateWindowW(L"BUTTON", L"Shortcut", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -230,7 +221,7 @@ void TabGeneral::CreateControls(HWND parent) {
     AddGeneralControl(browserGroup);
 
     control = CreateLabel(parent, S(UiStyle::ContentLeft), browserY + S(UiStyle::GeneralBrowserHintOffsetY), S(UiStyle::GeneralBrowserHintW), S(UiStyle::LabelH),
-                          L"Chrome & Edge need the companion extension for field context.");
+                          L"Load the companion extension, then click its icon to pair with VoxType.");
     AddGeneralControl(control);
 
     HWND statusLabel = CreateWindowW(L"STATIC", L"Bridge: checking...", WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX,
@@ -241,7 +232,7 @@ void TabGeneral::CreateControls(HWND parent) {
 
     const int browserActionsY = browserY + S(UiStyle::GeneralBrowserActionsOffsetY);
     HWND regBtn = CreateButton(parent, IDC_BROWSER_REGISTER_BRIDGE, S(UiStyle::ContentLeft), browserActionsY,
-                               S(UiStyle::GeneralBrowserBtnW), S(UiStyle::ActionBtnH), L"Register Bridge");
+                               S(UiStyle::GeneralBrowserBtnW), S(UiStyle::ActionBtnH), L"Pair / Refresh");
     AddGeneralControl(regBtn);
 
     const int folderBtnX = UiStyle::ContentLeft + UiStyle::GeneralBrowserBtnW + UiStyle::GeneralBrowserButtonGap;
@@ -253,9 +244,14 @@ void TabGeneral::CreateControls(HWND parent) {
     HWND guideBtn = CreateButton(parent, IDC_BROWSER_SETUP_GUIDE, S(guideBtnX), browserActionsY,
                                  S(UiStyle::GeneralBrowserGuideBtnW), S(UiStyle::ActionBtnH), L"Setup Guide");
     AddGeneralControl(guideBtn);
+    const int revokeBtnX = guideBtnX + UiStyle::GeneralBrowserGuideBtnW + UiStyle::GeneralBrowserButtonGap;
+    AddGeneralControl(CreateButton(parent, IDC_BROWSER_REVOKE, S(revokeBtnX), browserActionsY,
+        S(UiStyle::GeneralBrowserRevokeBtnW), S(UiStyle::ActionBtnH), L"Unpair all"));
 }
 
 void TabGeneral::DestroyControls() {
+    if (m_parent) KillTimer(m_parent, reinterpret_cast<UINT_PTR>(this));
+    m_parent = nullptr;
     for (HWND c : m_controls) {
         if (c && IsWindow(c)) DestroyWindow(c);
     }
@@ -263,6 +259,12 @@ void TabGeneral::DestroyControls() {
 }
 
 void TabGeneral::Show(bool visible) {
+    if (m_parent) {
+        if (visible) {
+            RefreshBrowserBridgeControl(m_parent);
+            SetTimer(m_parent, reinterpret_cast<UINT_PTR>(this), 1000, nullptr);
+        } else KillTimer(m_parent, reinterpret_cast<UINT_PTR>(this));
+    }
     for (HWND c : m_controls) {
         ShowWindow(c, visible ? SW_SHOW : SW_HIDE);
     }
@@ -309,23 +311,37 @@ bool TabGeneral::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWN
     (void)control;
     if (controlId == IDC_BROWSER_REGISTER_BRIDGE) {
         const std::wstring manifest = browser_bridge_registration::ManifestPath();
-        const auto registered = browser_bridge_registration::RegisterHost(manifest);
+        const auto state = browser_bridge_registration::QueryBridgeState();
+        const bool ready = state.chrome == browser_bridge_registration::HostState::Ready &&
+                           state.edge == browser_bridge_registration::HostState::Ready;
+        const auto registered = ready ? std::expected<void, std::wstring>{} :
+            browser_bridge_registration::RegisterHost(manifest);
         if (registered) {
             RefreshBrowserBridgeControl(parent);
-            SetStatus(parent, L"Bridge registered. Reload the extension or click its icon to reconnect.");
+            SetStatus(parent, L"Click the browser extension icon to pair. Normal connections use WebSocket.");
             MessageBoxW(parent,
-                        L"The browser host is registered for Chrome and Edge.\n\n"
+                        L"Pairing is ready for Chrome and Edge.\n\n"
                         L"If the companion extension is not loaded yet, open chrome://extensions "
                         L"(or edge://extensions), enable Developer mode, and use 'Load unpacked' to "
-                        L"select the extensions\\browser-bridge folder. Reload the extension after "
-                        L"registering, otherwise it keeps the connection state from before. You can also "
-                        L"click the extension icon to reconnect.",
+                        L"select the extensions\\browser-bridge folder. Reload an older extension.\n\n"
+                        L"Keep VoxType running and click the extension icon once in each browser profile "
+                        L"to pair. The temporary pairing host exits; subsequent connections use WebSocket. "
+                        L"Use Unpair all to revoke credentials. Connection status refreshes here each second.",
                         L"VoxType Browser Integration", MB_OK | MB_ICONINFORMATION);
         } else {
             SetStatus(parent, L"Registration failed: " + registered.error());
             MessageBoxW(parent, registered.error().c_str(), L"VoxType Browser Integration",
                         MB_OK | MB_ICONERROR);
         }
+        return true;
+    }
+    if (controlId == IDC_BROWSER_REVOKE) {
+        if (MessageBoxW(parent, L"Revoke all browser pairings for this VoxType installation?\n"
+            L"Each browser profile will need its extension icon clicked to pair again.",
+            L"VoxType Browser Integration", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return true;
+        const auto revoked = browser_bridge::Bridge::Instance().RevokePairings();
+        RefreshBrowserBridgeControl(parent);
+        SetStatus(parent, revoked ? L"Browser pairings revoked." : L"Could not revoke pairings: " + Utf8ToWide(revoked.error()));
         return true;
     }
     if (controlId == IDC_BROWSER_OPEN_FOLDER) {
@@ -361,6 +377,12 @@ bool TabGeneral::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWN
     // "dictate, then clear" hits it reliably.
     injection_ledger::Invalidate();
     SetStatus(parent, L"Learned corrections deleted.");
+    return true;
+}
+
+bool TabGeneral::HandleMessage(HWND parent, UINT msg, WPARAM wParam, LPARAM) {
+    if (msg != WM_TIMER || wParam != reinterpret_cast<UINT_PTR>(this)) return false;
+    RefreshBrowserBridgeControl(parent);
     return true;
 }
 

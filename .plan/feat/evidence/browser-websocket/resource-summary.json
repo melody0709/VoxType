@@ -1,0 +1,26 @@
+[
+  {
+    "file": ".plan/feat/evidence/browser-websocket/p0-native-chrome.json",
+    "samples": 7,
+    "voxtypeProcesses": [
+      2
+    ],
+    "privateMiB": 38.024,
+    "workingMiB": 76.007,
+    "cpuSeconds": 0.0,
+    "browserPrivateMiB": 4533.411,
+    "browserWorkingMiB": 6303.638
+  },
+  {
+    "file": ".plan/feat/evidence/browser-websocket/p1-websocket-chrome.json",
+    "samples": 7,
+    "voxtypeProcesses": [
+      1
+    ],
+    "privateMiB": 36.279,
+    "workingMiB": 62.585,
+    "cpuSeconds": 0.203125,
+    "browserPrivateMiB": 6631.15,
+    "browserWorkingMiB": 9190.775
+  }
+]

@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.11.9</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.12.0</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -98,6 +98,7 @@ the packager re-extracts and hashes each result before publishing it.
 <summary><strong>Settings Guide</strong></summary>
 
 **General & Input tab**
+- `Browser integration` — Use `Pair / Refresh` to prepare pairing, load companion extension 2.0, then click its icon and choose `Pair with VoxType` once per browser profile. Normal connections use authenticated local WebSocket and keep only one VoxType process; the temporary pairing host exits. Chrome and Edge connection/paired/offline states are independent. `Unpair all` revokes credentials. See the [setup and rollback guide](extensions/browser-bridge/README.md). Chrome has live coverage; Edge and multi-profile validation remain pending.
 - `Hold hotkey` — Click the input box then press the hotkey to record
   - `Esc` cancels this recording, `Backspace/Delete` clears the hotkey
   - Default CapsLock: Short press toggles Caps Lock, long press 300ms triggers voice input

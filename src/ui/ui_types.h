@@ -96,6 +96,7 @@ constexpr int GeneralBrowserActionsOffsetY = 80;
 constexpr int GeneralBrowserBtnW = 190;
 constexpr int GeneralBrowserFolderBtnW = 210;
 constexpr int GeneralBrowserGuideBtnW = 140;
+constexpr int GeneralBrowserRevokeBtnW = 150;
 constexpr int GeneralBrowserButtonGap = 16;
 // Tab 5 (Audio & Advanced): VAD group owns the top of the page, the recording
 // diagnostics block moves here from Tab 1 and keeps its internal geometry.
@@ -519,3 +520,4 @@ constexpr int IDC_BROWSER_OPEN_FOLDER = 2255;
 constexpr int IDC_BROWSER_REGISTER_BRIDGE = 2256;
 constexpr int IDC_BROWSER_SETUP_GUIDE = 2257;
 constexpr int IDC_BROWSER_STATUS = 2258;
+constexpr int IDC_BROWSER_REVOKE = 2259;

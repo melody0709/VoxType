@@ -10,12 +10,13 @@
 // directly instead, which never touches the accessibility tree, so this module
 // carries that channel:
 //
-//   VoxType.exe (tray)  <-- named pipe, current user + session only -->
-//   VoxType.exe --native-host (this same EXE, restricted mode)
-//                       <-- official length-prefixed JSON over stdio -->
-//   extension service worker
+//   VoxType.exe (tray) <-- authenticated loopback WebSocket --> extension worker
 //                       <-- chrome.scripting.executeScript (on demand) -->
 //   the focused field of the active tab
+//
+// Explicit pairing alone uses a short-lived restricted Native Messaging host
+// and the SID/session pipe. Extension 1.x can still use the legacy forwarder for
+// rollback; extension 2.0 startup and retries never launch it.
 //
 // Two rules are structural here, not conventions:
 //   1. The host mode runs BEFORE the single-instance mutex, because the desktop
@@ -24,10 +25,12 @@
 //   2. A failed lookup NEVER falls back to UIA/MSAA. Callers get `ok == false`
 //      plus a reason and must degrade to "no context, fail-closed privacy".
 //
-// The desktop side is deliberately passive: one pipe instance, one bounded
-// request/response, no polling and no per-page work while nobody is recording.
+// Field reads remain passive and bounded. The direct connection has a disclosed
+// 20-second heartbeat, bounded queues and event-driven I/O; no idle page reads.
 
 #include "browser_target.h"
+#include "browser_pairing.h"
+#include "browser_websocket.h"
 #include "utils.h"
 
 #include <windows.h>
@@ -233,7 +236,8 @@ inline bool IsWellFormedFrame(std::string_view bytes) {
     if (type.empty()) return false;
     const std::string narrow = WideToUtf8(type);
     return narrow == kTypeHello || narrow == kTypeQuery || narrow == kTypeResult ||
-           narrow == kTypeUnavailable;
+           narrow == kTypeUnavailable || narrow == "pair" || narrow == "paired" ||
+           narrow == "pairing_error";
 }
 
 inline bool WriteFrame(HANDLE pipe, const std::string& json, DWORD timeoutMs, PipeIo io) {
@@ -390,6 +394,59 @@ inline DWORD BrowserAncestorPid(DWORD pid) {
 }
 
 inline bool HasBrowserAncestor(DWORD pid) { return BrowserAncestorPid(pid) != 0; }
+
+inline bool SameUser(DWORD pid) {
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) return false;
+    HANDLE token = nullptr;
+    const bool opened = OpenProcessToken(process, TOKEN_QUERY, &token) != FALSE;
+    CloseHandle(process);
+    if (!opened) return false;
+    DWORD size = 0;
+    GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+    std::vector<char> bytes(size);
+    const bool read = GetTokenInformation(token, TokenUser, bytes.data(), size, &size) != FALSE;
+    CloseHandle(token);
+    LPWSTR sid = nullptr;
+    if (!read || !ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(bytes.data())->User.Sid, &sid)) return false;
+    const bool same = CurrentUserSid() == sid;
+    LocalFree(sid);
+    return same;
+}
+
+// TCP is owned by Chromium's network service or its browser process, not by the
+// extension. Walk only the same-image browser ancestry and pin the root process.
+inline DWORD BrowserRootPid(DWORD pid) {
+    if (!SameSession(pid) || !SameUser(pid)) return 0;
+    const auto image = ProcessImagePath(pid);
+    if (!browser_target::IsChromiumBrowserImage(browser_target::ImageBasename(image))) return 0;
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return 0;
+    std::vector<PROCESSENTRY32W> processes;
+    PROCESSENTRY32W entry{sizeof(entry)};
+    if (Process32FirstW(snapshot, &entry)) do { processes.push_back(entry); } while (Process32NextW(snapshot, &entry));
+    CloseHandle(snapshot);
+    DWORD current = pid;
+    for (int depth = 0; depth < 8; ++depth) {
+        const auto child = std::ranges::find(processes, current, &PROCESSENTRY32W::th32ProcessID);
+        if (child == processes.end()) return 0;
+        const auto parent = std::ranges::find(processes, child->th32ParentProcessID, &PROCESSENTRY32W::th32ProcessID);
+        if (parent == processes.end() || ProcessImagePath(parent->th32ProcessID) != image) return current;
+        if (parent->th32ProcessID == current || !SameSession(parent->th32ProcessID) || !SameUser(parent->th32ProcessID)) return 0;
+        HANDLE childProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, current);
+        HANDLE parentProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, parent->th32ProcessID);
+        FILETIME childCreated{}, parentCreated{}, exited{}, kernel{}, user{};
+        const bool chronological = childProcess && parentProcess &&
+            GetProcessTimes(childProcess, &childCreated, &exited, &kernel, &user) &&
+            GetProcessTimes(parentProcess, &parentCreated, &exited, &kernel, &user) &&
+            CompareFileTime(&parentCreated, &childCreated) <= 0;
+        if (childProcess) CloseHandle(childProcess);
+        if (parentProcess) CloseHandle(parentProcess);
+        if (!chronological) return 0;
+        current = parent->th32ProcessID;
+    }
+    return 0;
+}
 
 // ---------------------------------------------------------------------------
 // Window identity: the extension reports its window bounds in Chrome's
@@ -650,6 +707,34 @@ struct QueryResult {
 // Desktop-side client
 // ---------------------------------------------------------------------------
 
+inline std::expected<browser_pairing::Credential, std::string> AuthenticateChannel(
+    browser_websocket::Channel& channel, browser_pairing::Store& pairings, const std::wstring& browserImage) {
+    const auto serverNonce = browser_pairing::RandomHex(32);
+    const auto instance = pairings.InstanceId();
+    if (serverNonce.empty() || instance.empty() || !channel.Send(std::format(
+            "{{\"version\":2,\"type\":\"challenge\",\"nonce\":\"{}\",\"instance\":\"{}\"}}", serverNonce, instance))) return std::unexpected("authentication_failed");
+    const auto start = GetTickCount64();
+    const auto request = channel.Receive(3000);
+    if (!request || request->size() > 1024 || detail::JsonInt(*request, "version", -1) != 2 ||
+        ExtractJsonStringDecoded(*request, "type") != L"auth_start") return std::unexpected("authentication_failed");
+    const auto profile = WideToUtf8(ExtractJsonStringDecoded(*request, "profile"));
+    const auto clientNonce = WideToUtf8(ExtractJsonStringDecoded(*request, "nonce"));
+    const auto credential = pairings.Find(profile, browserImage);
+    if (!credential || !browser_pairing::IsHex(clientNonce, 32)) return std::unexpected("authentication_failed");
+    const auto transcript = instance + ":" + clientNonce + ":" + serverNonce;
+    if (!channel.Send(std::format("{{\"version\":2,\"type\":\"auth_server\",\"proof\":\"{}\"}}",
+                                  browser_pairing::Hmac(credential->secret, "server:" + transcript)))) return std::unexpected("authentication_failed");
+    const auto elapsed = GetTickCount64() - start;
+    if (elapsed >= 3000) return std::unexpected("authentication_failed");
+    const auto answer = channel.Receive(static_cast<DWORD>(3000 - elapsed));
+    if (!answer || answer->size() > 1024 || detail::JsonInt(*answer, "version", -1) != 2 ||
+        ExtractJsonStringDecoded(*answer, "type") != L"auth_client" ||
+        !browser_pairing::EqualProof(browser_pairing::Hmac(credential->secret, "client:" + transcript),
+                                     WideToUtf8(ExtractJsonStringDecoded(*answer, "proof")))) return std::unexpected("authentication_failed");
+    if (!channel.Send("{\"version\":2,\"type\":\"auth_ok\"}")) return std::unexpected("authentication_failed");
+    return *credential;
+}
+
 class Bridge {
 public:
     static Bridge& Instance() {
@@ -668,13 +753,20 @@ public:
         if (!state_->ready) return;
         ResetEvent(state_->ready);
         ResetEvent(state_->stop);
+        (void)state_->pairings.Load();
+        const auto listening = state_->listener.Start();
+        state_->listenerError = listening ? std::string{} : listening.error();
+        if (listening) state_->acceptWebSocket = std::jthread([this](std::stop_token stop) { AcceptWebSocketLoop(stop); });
         state_->accept = std::jthread([this, identity](std::stop_token stop) { AcceptLoop(identity, stop); });
     }
 
     void Stop() {
         state_->accept.request_stop();
+        state_->acceptWebSocket.request_stop();
         SetEvent(state_->stop);
         if (state_->accept.joinable()) state_->accept.join();
+        if (state_->acceptWebSocket.joinable()) state_->acceptWebSocket.join();
+        state_->listener.Close();
         std::vector<std::shared_ptr<Peer>> peers;
         {
             std::lock_guard lock(state_->mutex);
@@ -682,6 +774,7 @@ public:
         }
         for (const auto& peer : peers) {
             peer->thread.request_stop();
+            if (peer->channel) { peer->channel->Close(); continue; }
             // Closing the connection also rejects a read started after cancellation.
             DisconnectNamedPipe(peer->pipe);
             CancelIoEx(peer->pipe, nullptr);
@@ -689,6 +782,42 @@ public:
         for (const auto& peer : peers) {
             if (peer->thread.joinable()) peer->thread.join();
         }
+    }
+
+    struct ConnectionStatus {
+        size_t paired = 0;
+        size_t pairedChrome = 0, pairedEdge = 0;
+        size_t chrome = 0, edge = 0, legacy = 0;
+        std::string error;
+    };
+
+    ConnectionStatus Status() const {
+        ConnectionStatus status;
+        status.paired = state_->pairings.Count();
+        status.pairedChrome = state_->pairings.CountForBrowser(L"chrome.exe");
+        status.pairedEdge = state_->pairings.CountForBrowser(L"msedge.exe");
+        status.error = state_->listenerError.empty() ? state_->pairings.Error() : state_->listenerError;
+        std::lock_guard lock(state_->mutex);
+        for (const auto& peer : state_->peers) {
+            std::lock_guard peerLock(peer->mutex);
+            if (!peer->alive || !peer->hello) continue;
+            if (!peer->channel) { ++status.legacy; continue; }
+            const auto credential = state_->pairings.Find(peer->profile, peer->browserImage);
+            if (!credential || !browser_pairing::EqualProof(credential->secret, peer->secret)) continue;
+            const auto image = browser_target::ImageBasename(peer->browserImage);
+            if (image == L"chrome.exe") ++status.chrome;
+            else if (image == L"msedge.exe") ++status.edge;
+        }
+        return status;
+    }
+
+    std::expected<void, std::string> RevokePairings() {
+        const auto revoked = state_->pairings.RevokeAll();
+        if (!revoked) return revoked;
+        std::vector<std::shared_ptr<Peer>> peers;
+        { std::lock_guard lock(state_->mutex); peers = state_->peers; }
+        for (const auto& peer : peers) if (peer->channel) peer->channel->Close();
+        return {};
     }
 
     // Bounded request/response. `anchor` is the top-level window captured when
@@ -700,6 +829,7 @@ public:
     // than kept in a single slot: one shared slot would let either waiter consume
     // the other's answer and report a bogus failure.
     QueryResult Query(HWND anchor, Need need, size_t valueCharacters, DWORD deadlineMs) {
+        const auto start = GetTickCount64();
         QueryResult result;
         if (!anchor) {
             result.reason = kReasonNoAnchor;
@@ -720,7 +850,9 @@ public:
         }
         {
             std::lock_guard writeLock(target->write);
-            if (!WriteFrame(target->pipe, command, 50, detail::PipeIo::Overlapped)) {
+            const bool sent = target->channel ? target->channel->Send(command) :
+                WriteFrame(target->pipe, command, 50, detail::PipeIo::Overlapped);
+            if (!sent) {
                 result.reason = kReasonDisconnected;
                 return result;
             }
@@ -728,7 +860,9 @@ public:
         std::string reply;
         {
             std::unique_lock lock(target->mutex);
-            const bool received = target->cv.wait_for(lock, std::chrono::milliseconds(deadlineMs), [&] {
+            const auto elapsed = GetTickCount64() - start;
+            const DWORD remaining = elapsed < deadlineMs ? static_cast<DWORD>(deadlineMs - elapsed) : 0;
+            const bool received = target->cv.wait_for(lock, std::chrono::milliseconds(remaining), [&] {
                 return !target->alive || target->replies.count(id) != 0;
             });
             if (!target->alive) {
@@ -787,7 +921,11 @@ public:
 private:
     struct Peer {
         HANDLE pipe = INVALID_HANDLE_VALUE;
+        std::shared_ptr<browser_websocket::Channel> channel;
         DWORD browserPid = 0;
+        HANDLE browserProcess = nullptr;
+        std::wstring browserImage;
+        std::string profile, secret;
         int windowId = -1;
         bool alive = true;
         std::mutex mutex;
@@ -798,6 +936,7 @@ private:
         std::jthread thread;
         ~Peer() {
             if (pipe != INVALID_HANDLE_VALUE) CloseHandle(pipe);
+            if (browserProcess) CloseHandle(browserProcess);
         }
     };
 
@@ -805,6 +944,10 @@ private:
         mutable std::mutex mutex;
         std::vector<std::shared_ptr<Peer>> peers;
         std::jthread accept;
+        std::jthread acceptWebSocket;
+        browser_websocket::Listener listener;
+        browser_pairing::Store pairings;
+        std::string listenerError;
         HANDLE stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         HANDLE ready = nullptr;
         std::atomic<long long> requestSeq{0};
@@ -819,6 +962,67 @@ private:
     Bridge(const Bridge&) = delete;
     Bridge& operator=(const Bridge&) = delete;
 
+    void RetirePeers() {
+        std::vector<std::shared_ptr<Peer>> retired;
+        {
+            std::lock_guard lock(state_->mutex);
+            for (auto it = state_->peers.begin(); it != state_->peers.end();) {
+                std::lock_guard peerLock((*it)->mutex);
+                if (!(*it)->alive) { retired.push_back(*it); it = state_->peers.erase(it); }
+                else ++it;
+            }
+        }
+        for (const auto& peer : retired) if (peer->thread.joinable()) peer->thread.join();
+    }
+
+    void AcceptWebSocketLoop(std::stop_token stop) {
+        while (!stop.stop_requested()) {
+            auto channel = state_->listener.Accept(state_->stop);
+            if (!channel) break;
+            RetirePeers();
+            const DWORD browserPid = BrowserRootPid(channel->ProcessId());
+            if (!browserPid) continue;
+            auto peer = std::make_shared<Peer>();
+            peer->channel = std::move(channel);
+            peer->browserPid = browserPid;
+            peer->browserImage = ProcessImagePath(browserPid);
+            peer->browserProcess = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, browserPid);
+            if (!peer->browserProcess) continue;
+            {
+                std::lock_guard lock(state_->mutex);
+                if (state_->peers.size() >= kMaxPeers) continue;
+                state_->peers.push_back(peer);
+                peer->thread = std::jthread([this, peer](std::stop_token token) {
+                    if (peer->channel->Upgrade(std::format("chrome-extension://{}", kExtensionIdUtf8)) &&
+                        Authenticate(peer)) PeerLoop(peer, token);
+                    else { std::lock_guard lock(peer->mutex); peer->alive = false; peer->cv.notify_all(); }
+                    peer->channel->Close();
+                });
+            }
+        }
+    }
+
+    bool Authenticate(const std::shared_ptr<Peer>& peer) {
+        const auto credential = AuthenticateChannel(*peer->channel, state_->pairings, peer->browserImage);
+        if (!credential) return false;
+        peer->profile = credential->profile;
+        peer->secret = credential->secret;
+        return true;
+    }
+
+    void AnswerPairing(HANDLE pipe, const std::string& request, DWORD browserPid) {
+        const auto profile = WideToUtf8(ExtractJsonStringDecoded(request, "profile"));
+        if (WideToUtf8(ExtractJsonStringDecoded(request, "ext")) != kExtensionIdUtf8 ||
+            !browser_pairing::IsHex(profile, 16)) return;
+        const auto credential = state_->listenerError.empty() ? state_->pairings.Pair(profile, ProcessImagePath(browserPid)) :
+            std::expected<browser_pairing::Credential, std::string>(std::unexpected(state_->listenerError));
+        const auto reply = credential ? std::format(
+            "{{\"version\":1,\"type\":\"paired\",\"wsVersion\":2,\"port\":{},\"instance\":\"{}\",\"profile\":\"{}\",\"secret\":\"{}\"}}",
+            browser_websocket::kPort, state_->pairings.InstanceId(), credential->profile, credential->secret) :
+            std::format("{{\"version\":1,\"type\":\"pairing_error\",\"reason\":\"{}\"}}", credential.error());
+        detail::WriteFrame(pipe, reply, 1000, detail::PipeIo::Overlapped);
+    }
+
     void AcceptLoop(const PipeIdentity& identity, std::stop_token stop) {
         // Every pipe instance must carry the owner-only DACL, so the descriptor
         // stays alive for the whole accept loop.
@@ -829,26 +1033,7 @@ private:
         }
         SECURITY_ATTRIBUTES security{sizeof(security), descriptor, FALSE};
         while (!stop.stop_requested()) {
-            std::vector<std::shared_ptr<Peer>> retired;
-            {
-                std::lock_guard lock(state_->mutex);
-                for (auto it = state_->peers.begin(); it != state_->peers.end();) {
-                    bool alive = true;
-                    {
-                        std::lock_guard peerLock((*it)->mutex);
-                        alive = (*it)->alive;
-                    }
-                    if (!alive) {
-                        retired.push_back(*it);
-                        it = state_->peers.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
-            }
-            for (const auto& old : retired) {
-                if (old->thread.joinable()) old->thread.join();
-            }
+            RetirePeers();
             HANDLE pipe = CreateNamedPipeW(identity.name.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                                            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
                                                PIPE_REJECT_REMOTE_CLIENTS,
@@ -879,13 +1064,23 @@ private:
             }
             ULONG pid = 0;
             const DWORD browserPid = GetNamedPipeClientProcessId(pipe, &pid) ? BrowserAncestorPid(pid) : 0;
-            if (!browserPid || !SameSession(pid) || !SameImageAsSelf(pid)) {
+            if (!browserPid || !SameSession(pid) || !SameUser(pid) || !SameImageAsSelf(pid)) {
                 CloseHandle(pipe);
                 continue;
             }
+            auto first = detail::ReadFrame(pipe, 2000, detail::PipeIo::Overlapped, state_->stop);
+            if (!first) { CloseHandle(pipe); continue; }
+            if (ExtractJsonStringDecoded(*first, "type") == L"pair") {
+                AnswerPairing(pipe, *first, browserPid);
+                CloseHandle(pipe);
+                continue;
+            }
+            const auto hello = ParseHello(*first);
+            if (!hello || hello->extensionId != kExtensionIdUtf8) { CloseHandle(pipe); continue; }
             auto peer = std::make_shared<Peer>();
             peer->pipe = pipe;
             peer->browserPid = browserPid;
+            peer->hello = *hello;
             {
                 std::lock_guard lock(state_->mutex);
                 if (state_->peers.size() >= kMaxPeers) {
@@ -894,8 +1089,8 @@ private:
                     continue;
                 }
                 state_->peers.push_back(peer);
+                peer->thread = std::jthread([peer](std::stop_token token) { PeerLoop(peer, token); });
             }
-            peer->thread = std::jthread([peer](std::stop_token token) { PeerLoop(peer, token); });
         }
         if (descriptor) LocalFree(descriptor);
         ResetEvent(state_->ready);
@@ -903,13 +1098,19 @@ private:
 
     static void PeerLoop(const std::shared_ptr<Peer>& peer, std::stop_token stop) {
         while (!stop.stop_requested()) {
-            auto frame = detail::ReadFrame(peer->pipe, INFINITE, detail::PipeIo::Overlapped);
+            auto frame = peer->channel ? peer->channel->Receive() :
+                detail::ReadFrame(peer->pipe, INFINITE, detail::PipeIo::Overlapped);
             if (!frame) break;
+            if (peer->channel && *frame == "{\"version\":2,\"type\":\"ping\"}") {
+                if (!peer->channel->Send("{\"version\":2,\"type\":\"pong\"}")) break;
+                continue;
+            }
+            if (!detail::IsWellFormedFrame(*frame)) break;
             const std::wstring type = ExtractJsonStringDecoded(*frame, "type");
             std::lock_guard lock(peer->mutex);
             if (type == L"hello") {
                 const auto hello = ParseHello(*frame);
-                if (!hello) break;
+                if (!hello || hello->extensionId != kExtensionIdUtf8) break;
                 // The manifest already pins allowed_origins; recording the id keeps
                 // "which extension is talking" diagnosable, and a future rotation
                 // can be spotted here instead of guessed at.
@@ -961,6 +1162,11 @@ private:
             for (const auto& peer : state_->peers) {
                 std::lock_guard peerLock(peer->mutex);
                 if (!peer->alive || !peer->hello) continue;
+                if (peer->channel) {
+                    const auto credential = state_->pairings.Find(peer->profile, peer->browserImage);
+                    if (!credential || !browser_pairing::EqualProof(credential->secret, peer->secret) ||
+                        WaitForSingleObject(peer->browserProcess, 0) != WAIT_TIMEOUT) continue;
+                }
                 ++peerCount;
                 if (!anchorPid || peer->browserPid != anchorPid) continue;
                 for (const auto& window : peer->hello->windows) {
@@ -1026,6 +1232,37 @@ inline bool IsNativeHostInvocation() {
 
 // Restricted forwarding loop: it validates frames and relays them, and creates
 // no window, no tray icon, no model and no accessibility client.
+inline int RunPairingHost(HANDLE input, HANDLE output, const std::string& request) {
+    const auto origin = std::format(L"chrome-extension://{}/", Utf8ToWide(kExtensionIdUtf8));
+    if (GetCommandLineW() == nullptr || std::wstring(GetCommandLineW()).find(origin) == std::wstring::npos ||
+        WideToUtf8(ExtractJsonStringDecoded(request, "ext")) != kExtensionIdUtf8 ||
+        !browser_pairing::IsHex(WideToUtf8(ExtractJsonStringDecoded(request, "profile")), 16)) return 2;
+    const auto identity = CurrentIdentity();
+    HANDLE ready = CreateReadyEvent(identity);
+    if (!ready) return 2;
+    const bool available = WaitForSingleObject(ready, 1500) == WAIT_OBJECT_0;
+    CloseHandle(ready);
+    HANDLE pipe = available ? CreateFileW(identity.name.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                                          OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr) : INVALID_HANDLE_VALUE;
+    if (pipe == INVALID_HANDLE_VALUE && available && GetLastError() == ERROR_PIPE_BUSY) {
+        WaitNamedPipeW(identity.name.c_str(), 500);
+        pipe = CreateFileW(identity.name.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                           FILE_FLAG_OVERLAPPED, nullptr);
+    }
+    ULONG server = 0;
+    bool sent = false;
+    if (pipe != INVALID_HANDLE_VALUE && GetNamedPipeServerProcessId(pipe, &server) &&
+        SameSession(server) && SameUser(server) && SameImageAsSelf(server) &&
+        detail::WriteFrame(pipe, request, 1000, detail::PipeIo::Overlapped)) {
+        const auto reply = detail::ReadFrame(pipe, 3000, detail::PipeIo::Overlapped);
+        if (reply) sent = detail::WriteFrame(output, *reply, 1000, detail::PipeIo::Synchronous);
+    }
+    if (pipe != INVALID_HANDLE_VALUE) CloseHandle(pipe);
+    if (!sent) detail::WriteFrame(output, "{\"version\":1,\"type\":\"pairing_error\",\"reason\":\"desktop_unavailable\"}",
+                                  1000, detail::PipeIo::Synchronous);
+    return sent ? 0 : 2;
+}
+
 inline int RunNativeHost() {
     HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
     HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -1033,7 +1270,9 @@ inline int RunNativeHost() {
     if (identity.name.empty() || !HasBrowserAncestor(GetCurrentProcessId())) return 2;
 
     auto hello = detail::ReadFrame(input, 10000, detail::PipeIo::Synchronous);
-    if (!hello || ExtractJsonStringDecoded(*hello, "type") != L"hello") return 2;
+    if (!hello) return 2;
+    if (ExtractJsonStringDecoded(*hello, "type") == L"pair") return RunPairingHost(input, output, *hello);
+    if (ExtractJsonStringDecoded(*hello, "type") != L"hello") return 2;
     // Defence in depth on top of the manifest's allowed_origins: only the pinned
     // companion may talk to the desktop side. The extension id is fixed by the
     // `key` in its manifest, so this holds for a store build as well.

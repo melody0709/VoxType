@@ -1,0 +1,20 @@
+{
+  "type": "result",
+  "id": 1,
+  "ok": true,
+  "password": false,
+  "textInput": true,
+  "focus": true,
+  "value": "",
+  "windowId": 811594871,
+  "tabId": 811594996,
+  "frameId": 0,
+  "documentId": "BE0817D7CFED35D7AC0192CAEEEC057A",
+  "windowLeft": 0,
+  "windowTop": 0,
+  "windowWidth": 1519,
+  "windowHeight": 1672,
+  "scaleMicros": 1250000,
+  "screenLeft": 0,
+  "screenTop": 0
+}

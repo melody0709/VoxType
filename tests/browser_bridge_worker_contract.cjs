@@ -24,6 +24,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const {webcrypto, createHmac} = require("node:crypto");
 
 // An explicit path may be passed (node <this> <worker.js>) so a pre-fix copy can be
 // run through the same assertions; that is how the iframe regression was proven
@@ -54,7 +55,54 @@ function makeEvent() {
 function loadWorker(options) {
   const fixtures = options || {};
   const port = { sent: [], onMessage: makeEvent(), onDisconnect: makeEvent() };
-  port.postMessage = (message) => port.sent.push(message);
+  const credential = {wsVersion: 2, port: 19226, instance: "ab".repeat(16), profile: "cd".repeat(16), secret: "11".repeat(32)};
+  const storage = fixtures.unpaired ? {} : {voxtypePairingV2: credential};
+  const intervals = [];
+  const sockets = [];
+  const nativeRequests = [];
+  let nativeCount = 0;
+  class FakeWebSocket {
+    static OPEN = 1;
+    readyState = 1;
+    bufferedAmount = 0;
+    constructor(url, protocol) {
+      connectionCount++;
+      this.url = url;
+      this.protocol = protocol;
+      this.credential = storage.voxtypePairingV2;
+      this.nonce = "ef".repeat(32);
+      sockets.push(this);
+      port.onMessage.addListener((message) => this.deliver(message));
+      port.onDisconnect.addListener(() => this.close());
+      setTimeout(() => {
+        if (!fixtures.noServer) this.deliver({version: 2, type: "challenge", nonce: this.nonce,
+          instance: fixtures.wrongInstance ? "00".repeat(16) : this.credential.instance});
+      }, 0);
+    }
+    deliver(message) {
+      if (this.readyState === 1) this.onmessage?.({data: JSON.stringify(message)});
+    }
+    send(json) {
+      const message = JSON.parse(json);
+      port.sent.push(message);
+      if (message.type === "hello") this.hasHello = true;
+      if (message.type === "auth_start") {
+        this.transcript = this.credential.instance + ":" + message.nonce + ":" + this.nonce;
+        const proof = fixtures.wrongProof ? "00".repeat(32) :
+          createHmac("sha256", Buffer.from(this.credential.secret, "hex")).update("server:" + this.transcript).digest("hex");
+        setTimeout(() => this.deliver({version: 2, type: "auth_server", proof}), 0);
+      } else if (message.type === "auth_client") {
+        const proof = createHmac("sha256", Buffer.from(this.credential.secret, "hex")).update("client:" + this.transcript).digest("hex");
+        expect(message.proof === proof, "client authenticates the fresh mutual-auth transcript");
+        setTimeout(() => this.deliver({version: 2, type: "auth_ok"}), 0);
+      } else if (message.type === "ping") this.deliver({version: 2, type: "pong"});
+    }
+    close() {
+      if (this.readyState === 3) return;
+      this.readyState = 3;
+      this.onclose?.();
+    }
+  }
 
   const windows = {
     getAll: async () => fixtures.windows || [],
@@ -70,16 +118,32 @@ function loadWorker(options) {
   const chrome = {
     runtime: {
       id: EXTENSION_ID,
+      getURL: (file) => "chrome-extension://" + EXTENSION_ID + "/" + file,
+      onMessage: makeEvent(),
       connectNative: (name) => {
-        connectionCount++;
+        nativeCount++;
         chrome.__hostName = name;
-        return port;
+        const bootstrap = {onMessage: makeEvent(), onDisconnect: makeEvent(),
+          disconnect() { this.onDisconnect.fire(); },
+          postMessage(message) {
+            nativeRequests.push(message);
+            if (!fixtures.pairingFailure) setTimeout(() => this.onMessage.fire({version: 1, type: "paired",
+              ...credential, profile: message.profile}), 0);
+            else setTimeout(() => this.onMessage.fire({version: 1, type: "pairing_error", reason: "desktop_unavailable"}), 0);
+          }};
+        return bootstrap;
       },
       onInstalled: makeEvent(),
       onStartup: makeEvent(),
     },
-    action: { onClicked: makeEvent() },
-    alarms: { create: (name, args) => alarms.push({name, ...args}), onAlarm: makeEvent() },
+    action: { onClicked: makeEvent(), setBadgeText: async (value) => { chrome.badge = value.text; },
+      setTitle: async (value) => { chrome.title = value.title; } },
+    storage: {local: {
+      setAccessLevel: async (value) => { chrome.storageAccess = value.accessLevel; },
+      get: async () => storage,
+      set: async (value) => Object.assign(storage, value),
+    }},
+    alarms: { create: (name, args) => alarms.push({name, ...args}), clear: async () => {}, onAlarm: makeEvent() },
     windows,
     tabs: {getZoom: async () => fixtures.zoom ?? 1},
     scripting: { executeScript: async ({ target, args }) => fixtures.inject(target, args) },
@@ -88,30 +152,48 @@ function loadWorker(options) {
   // The worker logs its connection/query trace for humans; the assertions below are
   // the contract, so keep that trace out of the test output.
   const quiet = { log() {}, warn() {}, error() {} };
-  const context = vm.createContext({ chrome, setTimeout, clearTimeout, console: quiet,
+  const context = vm.createContext({ chrome, WebSocket: FakeWebSocket, crypto: webcrypto, TextEncoder, Uint8Array,
+    setTimeout, clearTimeout, setInterval: (callback, delay) => { intervals.push({callback, delay}); return intervals.length; },
+    clearInterval: (id) => { if (intervals[id - 1]) intervals[id - 1].cleared = true; }, console: quiet,
     devicePixelRatio: fixtures.dpr ?? 1,
     screen: {availLeft: 0, availTop: 0} });
   vm.runInContext(fs.readFileSync(WORKER, "utf8"), context, { filename: WORKER });
   // `context.readFocusedField` is the injected page function; it is reachable here
   // because a top-level function declaration in the worker script becomes a global.
-  return { port, chrome, windows, context, alarms, connections: () => connectionCount };
+  return { port, chrome, windows, context, alarms, intervals, sockets, storage, nativeRequests,
+    nativeConnections: () => nativeCount, connections: () => connectionCount };
 }
 
 async function testReconnectOncePromptlyThenBackOff() {
-  const harness = loadWorker({});
-  expect(harness.connections() === 1, "initial native connection opens once");
-  harness.port.onDisconnect.fire();
+  const options = {};
+  const harness = loadWorker(options);
+  await ready(harness);
+  expect(harness.connections() === 1 && harness.nativeConnections() === 0, "startup opens WebSocket without a native host");
+  // A failed reconnect must not reset backoff until authentication succeeds.
+  options.noServer = true;
+  harness.sockets[0].close();
   await new Promise((r) => setTimeout(r, 300));
   expect(harness.connections() === 2, "desktop disconnect retries within 300 ms");
-  harness.context.disconnect();
+  harness.sockets[1].close();
+  const before = harness.connections();
   await new Promise((r) => setTimeout(r, 300));
-  expect(harness.connections() === 2, "repeated failed connection does not spin");
+  expect(harness.connections() === before, "repeated failed connection does not spin");
   expect(harness.alarms.at(-1)?.delayInMinutes === 1, "repeated failure retains alarm backoff");
+  options.noServer = false;
   harness.chrome.alarms.onAlarm.fire({name: "voxtype-bridge-reconnect"});
-  harness.port.onMessage.fire({version: 1, type: "ack"});
-  harness.context.disconnect();
+  await ready(harness);
+  expect(harness.connections() === before + 1, "alarm reconnects with WebSocket");
+  harness.port.onDisconnect.fire();
   await new Promise((r) => setTimeout(r, 300));
-  expect(harness.connections() === 4, "confirmed desktop traffic rearms the single fast reconnect");
+  expect(harness.connections() === before + 2, "authentication rearms the single fast reconnect");
+  expect(harness.nativeConnections() === 0, "disconnects and alarms never launch a native host");
+}
+
+async function ready(harness) {
+  const deadline = Date.now() + 1000;
+  const connected = () => vm.runInContext("port !== null", harness.context) && harness.sockets.at(-1)?.hasHello;
+  while (Date.now() < deadline && !connected()) await new Promise((r) => setTimeout(r, 5));
+  expect(connected(), "WebSocket authenticates before application messages");
 }
 
 // A synthetic page element for driving readFocusedField directly.
@@ -137,6 +219,7 @@ async function waitForResult(port, id, timeoutMs = 3000) {
 }
 
 async function query(harness, message) {
+  await ready(harness);
   harness.port.onMessage.fire({ version: 1, ...message });
   return waitForResult(harness.port, message.id);
 }
@@ -175,7 +258,7 @@ async function testLastFocusSurvivesLossAndReconnect() {
   const harness = loadWorker({
     windows: [{id: 41, type: "normal", focused: true, left: 0, top: 0, width: 1600, height: 900}],
   });
-  await new Promise((r) => setTimeout(r, 20));
+  await ready(harness);
   harness.windows.getAll = async () => [
     {id: 41, type: "normal", focused: false, left: 0, top: 0, width: 1600, height: 900}];
   harness.windows.onFocusChanged.fire(-1);
@@ -186,7 +269,7 @@ async function testLastFocusSurvivesLossAndReconnect() {
     windows: [{id: 41, type: "normal", focused: false, left: 0, top: 0, width: 1600, height: 900}],
     lastFocused: {id: 41},
   });
-  await new Promise((r) => setTimeout(r, 20));
+  await ready(reconnected);
   expect(reconnected.port.sent.find((m) => m.type === "hello")?.windows[0].lastFocused === true,
          "reconnect while browser is unfocused recovers the last focused window");
 }
@@ -198,8 +281,10 @@ async function testHelloOnConnect() {
       { id: 42, type: "normal", focused: false, left: 1600, top: 0, width: 1600, height: 900 },
     ],
   });
-  expect(harness.chrome.__hostName === "com.voxtype.browser_bridge",
-         "the worker connects to the pinned native messaging host");
+  await ready(harness);
+  expect(harness.nativeConnections() === 0, "an already paired worker never launches a host");
+  expect(harness.sockets[0].url === "ws://127.0.0.1:19226/voxtype/browser/v2" &&
+         harness.sockets[0].protocol === "voxtype-context-v2", "fixed loopback endpoint and protocol are used");
 
   const deadline = Date.now() + 1000;
   while (Date.now() < deadline && !harness.port.sent.some((m) => m.type === "hello")) {
@@ -218,7 +303,7 @@ async function testHelloOnConnect() {
 
 async function testStaleHelloCannotOverwriteNewFocus() {
   const harness = loadWorker({});
-  await new Promise((r) => setTimeout(r, 20));
+  await ready(harness);
   let resolveOld;
   harness.windows.getAll = () => new Promise((r) => { resolveOld = r; });
   const old = harness.context.sendHello();
@@ -237,6 +322,7 @@ async function testReplyCannotCrossReconnection() {
   let finishInjection;
   const harness = loadWorker({windowById: WINDOW_BY_ID,
     inject: () => new Promise((resolve) => { finishInjection = resolve; })});
+  await ready(harness);
   const pending = harness.context.handleQuery({id: 55, need: "field", windowId: 41, valueChars: 400});
   while (!finishInjection) await new Promise((r) => setTimeout(r, 5));
   const replacement = {sent: [], postMessage(m) { this.sent.push(m); }};
@@ -411,6 +497,79 @@ async function testFocusChangeSendsImmediately() {
   expect(after > before, "a window focus change sends a hello immediately, not after the debounce");
 }
 
+async function testExplicitPairingOnly() {
+  const harness = loadWorker({unpaired: true});
+  await new Promise((r) => setTimeout(r, 20));
+  harness.chrome.runtime.onStartup.fire();
+  harness.chrome.alarms.onAlarm.fire({name: "voxtype-bridge-reconnect"});
+  await new Promise((r) => setTimeout(r, 20));
+  expect(harness.nativeConnections() === 0 && harness.connections() === 0,
+    "an unpaired startup or alarm does not repeatedly launch hosts or scan ports");
+  expect(harness.chrome.badge === "PAIR", "unpaired status invites an explicit action");
+  await harness.context.pair();
+  await ready(harness);
+  expect(harness.nativeConnections() === 1 && harness.chrome.__hostName === "com.voxtype.browser_bridge",
+    "explicit pairing uses the pinned native host exactly once");
+  expect(harness.nativeRequests[0]?.type === "pair" && !harness.nativeRequests[0]?.secret,
+    "pairing bootstrap sends identity, never a prior credential");
+  expect(harness.chrome.storageAccess === "TRUSTED_CONTEXTS", "credentials are inaccessible to content scripts");
+  expect(harness.storage.voxtypePairingV2?.secret.length === 64, "the profile credential persists for restarts");
+  expect(!harness.sockets[0].url.includes(harness.storage.voxtypePairingV2.secret), "credentials are absent from URLs");
+  expect(harness.intervals[0]?.delay === 20000, "heartbeat stays within the 30-second service-worker budget");
+  harness.intervals[0].callback();
+  expect(harness.port.sent.some((m) => m.type === "ping"), "heartbeat uses a bounded protocol message");
+}
+
+async function testUntrustedServersGetNoContext() {
+  for (const failure of [{wrongProof: true}, {wrongInstance: true}]) {
+    const harness = loadWorker({...failure, windowById: WINDOW_BY_ID,
+      inject: () => { throw new Error("an untrusted service cannot read a page"); }});
+    await new Promise((r) => setTimeout(r, 50));
+    expect(!harness.port.sent.some((m) => ["auth_client", "hello", "result"].includes(m.type)),
+      "wrong server identity or proof gets no client proof, window inventory or field text");
+    expect(harness.nativeConnections() === 0, "authentication failures never fall back to a native host");
+    expect(!harness.port.sent.some((m) => JSON.stringify(m).includes(harness.storage.voxtypePairingV2.secret)),
+      "the reusable secret never crosses WebSocket");
+  }
+}
+
+async function testFailedPairingDoesNotLoop() {
+  const harness = loadWorker({unpaired: true, pairingFailure: true});
+  await harness.context.pair();
+  await new Promise((r) => setTimeout(r, 300));
+  expect(harness.nativeConnections() === 1 && harness.connections() === 0,
+    "unavailable desktop ends the bootstrap without retrying hosts");
+}
+
+async function testFailedRepairingResumesConnection() {
+  const harness = loadWorker({pairingFailure: true});
+  await ready(harness);
+  const previous = harness.storage.voxtypePairingV2;
+  const before = harness.connections();
+  await harness.context.pair();
+  await ready(harness);
+  expect(harness.connections() === before + 1 && harness.chrome.badge === "ON",
+    "failed re-pairing resumes WebSocket with the existing credential");
+  expect(harness.storage.voxtypePairingV2 === previous && harness.nativeConnections() === 1,
+    "failed re-pairing preserves the credential and never retries the native host");
+  harness.sockets.at(-1).close();
+  expect(harness.alarms.at(-1)?.name === "voxtype-bridge-reconnect",
+    "the resumed connection retains automatic reconnect after a later disconnect");
+}
+
+async function testHeartbeatRequiresOpenSocket() {
+  const harness = loadWorker();
+  await ready(harness);
+  const connection = harness.sockets.at(-1);
+  for (const state of [2, 3]) {
+    connection.readyState = state;
+    const before = harness.port.sent.length;
+    harness.intervals.at(-1).callback();
+    expect(harness.port.sent.length === before,
+      "heartbeat skips a closing or closed socket before its close event");
+  }
+}
+
 (async () => {
   await testHelloOnConnect();
   await testSingleFrameFocus();
@@ -431,6 +590,11 @@ async function testFocusChangeSendsImmediately() {
   await testReconnectOncePromptlyThenBackOff();
   await testStaleHelloCannotOverwriteNewFocus();
   await testReplyCannotCrossReconnection();
+  await testExplicitPairingOnly();
+  await testUntrustedServersGetNoContext();
+  await testFailedPairingDoesNotLoop();
+  await testFailedRepairingResumesConnection();
+  await testHeartbeatRequiresOpenSocket();
 
   if (failures === 0) {
     console.log("browser_bridge_worker_contract: all checks passed");

@@ -2,6 +2,12 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.12.0 (2026-10-14; local validation build)
+
+- Browser companion 2.0 uses authenticated loopback WebSocket for normal connections. Native Messaging is an explicit, bounded pairing bootstrap; startup, heartbeat and retries never launch a forwarding host. The desktop verifies the kernel TCP owner, browser ancestry, user/session, mutual HMAC challenges and the existing focused-window geometry before accepting context.
+- Per-installation/profile credentials use an owner-only current-user DPAPI store. Settings and the extension pairing page show connection state and support re-pairing/revocation. Fixed-port conflicts, damaged stores, malformed or oversized messages and unknown identities fail closed. Windows owns WebSocket framing; no networking dependency was added.
+- Chrome live checks cover ordinary/password fields, cross-origin/nested iframes, open/closed shadow roots, page zoom, native geometry, restart and extension reload. Offline authentication/transport tests, architecture invariants and 96/144/192/288 DPI layout checks pass. Edge/multi-profile, sleep/session transitions and MSI installation/upgrade on a VM remain pending by agreement; the 1.x compatibility path is retained for rollback. This build is not a published release.
+
 ## v0.11.9 (2026-10-13)
 
 ### Browser accessibility isolation and the optional browser companion

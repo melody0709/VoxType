@@ -16,12 +16,14 @@ public:
     void LoadControls(HWND parent, const Config& cfg) override;
     void SaveControls(HWND parent, Config& cfg) override;
     bool HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) override;
+    bool HandleMessage(HWND parent, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
     bool SaveStartupRegistration(HWND parent);
 
 private:
     void AddGeneralControl(HWND hwnd) { if (hwnd) m_controls.push_back(hwnd); }
     std::vector<HWND> m_controls;
+    HWND m_parent = nullptr;
 };
 
 void RefreshStartupRegistrationControl(HWND hwnd, bool reportError);

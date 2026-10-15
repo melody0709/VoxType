@@ -713,6 +713,37 @@ Record-Result -Name "Contract: browser companion identity pinned and never yield
     -Details $(if ($bridgePrivacyMissing.Count -eq 0) { "host/id derived and pinned; value gated on isPassword" } else { "$($bridgePrivacyMissing.Count) missing guard(s)" })
 foreach ($g in $bridgePrivacyMissing) { Write-Host "    ! $g" -ForegroundColor Red }
 
+$webSocketMissing = @()
+$webSocketPath = Join-Path $RepoRoot 'src/core/browser_websocket.cpp'
+$pairingPath = Join-Path $RepoRoot 'src/core/browser_pairing.cpp'
+foreach ($entry in @(
+    @{ Path = $webSocketPath; Needles = @('htonl(INADDR_LOOPBACK)', 'SO_EXCLUSIVEADDRUSE', 'WebSocketBeginServerHandshake', 'value("origin") != origin', 'TcpPeerPid(socket)', 'incoming.size() >= 8') },
+    @{ Path = $pairingPath; Needles = @('BCryptGenRandom', 'BCRYPT_HMAC_SHA256_ALG_HANDLE', 'CryptProtectData', 'CRYPTPROTECT_UI_FORBIDDEN', 'MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH') },
+    @{ Path = $bridgeGuardPath; Needles = @('BrowserRootPid(channel->ProcessId())', 'Authenticate(peer)) PeerLoop(peer, token)', 'WaitForSingleObject(peer->browserProcess, 0)', 'SameUser(pid)') },
+    @{ Path = $workerPath; Needles = @('ws://127.0.0.1:19226/voxtype/browser/v2', 'TRUSTED_CONTEXTS', 'crypto.subtle.verify', 'state !== "ready"', '20000') }
+)) {
+    if (!(Test-Path $entry.Path)) { $webSocketMissing += "missing $($entry.Path)"; continue }
+    $text = Read-Text -Path $entry.Path
+    foreach ($needle in $entry.Needles) {
+        if (!$text.Contains($needle)) { $webSocketMissing += "$($entry.Path): $needle" }
+    }
+}
+if ((Read-Text -Path $workerPath | Select-String -Pattern 'connectNative\(HOST_NAME\)' -AllMatches).Matches.Count -ne 1) {
+    $webSocketMissing += 'the native host must have exactly one explicit pairing call site'
+}
+$finishLocked = 'void Finish\(\)\s*\{\s*\{\s*std::lock_guard lock\(mutex\);\s*closed = true;'
+if ((Read-Text -Path $webSocketPath) -notmatch $finishLocked) {
+    $webSocketMissing += 'channel closure must update the receive predicate under its mutex'
+}
+$peerPublishedLocked = '(?ms)^ {16}std::lock_guard lock\(state_->mutex\);(?:(?!^ {12}\}).)*?state_->peers.push_back\(peer\);(?:(?!^ {12}\}).)*?peer->thread = std::jthread'
+if ([regex]::Matches((Read-Text -Path $bridgeGuardPath), $peerPublishedLocked).Count -ne 2) {
+    $webSocketMissing += 'both accept loops must initialize peer threads before releasing the publication mutex'
+}
+Record-Result -Name "Contract: browser WebSocket authenticated and bounded" `
+    -Passed ($webSocketMissing.Count -eq 0) `
+    -Details $(if ($webSocketMissing.Count -eq 0) { 'loopback/origin/PID pinned; mutual auth; DPAPI; bounded queues; pairing-only host' } else { "$($webSocketMissing.Count) missing guard(s)" })
+foreach ($g in $webSocketMissing) { Write-Host "    ! $g" -ForegroundColor Red }
+
 # -----------------------------------------------------------------------------
 # 4. Stage gates (-Stage P1..P6). Turns each milestone DoD into a machine check.
 # -----------------------------------------------------------------------------

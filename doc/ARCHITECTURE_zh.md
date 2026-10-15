@@ -110,8 +110,10 @@ flowchart LR
 | `src/audio/firered_vad.h` | FireRed VAD 模块（header-only） |
 | `src/core/input_context.h` | 输入框上下文读取模块（header-only，UIA/MSAA/WM_GETTEXT 分层 Fallback），并持有根层浏览器门控：浏览器目标改走配套扩展桥，绝不发起无障碍请求 |
 | `src/core/browser_target.h` | 浏览器识别模块（header-only，纯函数）：按进程镜像名与窗口类名判定前台顶层窗口是否 Chromium/Gecko 系浏览器，不使用 UIA/MSAA/COM。Electron 与 WebView2 宿主刻意不算浏览器 |
+| `src/core/browser_websocket.h` / `src/core/browser_websocket.cpp` | 仅本机监听的 WebSocket 服务端：Windows 原生协议组件 + Winsock 事件，有限队列、有界取消；从 OS 核对 TCP 客户端 PID，校验固定扩展 Origin、路径和子协议 |
+| `src/core/browser_pairing.h` / `src/core/browser_pairing.cpp` | 每安装目录、每浏览器配置的配对凭据；仅当前用户可访问的 DPAPI 存储，强随机 nonce、HMAC-SHA256 双向认证、原子保存和显式撤销 |
 | `src/core/accessibility_focus.h` | 捕获窗口内的 UIA 查询（header-only）：先确认非浏览器 HWND，再定位其元素并在后代范围内找键盘焦点。input_context/selection_context 共用；禁止全局焦点和屏幕点命中，避免查询期间切进浏览器而触发其无障碍 |
-| `src/core/browser_bridge.h` | 浏览器配套扩展桥（header-only）：长度前缀 JSON 分帧、按 SID+会话隔离的命名管道服务端、fail-closed 的 `ClassifyFocus` 三态判定，以及本 EXE 的 Native Messaging host 模式。路由绑定原生浏览器 PID 与最后聚焦窗口；应答用页面 DPR / tab zoom 得到浏览器真实界面缩放，按显示器工作区原点校验矩形，不依赖 Windows DPI。用于替代浏览器无障碍读取 |
+| `src/core/browser_bridge.h` | 浏览器配套扩展的组合/查询层（header-only）：核对内核 TCP 对端、同用户/会话的浏览器根进程，先双向挑战认证再消费直连 peer；保留 fail-closed 的 `ClassifyFocus`、SID+会话隔离的短暂 Native 配对引导及旧版 1.x 兼容转发。路由绑定 PID/进程生命周期和最后聚焦窗口；应答以 DPR/tab zoom 按显示器工作区校验几何，不依赖 Windows DPI。直连队列有上限，总查询期限包含发送时间 |
 | `src/core/selection_context.h` | 选区与焦点文档快照（header-only，先 UIA 后 Win32），带同样的根层浏览器门控，浏览器永不收到无障碍请求 |
 | `src/core/startup_registration.h` / `src/core/startup_registration.cpp` | 当前用户 Windows 开机自启注册表管理，支持旧版便携路径探测与修复 |
 | `src/core/browser_bridge_registration.h` / `src/core/browser_bridge_registration.cpp` | 浏览器配套扩展的 Native Messaging host 注册。读路径严格只读：按 HKCU→HKLM、32 位→64 位视图解析各浏览器键，Edge 额外按 Edge/Chromium/Chrome 顺序尝试兼容键，接受 `REG_SZ` / `REG_EXPAND_SZ`；两侧路径都规范化（分隔符、`.` / `..`、8.3 短名），并把 Chrome 与 Edge **各自独立**判为未注册 / 就绪 / 其他路径 / 清单缺失——"就绪"还要求清单确实存在于磁盘。写路径与 `tools/register_browser_bridge.ps1` 同契约：拒绝覆盖不是本程序创建的注册、先记录原值以便 `-Action Unregister` 还原、并拒绝未声明本 host / 本 EXE / stdio 的清单 |

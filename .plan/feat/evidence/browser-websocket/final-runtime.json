@@ -1,0 +1,26 @@
+{
+  "utc": "2026-10-14T16:50:39.8329438Z",
+  "processes": [
+    {
+      "ProcessId": 22888,
+      "ParentProcessId": 4952,
+      "ExecutablePath": "D:\\GITHUB_melody0709\\VoxType\\build\\run\\x64-release\\VoxType.exe"
+    }
+  ],
+  "listeners": [
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 19226,
+      "OwningProcess": 22888
+    }
+  ],
+  "connections": [
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 19226,
+      "RemoteAddress": "127.0.0.1",
+      "RemotePort": 51091,
+      "OwningProcess": 22888
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "utc": "2026-10-14T16:50:11.0388974Z",
+  "checks": {
+    "extensionReload": "passed",
+    "chromeFieldCases": 7,
+    "msiVm": "deferred",
+    "buildTestPackage": "passed",
+    "workerContract": "passed",
+    "nativeGeometry": "passed",
+    "desktopUiVisual": "not available",
+    "pairing": "passed",
+    "desktopRestart": "passed",
+    "architectureChecks": 24,
+    "edge": "deferred by user",
+    "multiProfile": "deferred by user"
+  },
+  "packages": [
+    {
+      "name": "VoxType-v0.11.10-win-x64-portable-unsigned.7z",
+      "bytes": 9252354,
+      "sha256": "f79802e0f82d696b325bedf53282765c76ba08093799925a4f4f1a52cf84e0bd"
+    },
+    {
+      "name": "VoxType-v0.11.10-win-x64-unsigned.msi",
+      "bytes": 11382784,
+      "sha256": "df1c177ea725921f283913d99a056dd273f8540efee1481ee3d18824d4b640f4"
+    }
+  ],
+  "notPublished": true
+}

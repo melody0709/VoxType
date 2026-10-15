@@ -25,6 +25,10 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <filesystem>
+
+int TestBrowserWebSocketContracts();
 
 namespace {
 
@@ -755,7 +759,43 @@ void TestCancelledTransport() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string_view(argv[1]) == "--live-browser-geometry") {
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        std::ifstream file(std::filesystem::path(argv[2]), std::ios::binary);
+        const std::string reply(std::istreambuf_iterator<char>(file), {});
+        // DevTools may own foreground while CDP evaluates the fixture. Select
+        // only our uniquely titled synthetic browser window, never a user's tab.
+        std::vector<HWND> candidates;
+        EnumWindows([](HWND window, LPARAM data) -> BOOL {
+            wchar_t title[512]{};
+            GetWindowTextW(window, title, static_cast<int>(std::size(title)));
+            if (std::wstring_view(title).starts_with(L"VoxType synthetic browser fixture") &&
+                browser_target::IdentifyTopLevel(window).kind == browser_target::Kind::Chromium) {
+                reinterpret_cast<std::vector<HWND>*>(data)->push_back(window);
+            }
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(&candidates));
+        const HWND anchor = candidates.size() == 1 ? candidates.front() : nullptr;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(anchor, &pid);
+        const bool matched = browser_target::IdentifyTopLevel(anchor).kind == browser_target::Kind::Chromium &&
+            browser_bridge::BrowserRootPid(pid) == pid && browser_bridge::ReplyMatchesWindow(reply, anchor);
+        if (!matched) {
+            RECT bounds{};
+            GetWindowRect(anchor, &bounds);
+            MONITORINFO monitor{sizeof(monitor)};
+            GetMonitorInfoW(MonitorFromWindow(anchor, MONITOR_DEFAULTTONEAREST), &monitor);
+            std::cout << "anchor=" << bounds.left << ',' << bounds.top << ',' << bounds.right-bounds.left << ',' << bounds.bottom-bounds.top
+                      << " browser=" << (browser_target::IdentifyTopLevel(anchor).kind == browser_target::Kind::Chromium)
+                      << " root_pid=" << (browser_bridge::BrowserRootPid(pid) == pid)
+                      << " monitor=" << monitor.rcWork.left << ',' << monitor.rcWork.top << ',' << monitor.rcWork.right << ',' << monitor.rcWork.bottom
+                      << " dpi=" << GetDpiForWindow(anchor)
+                      << " per_monitor_v2=" << AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) << '\n';
+        }
+        std::cout << "live browser geometry: " << (matched ? "PASS" : "FAIL") << '\n';
+        return matched ? 0 : 1;
+    }
     TestBrowserClassification();
     TestFocusClassification();
     TestFramingValidation();
@@ -767,6 +807,7 @@ int main() {
     TestHostManifestUsability();
     TestRegistrationWritePath();
     TestCancelledTransport();
+    g_failures += TestBrowserWebSocketContracts();
 
     if (g_failures == 0) {
         std::cout << "browser_bridge_test: all checks passed\n";
