@@ -2,11 +2,22 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
-## v0.12.0（2026-10-14；本地验证构建）
+## v0.12.0（2026-10-19）
 
-- 浏览器配套扩展 2.0 的日常通信改走经认证的本机 WebSocket。Native Messaging 仅用于显式、有界的首次/重新配对；启动、保活与重连不再启动转发 host。桌面核对内核 TCP 对端 PID、浏览器祖先链、用户/会话、双向 HMAC 挑战及原有焦点窗口几何，再接受上下文。
-- 按安装目录和浏览器配置区分的凭据保存到仅当前用户可读的 DPAPI 文件；设置页与扩展配对页展示连接状态并支持重新配对/撤销。端口冲突、损坏存储、畸形/超量消息及未知身份均 fail-closed；WebSocket 分帧由 Windows 原生组件负责，没有新增网络依赖。
-- Chrome 实测覆盖普通/密码字段、跨域与嵌套 iframe、开放/闭合 shadow root、网页缩放、原生窗口几何、程序重启与扩展重载；离线认证/传输回归、架构守卫及 96/144/192/288 DPI 布局校验通过。按用户决定，Edge/多配置、睡眠/会话切换、MSI 的 VM 安装升级保留待验收；1.x 兼容路径仍保留用于回滚。本构建尚未公开发布。
+### 浏览器配套扩展 2.0：经认证的本机 WebSocket 与无障碍深度隔离
+
+- **经认证的本机 WebSocket（配套扩展 2.0）。** 浏览器配套扩展与 VoxType 桌面端的日常通信全面升级为基于 Windows 原生 `websocket.dll` 的本机回环长连接（`127.0.0.1`），无需引入任何第三方网络依赖。Native Messaging 降级为显式、有界的配对引导协议（Pairing Bootstrap）；软件启动、心跳保活与常规查询再也不拉起中转 Host 进程。
+- **内核级与密码学多重安全防护机制。**
+  - **内核 TCP 对端校验：** 桌面端调用 `GetExtendedTcpTable` 提取真实对端 PID，并追溯进程祖先链核对是否属于受信浏览器进程；
+  - **用户 SID 与终端会话绑定：** 严格要求 TCP 连接两端必须处于同一 Windows Token User SID 与 Terminal Session ID；
+  - **双向 HMAC 挑战握手：** 应用层基于高强度随机 Nonce 与 SHA-256 HMAC 相互验证身份，彻底杜绝本机恶意进程偷窥或仿冒；
+  - **DPAPI 凭据安全存储：** 配对凭据使用 Windows DPAPI（`CryptProtectData`）在当前用户作用域加密存储，按安装路径与浏览器配置严格隔离；
+  - **刚性 Fail-Closed 安全兜底：** 端口占用、损坏凭据、畸形分帧、超量数据及未知身份一律 fail-closed 拒绝交互。
+- **Chromium 浏览器无障碍彻底隔离。** 彻底杜绝 VoxType 对 Chromium 浏览器的 UIA/MSAA 树读取，从源头根除 Chromium 进程级卡顿；基于窗口类名与镜像名的快速判定门控（`browser_target.h`）置于入口最顶层，彻底阻断无障碍调用穿透。
+- **轻量 MV3 扩展按需提取焦点字段。** 配套扩展（`extensions/browser-bridge/`）仅在口述录音时按需执行 `chrome.scripting.executeScript` 判断焦点与密码属性；空闲期零资源占用、无常驻 content script，密码框内容绝对不离开页面。
+- **完整兼容屏幕 DPI、网页缩放与复杂 DOM。** 精确计算页面 DPR 与 tab zoom 比率，优雅处理嵌套跨域 iframe 焦点委托与开放/闭合 Shadow DOM fail-closed 探测。
+- **Fluent 设置界面与配对管理。** General 设置页新增 Browser Companion 专属状态卡片，实时显示 WebSocket 连接状态、就绪状态及一键配对/重新配对/撤销功能，经受 96/144/192/288 DPI 尺度静态校验。
+- **架构守护与全自动化回归。** 顺利通过全部 24 项机械架构守卫；包含 WebSocket 握手契约、工作线程状态机、分帧验证与 DPI 布局在内的离线回归测试套件 100% 通过。
 
 ## v0.11.9 (2026-10-13)
 

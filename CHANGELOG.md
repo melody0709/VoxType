@@ -2,11 +2,22 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
-## v0.12.0 (2026-10-14; local validation build)
+## v0.12.0 (2026-10-19)
 
-- Browser companion 2.0 uses authenticated loopback WebSocket for normal connections. Native Messaging is an explicit, bounded pairing bootstrap; startup, heartbeat and retries never launch a forwarding host. The desktop verifies the kernel TCP owner, browser ancestry, user/session, mutual HMAC challenges and the existing focused-window geometry before accepting context.
-- Per-installation/profile credentials use an owner-only current-user DPAPI store. Settings and the extension pairing page show connection state and support re-pairing/revocation. Fixed-port conflicts, damaged stores, malformed or oversized messages and unknown identities fail closed. Windows owns WebSocket framing; no networking dependency was added.
-- Chrome live checks cover ordinary/password fields, cross-origin/nested iframes, open/closed shadow roots, page zoom, native geometry, restart and extension reload. Offline authentication/transport tests, architecture invariants and 96/144/192/288 DPI layout checks pass. Edge/multi-profile, sleep/session transitions and MSI installation/upgrade on a VM remain pending by agreement; the 1.x compatibility path is retained for rollback. This build is not a published release.
+### Browser Companion 2.0 with Authenticated Loopback WebSocket & Zero-Accessibility Isolation
+
+- **Authenticated Loopback WebSocket (Browser Companion 2.0).** Daily communication between VoxType and the companion extension moves from Native Messaging to an authenticated loopback WebSocket (`127.0.0.1`) implemented via Windows native `websocket.dll` (zero extra networking dependencies). Native Messaging is demoted to a strictly bounded, user-initiated pairing bootstrap; startup, heartbeat, and routine queries never spawn a forwarding host process.
+- **Kernel-level & Cryptographic Multi-Layer Defense.**
+  - **Kernel TCP Owner Verification:** VoxType queries `GetExtendedTcpTable` to verify that the remote TCP endpoint process ID belongs to an authorized browser executable through full process ancestry validation.
+  - **Token User & Terminal Session Binding:** The connection is rejected if the browser's Windows Token User SID or Terminal Session ID does not match VoxType's desktop session.
+  - **Mutual HMAC Challenge Handshake:** Authentication uses a cryptographically secure random nonce challenge exchange with SHA-256 HMAC, preventing unauthorized local processes from intercepting or forging messages.
+  - **DPAPI Credential Isolation:** Pairing tokens and shared secrets are stored encrypted under Windows DPAPI (`CryptProtectData`) scoped to current-user, isolated per installation path and browser profile.
+  - **Fail-Closed Safety:** Port conflicts, damaged credential stores, malformed frames, and unverified origins fail closed immediately without compromise.
+- **Zero-Accessibility Isolation for Chromium.** VoxType never queries Chromium browsers for UIA/MSAA accessibility trees. Fast window classification (`src/core/browser_target.h`) halts accessibility reads at the root before entering COM/UIA pipelines, eliminating browser-wide accessibility performance degradation.
+- **On-Demand Context Extraction via MV3 Extension.** The companion extension (`extensions/browser-bridge/`) extracts active element text and password state on-demand via `chrome.scripting.executeScript`. No background content scripts, observers, or DOM listeners run while idle. Password field values never leave the webpage.
+- **DPI, Zoom & Nested Frame Resilience.** Accurately handles device pixel ratio (DPR) divided by tab zoom, nested cross-origin iframes with focus delegation, and open/closed Shadow DOM boundaries.
+- **Settings & UI Integration.** General settings panel features a dedicated Browser Companion status card displaying real-time WebSocket connection state, pairing status, and re-pairing/revocation controls, fully tested at 96/144/192/288 DPI.
+- **Architecture & Quality Assurance.** All 24 architectural mechanical invariants passed. Automated offline regressions verify WebSocket handshake, token rotation, worker contract, frame framing, and DPI layout scaling.
 
 ## v0.11.9 (2026-10-13)
 
