@@ -1,4 +1,4 @@
-                    ' 隐藏启动 chrome-cdp 守护进程（无控制台窗口），可放进 shell:startup 常驻。
+' 隐藏启动 chrome-cdp 守护进程（无控制台窗口），可放进 shell:startup 常驻。
 ' 脚本自动定位同目录下的 cdp.js，因此仓库副本与安装副本都能直接用；
 ' 守护进程日志：%TEMP%\chrome-cdp-daemon.log
 Option Explicit
