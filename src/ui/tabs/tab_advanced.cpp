@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "config_store.h"
 #include "asr_probe_service.h"
 
@@ -29,10 +30,10 @@ void UpdateDiagnosticAudioHint(HWND hwnd) {
     if (!hint) return;
     const std::wstring mode = DiagnosticAudioModeFromControl(hwnd);
     const wchar_t* text = mode == L"all"
-        ? L"Privacy: every utterance is saved as a playable WAV on this PC. Old files are removed automatically."
+        ? ui_strings::UiText().advDiagHintAll
         : (mode == L"failures"
-            ? L"Only diagnostic failures are saved on this PC. Old files are removed automatically."
-            : L"Audio recording diagnostics are off. No diagnostic WAV files are saved.");
+            ? ui_strings::UiText().advDiagHintFailures
+            : ui_strings::UiText().advDiagHintOff);
     SetWindowTextW(hint, text);
 }
 
@@ -53,52 +54,53 @@ void TabAdvanced::UpdateVadSubGroup(HWND parent) {
 void TabAdvanced::CreateControls(HWND parent) {
     m_controls.clear();
     m_vadFireredControls.clear();
+    const auto& text = ui_strings::UiText();
 
     const int vadY = S(UiStyle::AdvancedVadGroupY);
-    HWND vadGroup = CreateWindowW(L"BUTTON", L"Voice Activity Detection", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+    HWND vadGroup = CreateWindowW(L"BUTTON", text.advVadGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                   S(UiStyle::GeneralGroupX), vadY, S(UiStyle::GeneralGroupW), S(UiStyle::AdvancedVadGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(vadGroup);
     AddAdvancedControl(vadGroup);
 
-    HWND vadEnable = CreateWindowW(L"BUTTON", L"Enable VAD", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+    HWND vadEnable = CreateWindowW(L"BUTTON", text.advVadEnableCheck, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                    S(UiStyle::ContentLeft), vadY + S(UiStyle::AdvancedVadEnableOffsetY), S(200), S(UiStyle::CheckH), parent,
                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VAD)), GetParentInstance(parent), nullptr);
     ApplyUiFont(vadEnable);
     AddAdvancedControl(vadEnable);
 
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), vadY + S(UiStyle::AdvancedVadModelOffsetY + UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"VAD model");
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), vadY + S(UiStyle::AdvancedVadModelOffsetY + UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.advVadModelLabel);
     AddAdvancedControl(control);
     AddAdvancedControl(CreateCombo(parent, IDC_VAD_MODEL, S(UiStyle::InputLeft), vadY + S(UiStyle::AdvancedVadModelOffsetY), S(UiStyle::ComboW), S(UiStyle::ComboH)));
 
     const int vadGroupParamsY = vadY + S(UiStyle::AdvancedVadParamsGroupOffsetY);
-    HWND vadParamsGroup = CreateWindowW(L"BUTTON", L"VAD Parameters", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+    HWND vadParamsGroup = CreateWindowW(L"BUTTON", text.advVadParamsGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                         S(UiStyle::GeneralGroupX), vadGroupParamsY, S(UiStyle::GeneralGroupW), S(UiStyle::AdvancedVadParamsGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(vadParamsGroup);
     AddAdvancedControl(vadParamsGroup);
 
     const int row1Y = vadGroupParamsY + S(UiStyle::AdvancedVadParamRowOffset1);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), row1Y + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Threshold");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), row1Y + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.advThresholdLabel);
     AddAdvancedControl(control);
     HWND vadThreshold = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                         S(UiStyle::InputLeft), row1Y, S(100), S(UiStyle::EditH), parent,
                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VAD_THRESHOLD)), GetParentInstance(parent), nullptr);
     ApplyUiFont(vadThreshold);
     AddAdvancedControl(vadThreshold);
-    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(108), row1Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), L"(0.0~1.0)");
+    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(108), row1Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), text.advThresholdRange);
     AddAdvancedControl(control);
 
     const int row2Y = vadGroupParamsY + S(UiStyle::AdvancedVadParamRowOffset2);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), row2Y + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Min silence");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), row2Y + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.advMinSilenceLabel);
     AddAdvancedControl(control);
     HWND vadMinSilence = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                          S(UiStyle::InputLeft), row2Y, S(100), S(UiStyle::EditH), parent,
                                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VAD_MIN_SILENCE)), GetParentInstance(parent), nullptr);
     ApplyUiFont(vadMinSilence);
     AddAdvancedControl(vadMinSilence);
-    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(108), row2Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), L"ms");
+    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(108), row2Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), text.advMsUnit);
     AddAdvancedControl(control);
 
-    control = CreateLabel(parent, S(420), row2Y + S(UiStyle::LabelYOffset), S(100), S(UiStyle::LabelH), L"Pad start");
+    control = CreateLabel(parent, S(420), row2Y + S(UiStyle::LabelYOffset), S(100), S(UiStyle::LabelH), text.advPadStartLabel);
     AddAdvancedControl(control);
     AddVadFireredControl(control);
     HWND vadPadStart = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
@@ -107,22 +109,22 @@ void TabAdvanced::CreateControls(HWND parent) {
     ApplyUiFont(vadPadStart);
     AddAdvancedControl(vadPadStart);
     AddVadFireredControl(vadPadStart);
-    control = CreateLabel(parent, S(638), row2Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), L"ms");
+    control = CreateLabel(parent, S(638), row2Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), text.advMsUnit);
     AddAdvancedControl(control);
     AddVadFireredControl(control);
 
     const int row3Y = vadGroupParamsY + S(UiStyle::AdvancedVadParamRowOffset3);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), row3Y + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Min speech");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), row3Y + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.advMinSpeechLabel);
     AddAdvancedControl(control);
     HWND vadMinSpeech = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                         S(UiStyle::InputLeft), row3Y, S(100), S(UiStyle::EditH), parent,
                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VAD_MIN_SPEECH)), GetParentInstance(parent), nullptr);
     ApplyUiFont(vadMinSpeech);
     AddAdvancedControl(vadMinSpeech);
-    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(108), row3Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), L"ms");
+    control = CreateLabel(parent, S(UiStyle::InputLeft) + S(108), row3Y + S(UiStyle::LabelYOffset), S(80), S(UiStyle::LabelH), text.advMsUnit);
     AddAdvancedControl(control);
 
-    control = CreateLabel(parent, S(420), row3Y + S(UiStyle::LabelYOffset), S(100), S(UiStyle::LabelH), L"Smooth win");
+    control = CreateLabel(parent, S(420), row3Y + S(UiStyle::LabelYOffset), S(100), S(UiStyle::LabelH), text.advSmoothWinLabel);
     AddAdvancedControl(control);
     AddVadFireredControl(control);
     HWND vadSmoothWin = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
@@ -134,7 +136,7 @@ void TabAdvanced::CreateControls(HWND parent) {
 
     const int diagnosticsY = S(UiStyle::AdvancedDiagnosticsGroupY);
     HWND diagnosticsGroup = CreateWindowW(
-        L"BUTTON", L"Diagnostics", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+        L"BUTTON", text.advDiagnosticsGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
         S(UiStyle::GeneralGroupX), diagnosticsY,
         S(UiStyle::GeneralGroupW), S(UiStyle::AdvancedDiagnosticsGroupH),
         parent, nullptr, GetParentInstance(parent), nullptr);
@@ -145,7 +147,7 @@ void TabAdvanced::CreateControls(HWND parent) {
         parent, S(UiStyle::ContentLeft),
         diagnosticsY + S(UiStyle::AdvancedDiagnosticsModeOffsetY + UiStyle::LabelYOffset),
         S(UiStyle::AdvancedDiagnosticsModeLabelW), S(UiStyle::LabelH),
-        L"Recording diagnostics");
+        text.advRecordingDiag);
     AddAdvancedControl(control);
     AddAdvancedControl(CreateCombo(
         parent, IDC_DIAGNOSTIC_AUDIO_MODE, S(UiStyle::InputLeft),
@@ -157,13 +159,13 @@ void TabAdvanced::CreateControls(HWND parent) {
     AddAdvancedControl(CreateButton(
         parent, IDC_DIAGNOSTIC_AUDIO_OPEN_FOLDER, S(UiStyle::ContentLeft),
         diagnosticActionsY, S(UiStyle::AdvancedDiagnosticsOpenButtonW),
-        S(UiStyle::ActionBtnH), L"Open recordings folder"));
+        S(UiStyle::ActionBtnH), text.advOpenRecordingsBtn));
     AddAdvancedControl(CreateButton(
         parent, IDC_DIAGNOSTIC_AUDIO_DELETE,
         S(UiStyle::ContentLeft + UiStyle::AdvancedDiagnosticsOpenButtonW +
           UiStyle::AdvancedDiagnosticsButtonGap),
         diagnosticActionsY, S(UiStyle::AdvancedDiagnosticsDeleteButtonW),
-        S(UiStyle::ActionBtnH), L"Delete saved recordings..."));
+        S(UiStyle::ActionBtnH), text.advDeleteRecordingsBtn));
 
     control = CreateHint(
         parent, S(UiStyle::ContentLeft),
@@ -193,13 +195,14 @@ void TabAdvanced::Show(bool visible) {
 }
 
 void TabAdvanced::LoadControls(HWND parent, const Config& cfg) {
+    const auto& text = ui_strings::UiText();
     Button_SetCheck(GetDlgItem(parent, IDC_VAD), cfg.enableVad ? BST_CHECKED : BST_UNCHECKED);
 
     HWND vadModelCombo = GetDlgItem(parent, IDC_VAD_MODEL);
     if (vadModelCombo) {
         ComboBox_ResetContent(vadModelCombo);
-        ComboBox_AddString(vadModelCombo, L"Silero VAD");
-        ComboBox_AddString(vadModelCombo, L"FireRed VAD");
+        ComboBox_AddString(vadModelCombo, text.advVadModelSilero);
+        ComboBox_AddString(vadModelCombo, text.advVadModelFireRed);
         int vadModelIndex = 0;
         if (cfg.vadModel == L"firered") vadModelIndex = 1;
         ComboBox_SetCurSel(vadModelCombo, vadModelIndex);
@@ -225,9 +228,9 @@ void TabAdvanced::LoadControls(HWND parent, const Config& cfg) {
     HWND audioDiagCombo = GetDlgItem(parent, IDC_DIAGNOSTIC_AUDIO_MODE);
     if (audioDiagCombo) {
         ComboBox_ResetContent(audioDiagCombo);
-        ComboBox_AddString(audioDiagCombo, L"Off (default)");
-        ComboBox_AddString(audioDiagCombo, L"Save failed requests only");
-        ComboBox_AddString(audioDiagCombo, L"Save all utterances (debug)");
+        ComboBox_AddString(audioDiagCombo, text.advDiagModeOff);
+        ComboBox_AddString(audioDiagCombo, text.advDiagModeFailures);
+        ComboBox_AddString(audioDiagCombo, text.advDiagModeAll);
         const std::wstring mode = asr_probe::NormalizeDiagnosticAudioMode(cfg.diagnosticAudioMode);
         int sel = 0;
         if (mode == L"failures") sel = 1;
@@ -294,9 +297,10 @@ bool TabAdvanced::HandleCommand(HWND hwnd, WORD notifyCode, WORD controlId, HWND
 }
 
 void OpenDiagnosticAudioFolder(HWND hwnd) {
+    const auto& text = ui_strings::UiText();
     std::wstring error;
     if (!asr_probe::EnsureDiagnosticAudioDir(&error)) {
-        MessageBoxW(hwnd, error.c_str(), L"Recording diagnostics",
+        MessageBoxW(hwnd, error.c_str(), text.advRecordingDiag,
                     MB_OK | MB_ICONERROR);
         return;
     }
@@ -304,28 +308,28 @@ void OpenDiagnosticAudioFolder(HWND hwnd) {
     const HINSTANCE result = ShellExecuteW(
         hwnd, L"open", directory.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     if (reinterpret_cast<INT_PTR>(result) <= 32) {
-        MessageBoxW(hwnd, L"Unable to open the recordings folder.",
-                    L"Recording diagnostics", MB_OK | MB_ICONERROR);
+        MessageBoxW(hwnd, text.advOpenRecordingsFailed,
+                    text.advRecordingDiag, MB_OK | MB_ICONERROR);
     }
 }
 
 void DeleteDiagnosticAudioFiles(HWND hwnd) {
+    const auto& text = ui_strings::UiText();
     const int choice = MessageBoxW(
         hwnd,
-        L"Delete all recordings and JSON manifests managed by VoxType?\n\n"
-        L"Unknown files in the folder will be preserved.",
-        L"Delete saved recordings", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+        text.advDeleteConfirmBody,
+        text.advDeleteRecordingsTitle, MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
     if (choice != IDYES) return;
 
     size_t deletedGroups = 0;
     std::wstring error;
     if (!asr_probe::DeleteDiagnosticManagedRecordings(&deletedGroups, &error)) {
-        MessageBoxW(hwnd, error.c_str(), L"Delete saved recordings",
+        MessageBoxW(hwnd, error.c_str(), text.advDeleteRecordingsTitle,
                     MB_OK | MB_ICONERROR);
         return;
     }
-    SetStatus(hwnd, L"Deleted " + std::to_wstring(deletedGroups) +
-                    L" managed recording group(s). Unknown files were preserved.");
+    SetStatus(hwnd, text.advDeletedPrefix + std::to_wstring(deletedGroups) +
+                    text.advDeletedSuffix);
 }
 
 } // namespace ui_tab

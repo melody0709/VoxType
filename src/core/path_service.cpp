@@ -4,12 +4,15 @@
 
 #include "path_service.h"
 
+#include "app_messages.h"
+
 #include <windows.h>
 #include <shlobj.h>
 #include <knownfolders.h>
 #include <shellapi.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cwctype>
 #include <mutex>
 #include <string>
@@ -24,6 +27,10 @@ namespace {
 constexpr wchar_t kPortableFlagName[] = L"portable.flag";
 std::mutex g_runtimeAssetDirMutex;
 std::wstring g_runtimeAssetDirOverride;
+
+// 下载完成通知的当前接收窗口，以及"是否已有下载在跑"。两者都由 UI 线程写、等待线程读。
+std::atomic<HWND> g_downloadNotifyWindow{nullptr};
+std::atomic<bool> g_downloadRunning{false};
 
 std::wstring CurrentExecutableDirectory() {
     for (DWORD capacity = MAX_PATH; capacity <= 32768; capacity *= 2) {
@@ -214,10 +221,35 @@ bool AnyModelDirExists() {
     return false;
 }
 
+void SetModelDownloadNotifyWindow(HWND hwnd) {
+    g_downloadNotifyWindow.store(hwnd, std::memory_order_release);
+}
+
+bool IsModelDownloadRunning() {
+    return g_downloadRunning.load(std::memory_order_acquire);
+}
+
+namespace {
+
+// 完成通知只发给登记过的稳定窗口（主窗口）；没有接收者时 payload 由这里回收。
+void PostDownloadResult(LPARAM lParam) {
+    const HWND target = g_downloadNotifyWindow.load(std::memory_order_acquire);
+    if (!target || !PostMessageW(target, kModelDownloadDoneMessage, 0, lParam)) {
+        delete reinterpret_cast<std::wstring*>(lParam);
+    }
+}
+
+} // namespace
+
 bool RunModelDownloader(HWND hwnd, const std::wstring& modelId) {
+    // 一次只允许一个下载：Settings 窗口被重建后按钮会重新可点，这里再兜一层。
+    bool expected = false;
+    if (!g_downloadRunning.compare_exchange_strong(expected, true)) return false;
+
     const std::wstring scriptPath = RuntimeAssetDir() + L"\\download_models.ps1";
 
     if (GetFileAttributesW(scriptPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        g_downloadRunning.store(false);
         MessageBoxW(hwnd,
             L"download_models.ps1 not found.\n\n"
             L"Please download models manually from:\n"
@@ -242,24 +274,25 @@ bool RunModelDownloader(HWND hwnd, const std::wstring& modelId) {
     sei.nShow = SW_SHOWNORMAL;
 
     if (!ShellExecuteExW(&sei)) {
+        g_downloadRunning.store(false);
         MessageBoxW(hwnd, L"Failed to start download.", L"Error", MB_OK | MB_ICONERROR);
         return false;
     }
 
     if (sei.hProcess) {
-        std::thread([hProcess = sei.hProcess, hwnd, modelId]() {
+        std::thread([hProcess = sei.hProcess, modelId]() {
             WaitForSingleObject(hProcess, INFINITE);
             CloseHandle(hProcess);
+            g_downloadRunning.store(false);
             std::wstring modelDir = DefaultModelDir(modelId);
             LPARAM lParam = ModelDirExists(modelDir)
                 ? reinterpret_cast<LPARAM>(new std::wstring(std::move(modelDir)))
                 : 0;
-            if (!PostMessageW(hwnd, WM_APP + 20, 0, lParam)) {
-                if (lParam) delete reinterpret_cast<std::wstring*>(lParam);
-            }
+            PostDownloadResult(lParam);
         }).detach();
     } else {
-        PostMessageW(hwnd, WM_APP + 20, 0, 0);
+        g_downloadRunning.store(false);
+        PostDownloadResult(0);
     }
 
     return true;

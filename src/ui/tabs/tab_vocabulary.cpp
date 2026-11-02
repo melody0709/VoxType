@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "ui_theme.h"
 #include "vocabulary_manager.h"
 #include "path_service.h"
@@ -13,7 +14,6 @@
 
 #include <windowsx.h>
 #include <shellapi.h>
-#include <format>
 #include <vector>
 
 namespace ui_tab {
@@ -21,10 +21,11 @@ namespace ui_tab {
 void TabVocabulary::UpdateStatusFromText(HWND parent, std::wstring_view text) {
     HWND statusLabel = GetDlgItem(parent, IDC_VOCAB_TAB_STATUS);
     if (!statusLabel) return;
+    const auto& uiText = ui_strings::UiText();
 
     const std::wstring trimmed(text);
     if (trimmed.empty()) {
-        SetWindowTextW(statusLabel, L"Status: Empty (0 entries). Common vocabulary disabled until words are added.");
+        SetWindowTextW(statusLabel, uiText.vocabStatusEmpty);
         return;
     }
 
@@ -35,35 +36,36 @@ void TabVocabulary::UpdateStatusFromText(HWND parent, std::wstring_view text) {
         for (const auto& entry : *parsed) {
             if (vocabulary_manager::IsSuperHotword(entry.weight)) superCount++;
         }
-        std::wstring status = std::format(
-            L"Status: {} entries, {} super hotword(s) of {} allowed. Synced across Qwen & Volcano Engine.",
+        std::wstring status = ui_strings::Format(
+            uiText.vocabStatusCounts,
             count, superCount, vocabulary_manager::kQwenMaxSuperHotwords);
         SetWindowTextW(statusLabel, status.c_str());
     } else {
-        std::wstring status = std::format(L"Status: Syntax error — {}", parsed.error());
+        std::wstring status = ui_strings::Format(uiText.vocabStatusSyntaxError, parsed.error());
         SetWindowTextW(statusLabel, status.c_str());
     }
 }
 
 void TabVocabulary::CreateControls(HWND parent) {
     m_controls.clear();
+    const auto& text = ui_strings::UiText();
 
     const int topY = S(UiStyle::RowInputY(0));
-    HWND btnEdit = CreateButton(parent, IDC_VOCAB_TAB_EDIT_FILE, S(30), topY, S(200), S(UiStyle::ActionBtnH), L"Edit in External Editor");
+    HWND btnEdit = CreateButton(parent, IDC_VOCAB_TAB_EDIT_FILE, S(30), topY, S(200), S(UiStyle::ActionBtnH), text.vocabEditInEditorBtn);
     AddVocabControl(btnEdit);
 
-    HWND btnReload = CreateButton(parent, IDC_VOCAB_TAB_RELOAD, S(240), topY, S(150), S(UiStyle::ActionBtnH), L"Reload from File");
+    HWND btnReload = CreateButton(parent, IDC_VOCAB_TAB_RELOAD, S(240), topY, S(150), S(UiStyle::ActionBtnH), text.vocabReloadBtn);
     AddVocabControl(btnReload);
 
-    HWND btnFormat = CreateButton(parent, IDC_VOCAB_TAB_FORMAT, S(400), topY, S(120), S(UiStyle::ActionBtnH), L"Format JSON");
+    HWND btnFormat = CreateButton(parent, IDC_VOCAB_TAB_FORMAT, S(400), topY, S(120), S(UiStyle::ActionBtnH), text.vocabFormatJsonBtn);
     AddVocabControl(btnFormat);
 
-    HWND btnOpenFolder = CreateButton(parent, IDC_VOCAB_TAB_OPEN_FOLDER, S(530), topY, S(140), S(UiStyle::ActionBtnH), L"Open Folder");
+    HWND btnOpenFolder = CreateButton(parent, IDC_VOCAB_TAB_OPEN_FOLDER, S(530), topY, S(140), S(UiStyle::ActionBtnH), text.vocabOpenFolderBtn);
     AddVocabControl(btnOpenFolder);
 
     const int groupBoxY = topY + S(UiStyle::ActionBtnH) + S(10);
     const int groupH = S(416);
-    HWND vocabGroup = CreateWindowW(L"BUTTON", L"Custom Vocabulary (Universal)", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+    HWND vocabGroup = CreateWindowW(L"BUTTON", text.vocabGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                     S(30), groupBoxY, S(788), groupH, parent,
                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOCAB_TAB_GROUP)),
                                     GetParentInstance(parent), nullptr);
@@ -82,7 +84,7 @@ void TabVocabulary::CreateControls(HWND parent) {
     AddVocabControl(edit);
 
     const int footerY = groupBoxY + groupH + S(8);
-    HWND statusLabel = CreateWindowW(L"STATIC", L"Status: Ready", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
+    HWND statusLabel = CreateWindowW(L"STATIC", text.vocabStatusReady, WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                      S(30), footerY, S(788), S(24), parent,
                                      reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOCAB_TAB_STATUS)),
                                      GetParentInstance(parent), nullptr);
@@ -90,7 +92,7 @@ void TabVocabulary::CreateControls(HWND parent) {
     AddVocabControl(statusLabel);
 
     HWND hintLabel = CreateHint(parent, S(30), footerY + S(24), S(788), S(UiStyle::LabelH),
-                                L"JSON (\"word\": weight) or line format (word [weight]). Weights 1–5 (default 4) or 50 = super (max 50).");
+                                text.vocabFormatHint);
     AddVocabControl(hintLabel);
 }
 
@@ -162,7 +164,7 @@ bool TabVocabulary::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, 
             const std::wstring quotedPath = L"\"" + vocabPath + L"\"";
             ShellExecuteW(parent, L"open", L"notepad.exe", quotedPath.c_str(), nullptr, SW_SHOWNORMAL);
         }
-        SetStatus(parent, L"Opened vocabulary.json in external editor.");
+        SetStatus(parent, ui_strings::UiText().vocabOpenedInEditorStatus);
         return true;
     }
     case IDC_VOCAB_TAB_OPEN_FOLDER: {
@@ -175,9 +177,9 @@ bool TabVocabulary::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, 
             res = ShellExecuteW(parent, L"open", L"explorer.exe", vocabDir.c_str(), nullptr, SW_SHOWNORMAL);
         }
         if (reinterpret_cast<INT_PTR>(res) <= 32) {
-            SetStatus(parent, L"Unable to open vocabulary folder.");
+            SetStatus(parent, ui_strings::UiText().vocabOpenFolderFailedStatus);
         } else {
-            SetStatus(parent, L"Opened vocabulary folder.");
+            SetStatus(parent, ui_strings::UiText().vocabFolderOpenedStatus);
         }
         return true;
     }
@@ -189,10 +191,10 @@ bool TabVocabulary::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, 
                 SetWindowTextW(edit, res->c_str());
             }
             UpdateStatusFromText(parent, *res);
-            SetStatus(parent, L"Vocabulary reloaded from file.");
+            SetStatus(parent, ui_strings::UiText().vocabReloadedStatus);
         } else {
-            std::wstring err = L"Failed to read vocabulary.json: " + res.error();
-            MessageBoxW(parent, err.c_str(), L"Vocabulary Reload Failed", MB_ICONERROR | MB_OK);
+            std::wstring err = ui_strings::UiText().vocabReadFailedPrefix + res.error();
+            MessageBoxW(parent, err.c_str(), ui_strings::UiText().vocabReloadFailedTitle, MB_ICONERROR | MB_OK);
         }
         return true;
     }
@@ -212,10 +214,10 @@ bool TabVocabulary::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, 
             std::wstring wideFormatted = Utf8ToWide(formatted);
             SetWindowTextW(edit, wideFormatted.c_str());
             UpdateStatusFromText(parent, wideFormatted);
-            SetStatus(parent, L"Vocabulary formatted as JSON.");
+            SetStatus(parent, ui_strings::UiText().vocabFormattedStatus);
         } else {
-            std::wstring err = L"Cannot format invalid vocabulary: " + parsed.error();
-            MessageBoxW(parent, err.c_str(), L"Format Error", MB_ICONWARNING | MB_OK);
+            std::wstring err = ui_strings::UiText().vocabFormatInvalidPrefix + parsed.error();
+            MessageBoxW(parent, err.c_str(), ui_strings::UiText().vocabFormatErrorTitle, MB_ICONWARNING | MB_OK);
         }
         return true;
     }

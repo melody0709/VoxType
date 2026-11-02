@@ -83,6 +83,7 @@ Since v0.6.0, the source code is organized into multiple modules. Current source
 | `src/ui/hud_pagination.h` / `src/ui/hud_pagination.cpp` | HUD text line wrapping, paging calculations, and display clipping |
 | `src/ui/ui_types.h` | UI layout dimensions, colors, control constants, DPI metrics |
 | `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI GDI/DirectWrite font and brush theme resource lifecycle management |
+| `src/ui/ui_strings.h` / `src/ui/ui_strings.cpp` | Settings UI bilingual text tables (en/zh, X-macro list in `ui_strings.inc`) and interface-language selection (`ui_language` config: auto/en/zh) |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | Hotkey config, CapsLock long-press logic, `WH_KEYBOARD_LL` hook, `HotkeyEdit` custom control |
 | `src/ui/form_builder.h` / `src/ui/form_builder.cpp` | Native Win32 form control builder and auto-incrementing layout cursors |
 | `src/ui/settings.h` / `src/ui/settings.cpp` | Settings window shell, tab switcher, top-level window layout, and event dispatcher |

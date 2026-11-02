@@ -42,6 +42,23 @@ constexpr WPARAM kClipboardPasteStillPending = 2;
 // the handler deletes it. The sequence lets a stale read-back be dropped, and
 // `reason` carries a static skip reason so the app layer owns all logging.
 constexpr UINT kInjectionReflectionMessage = WM_APP + 16;
+// Settings 窗口在语言切换保存后自我重建（destroy + create），控件全部换新语言表。
+constexpr UINT kUiLanguageReapplyMessage = WM_APP + 17;
+// Path service 的模型下载完成通知（lParam 持有 heap std::wstring 目录或为空）。
+// **发往主窗口**，因为 Settings 窗口会被语言切换销毁重建；主窗口再转给当前 Settings 窗口。
+// payload 的所有权随消息转移：无人接收时必须由接收方 delete。
+constexpr UINT kModelDownloadDoneMessage = WM_APP + 20;
+
+// 同线程跨窗口转发携带 heap payload 的消息必须**同步**派发。
+// PostMessage 的转发会排在已入队的销毁消息之后（WM_CLOSE、语言重建的 DestroyWindow、
+// 进程退出的 DestroyWindow）；目标窗口一旦被销毁，系统会把队列里发往它的消息连同
+// payload 一起静默丢弃——而 PostMessage 当时仍返回 TRUE，调用方以为已经交出去了。
+// 返回 false 表示目标窗口已不在，调用方必须自行回收 lParam。
+inline bool SendToWindow(HWND target, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (!target || !IsWindow(target)) return false;
+    SendMessageW(target, msg, wParam, lParam);
+    return true;
+}
 
 struct InjectionReflection {
     uint64_t sequence = 0;

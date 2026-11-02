@@ -2,6 +2,15 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.13.0 (2026-10-30)
+
+### Interface Language Switch (Chinese / English)
+
+- **Language selection in Settings.** New `Language` group on the General & Input page with `Follow system / English / 中文`; the persisted `ui_language` config (`auto`/`en`/`zh`) normalizes to `auto` on invalid values. The picker always shows endonyms so it stays readable in any language. Applies after Save by rebuilding the Settings window in place — the rebuilt window keeps its previous position/maximized state and the save confirmation — no restart needed.
+- **Model download results survive a rebuild.** Completion notices travel main window → Settings synchronously (`SendToWindow`), and the download button is re-disabled while one is running, so changing the language mid-download cannot drop the model-directory update or start a second download.
+- **Bilingual UI string tables.** All Settings UI text (five tabs, provider panels, secondary dialogs, form builder) is extracted into compile-time en/zh tables (`src/ui/ui_strings.h/.cpp`, X-macro list `ui_strings.inc`): a missing translation is a compile error, and `tests/ui_strings_test.cpp` asserts non-empty entries, en/zh placeholder parity, and language parsing fallbacks.
+- **General & Input page layout rework.** The two-line Shortcut hint collapses to one line and the standalone Startup group folds into a merged `Shortcut & Startup` group (its Portable-relocation hint removed), freeing the vertical budget for the Language group. Startup registration behavior is unchanged; 96/144/192/288 DPI static layout validation updated accordingly.
+
 ## v0.12.0 (2026-10-19)
 
 ### Browser Companion 2.0 with Authenticated Loopback WebSocket & Zero-Accessibility Isolation

@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "asr_probe_service.h"
 
 #include <windowsx.h>
@@ -14,20 +15,21 @@ namespace ui_provider {
 
 void ProviderBaidu::CreateControls(HWND parent) {
     m_extraControls.clear();
+    const auto& text = ui_strings::UiText();
     ui_form::LayoutCursor cursor(UiStyle::RowInputY(1), UiStyle::RowHeight);
 
-    m_binder.AddPasswordRow(parent, cursor, IDC_BAIDU_API_KEY, IDC_BAIDU_SHOW_API_KEY, L"API Key", &Config::baiduApiKey, 330);
-    m_binder.AddPasswordRow(parent, cursor, IDC_BAIDU_SECRET_KEY, IDC_BAIDU_SHOW_KEY, L"Secret Key", &Config::baiduSecretKey, 330);
+    m_binder.AddPasswordRow(parent, cursor, IDC_BAIDU_API_KEY, IDC_BAIDU_SHOW_API_KEY, text.baiduApiKey, &Config::baiduApiKey, 330);
+    m_binder.AddPasswordRow(parent, cursor, IDC_BAIDU_SECRET_KEY, IDC_BAIDU_SHOW_KEY, text.baiduSecretKey, &Config::baiduSecretKey, 330);
 
     const std::pair<int, std::wstring> pidOpts[] = {
-        {1537, L"Mandarin (1537)"},
-        {1737, L"English (1737)"},
-        {1637, L"Cantonese (1637)"},
-        {1837, L"Sichuanese (1837)"},
+        {1537, text.baiduLangMandarin},
+        {1737, text.baiduLangEnglish},
+        {1637, text.baiduLangCantonese},
+        {1837, text.baiduLangSichuanese},
     };
-    m_binder.AddComboRow(parent, cursor, IDC_BAIDU_DEV_PID, L"Language Model", &Config::baiduDevPid, pidOpts, UiStyle::ComboW);
+    m_binder.AddComboRow(parent, cursor, IDC_BAIDU_DEV_PID, text.baiduLanguageModel, &Config::baiduDevPid, pidOpts, UiStyle::ComboW);
 
-    HWND btnTest = CreateButton(parent, IDC_BAIDU_TEST, S(500), S(UiStyle::RowInputY(4)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_BAIDU_TEST, S(500), S(UiStyle::RowInputY(4)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), text.baiduTestConnection);
     m_extraControls.push_back(btnTest);
 }
 
@@ -60,7 +62,7 @@ bool ProviderBaidu::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, 
     if (controlId == IDC_BAIDU_TEST) {
         Config snap = g_config;
         SaveControls(parent, snap);
-        SetStatus(parent, L"Testing Baidu ASR connection...");
+        SetStatus(parent, ui_strings::UiText().baiduTesting);
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"baidu", snap };
         if (auto* svc = asr_probe::GetProbeService()) {

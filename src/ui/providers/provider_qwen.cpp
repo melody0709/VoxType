@@ -8,6 +8,7 @@
 #include "settings_dialogs.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "ui_utils.h"
 #include "asr_probe_service.h"
 #include "qwen_audio_profile.h"
@@ -48,35 +49,36 @@ void ProviderQwen::CreateControls(HWND parent) {
     m_controls.clear();
     m_audio3Controls.clear();
 
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenKeyY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Key");
+    const auto& text = ui_strings::UiText();
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenKeyY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenApiKeyLabel);
     AddQwenControl(control);
     HWND qwenApiKey = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_PASSWORD,
                                       S(UiStyle::InputLeft), S(UiStyle::QwenKeyY), S(UiStyle::QwenKeyEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_API_KEY)), GetParentInstance(parent), nullptr);
     ApplyUiFont(qwenApiKey);
     AddQwenControl(qwenApiKey);
-    HWND btnShow = CreateButton(parent, IDC_QWEN_SHOW_KEY, S(UiStyle::QwenShowBtnX), S(UiStyle::QwenKeyY), S(UiStyle::QwenShowBtnW), S(UiStyle::EditH), L"Show");
+    HWND btnShow = CreateButton(parent, IDC_QWEN_SHOW_KEY, S(UiStyle::QwenShowBtnX), S(UiStyle::QwenKeyY), S(UiStyle::QwenShowBtnW), S(UiStyle::EditH), text.qwenShowBtn);
     AddQwenControl(btnShow);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenUrlY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Base URL");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenUrlY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenBaseUrlLabel);
     AddQwenControl(control);
     HWND qwenBaseUrl = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                        S(UiStyle::InputLeft), S(UiStyle::QwenUrlY), S(UiStyle::QwenUrlEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_BASE_URL)), GetParentInstance(parent), nullptr);
     ApplyUiFont(qwenBaseUrl);
     AddQwenControl(qwenBaseUrl);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenModelY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Model");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenModelY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenModelLabel);
     AddQwenControl(control);
     HWND qwenModel = CreateCombo(parent, IDC_QWEN_MODEL, S(UiStyle::InputLeft), S(UiStyle::QwenModelY), S(UiStyle::QwenModelComboW), S(UiStyle::ComboH));
     AddQwenControl(qwenModel);
-    HWND btnLog = CreateButton(parent, IDC_QWEN_OPEN_LOG, S(UiStyle::QwenLogBtnX), S(UiStyle::QwenModelY), S(UiStyle::QwenLogBtnW), S(UiStyle::ActionBtnH), L"Open log");
+    HWND btnLog = CreateButton(parent, IDC_QWEN_OPEN_LOG, S(UiStyle::QwenLogBtnX), S(UiStyle::QwenModelY), S(UiStyle::QwenLogBtnW), S(UiStyle::ActionBtnH), text.qwenOpenLogBtn);
     AddQwenControl(btnLog);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenLanguageY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Language");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenLanguageY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenLanguageLabel);
     AddQwenControl(control);
     HWND qwenLang = CreateCombo(parent, IDC_QWEN_LANGUAGE, S(UiStyle::InputLeft), S(UiStyle::QwenLanguageY), S(UiStyle::QwenLanguageComboW), S(UiStyle::ComboH));
     AddQwenControl(qwenLang);
 
-    control = CreateLabel(parent, S(UiStyle::QwenHintsLabelX), S(UiStyle::QwenLanguageY) + S(UiStyle::LabelYOffset), S(UiStyle::QwenHintsLabelW), S(UiStyle::LabelH), L"Hints");
+    control = CreateLabel(parent, S(UiStyle::QwenHintsLabelX), S(UiStyle::QwenLanguageY) + S(UiStyle::LabelYOffset), S(UiStyle::QwenHintsLabelW), S(UiStyle::LabelH), text.qwenHintsLabel);
     AddQwenAudio3Control(control);
     HWND qwenHints = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                      S(UiStyle::QwenHintsEditX), S(UiStyle::QwenLanguageY), S(UiStyle::QwenHintsEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_LANGUAGE_HINTS)), GetParentInstance(parent), nullptr);
@@ -84,13 +86,13 @@ void ProviderQwen::CreateControls(HWND parent) {
     AddQwenAudio3Control(qwenHints);
     HWND btnResetHints = CreateButton(parent, IDC_QWEN_LANGUAGE_HINTS_RESET,
                                       S(UiStyle::QwenHintsResetX), S(UiStyle::QwenLanguageY) - S(1),
-                                      S(UiStyle::QwenHintsResetW), S(UiStyle::BtnH), L"Reset");
+                                      S(UiStyle::QwenHintsResetW), S(UiStyle::BtnH), text.qwenResetBtn);
     AddQwenAudio3Control(btnResetHints);
     m_languageHintsHint = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenLanguageHintY),
                                      S(UiStyle::QwenHintW), S(UiStyle::QwenHintH), L"");
     AddQwenAudio3Control(m_languageHintsHint);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenChunkY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Chunk ms");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenChunkY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenChunkMsLabel);
     AddQwenControl(control);
     HWND qwenChunkMs = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                        S(UiStyle::InputLeft), S(UiStyle::QwenChunkY), S(UiStyle::QwenChunkEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_CHUNK_MS)), GetParentInstance(parent), nullptr);
@@ -98,32 +100,32 @@ void ProviderQwen::CreateControls(HWND parent) {
     AddQwenControl(qwenChunkMs);
     control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenChunkHintY),
                          S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
-                         L"200 ms recommended; larger chunks add latency.");
+                         text.qwenChunkMsHint);
     AddQwenControl(control);
 
     // Input context is a separate capability from the chunk length, so it gets its
     // own labelled row and its own hint instead of sharing the chunk row.
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenInputContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Input context");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenInputContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenInputContextLabel);
     AddQwenAudio3Control(control);
     HWND qwenInputContext = CreateCheckBox(parent, IDC_QWEN_INPUT_CONTEXT,
                                             S(UiStyle::QwenInputContextX), S(UiStyle::QwenInputContextY), S(UiStyle::QwenInputContextW), S(UiStyle::CheckH),
-                                            L"Use focused input field text as ASR context");
+                                            text.qwenInputContextCheck);
     AddQwenAudio3Control(qwenInputContext);
     control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenInputContextHintY),
                          S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
-                         L"Sends up to 400 chars (Chrome/Edge companion required).");
+                         text.qwenInputContextHint);
     AddQwenAudio3Control(control);
 
     // Multi-turn context enhancement sits on its own row: it forwards previous
     // transcripts (and, when nothing else is readable, the vocabulary) so it
     // must stay a separate, explicit opt-in from the focused-field switch.
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenHistoryContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"History ctx");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenHistoryContextY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenHistoryCtxLabel);
     AddQwenAudio3Control(control);
     HWND qwenHistoryContext = CreateCheckBox(parent, IDC_QWEN_HISTORY_CONTEXT,
                                              S(UiStyle::QwenHistoryContextX), S(UiStyle::QwenHistoryContextY), S(UiStyle::QwenHistoryContextW), S(UiStyle::CheckH),
-                                             L"Use recent recognition results");
+                                             text.qwenHistoryContextCheck);
     AddQwenAudio3Control(qwenHistoryContext);
-    control = CreateLabel(parent, S(UiStyle::QwenHistoryRoundsLabelX), S(UiStyle::QwenHistoryContextY) + S(UiStyle::LabelYOffset), S(UiStyle::QwenHistoryRoundsLabelW), S(UiStyle::LabelH), L"Rounds");
+    control = CreateLabel(parent, S(UiStyle::QwenHistoryRoundsLabelX), S(UiStyle::QwenHistoryContextY) + S(UiStyle::LabelYOffset), S(UiStyle::QwenHistoryRoundsLabelW), S(UiStyle::LabelH), text.qwenRoundsLabel);
     AddQwenAudio3Control(control);
     HWND qwenHistoryRounds = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                              S(UiStyle::QwenHistoryRoundsEditX), S(UiStyle::QwenHistoryContextY), S(UiStyle::QwenHistoryRoundsEditW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_HISTORY_ROUNDS)), GetParentInstance(parent), nullptr);
@@ -131,18 +133,18 @@ void ProviderQwen::CreateControls(HWND parent) {
     AddQwenAudio3Control(qwenHistoryRounds);
     control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenHistoryContextHintY),
                          S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
-                         L"Sends recent recognition results as context.");
+                         text.qwenHistoryContextHint);
     AddQwenAudio3Control(control);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenAdvancedButtonY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Advanced");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::QwenAdvancedButtonY) + S(UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenAdvancedLabel);
     AddQwenAudio3Control(control);
     HWND btnAdv = CreateButton(parent, IDC_QWEN_ADVANCED,
                                S(UiStyle::InputLeft), S(UiStyle::QwenAdvancedButtonY),
-                               S(UiStyle::QwenAdvancedBtnW), S(UiStyle::ActionBtnH), L"Advanced...");
+                               S(UiStyle::QwenAdvancedBtnW), S(UiStyle::ActionBtnH), text.qwenAdvancedBtn);
     AddQwenAudio3Control(btnAdv);
     control = CreateHint(parent, S(UiStyle::InputLeft), S(UiStyle::QwenAdvancedHintY),
                          S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
-                         L"Hotwords, context, sensitive words, punctuation, VAD.");
+                         text.qwenAdvancedHint);
     AddQwenAudio3Control(control);
 
     // Hidden edit/checkbox controls for Advanced parameters to hold data in main window:
@@ -182,7 +184,7 @@ void ProviderQwen::CreateControls(HWND parent) {
                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_DISFLUENCY_REMOVAL)), GetParentInstance(parent), nullptr);
     ApplyUiFont(qwenVadModel); ApplyUiFont(qwenKeepDialect); ApplyUiFont(qwenDisfluency);
 
-    HWND btnTest = CreateButton(parent, IDC_QWEN_TEST, S(UiStyle::QwenTestBtnX), S(UiStyle::QwenAdvancedButtonY), S(UiStyle::QwenTestBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_QWEN_TEST, S(UiStyle::QwenTestBtnX), S(UiStyle::QwenAdvancedButtonY), S(UiStyle::QwenTestBtnW), S(UiStyle::ActionBtnH), text.qwenTestConnectionBtn);
     AddQwenControl(btnTest);
 }
 
@@ -207,7 +209,7 @@ void ProviderQwen::Show(bool visible) {
         if (parent) {
             m_keyVisible = false;
             HWND showQwenBtn = GetDlgItem(parent, IDC_QWEN_SHOW_KEY);
-            if (showQwenBtn) SetWindowTextW(showQwenBtn, L"Show");
+            if (showQwenBtn) SetWindowTextW(showQwenBtn, ui_strings::UiText().qwenShowBtn);
             HWND qwenKeyEdit = GetDlgItem(parent, IDC_QWEN_API_KEY);
             if (qwenKeyEdit) {
                 SendMessageW(qwenKeyEdit, EM_SETPASSWORDCHAR, L'\u25CF', 0);
@@ -220,7 +222,7 @@ void ProviderQwen::Show(bool visible) {
 void ProviderQwen::LoadControls(HWND parent, const Config& cfg) {
     m_keyVisible = false;
     HWND showQwenBtn = GetDlgItem(parent, IDC_QWEN_SHOW_KEY);
-    if (showQwenBtn) SetWindowTextW(showQwenBtn, L"Show");
+    if (showQwenBtn) SetWindowTextW(showQwenBtn, ui_strings::UiText().qwenShowBtn);
     HWND qwenKeyEdit = GetDlgItem(parent, IDC_QWEN_API_KEY);
     if (qwenKeyEdit) SendMessageW(qwenKeyEdit, EM_SETPASSWORDCHAR, L'\u25CF', 0);
 
@@ -365,7 +367,7 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
             InvalidateRect(keyEdit, nullptr, TRUE);
         }
         HWND btn = GetDlgItem(parent, IDC_QWEN_SHOW_KEY);
-        if (btn) SetWindowTextW(btn, m_keyVisible ? L"Hide" : L"Show");
+        if (btn) SetWindowTextW(btn, m_keyVisible ? ui_strings::UiText().qwenHideBtn : ui_strings::UiText().qwenShowBtn);
         return true;
     }
     case IDC_QWEN_OPEN_LOG:
@@ -386,12 +388,13 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
     case IDC_QWEN_LANGUAGE_HINTS_RESET:
         SetWindowTextW(GetDlgItem(parent, IDC_QWEN_LANGUAGE_HINTS), L"zh,en,yue");
         UpdateQwenLanguageEffectiveHint(parent, m_languageHintsHint);
-        SetStatus(parent, L"Language hints reset to zh,en,yue. Click Save to apply.");
+        SetStatus(parent, ui_strings::UiText().qwenLanguageHintsResetStatus);
         return true;
     case IDC_QWEN_ADVANCED:
         EditQwenAdvancedSettings(parent, m_profileState, m_languageHintsHint);
         return true;
     case IDC_QWEN_TEST: {
+        const auto& text = ui_strings::UiText();
         const std::wstring selectedModel = QwenModelFromControl(parent);
         Config snap = g_config;
         snap.qwenModel = selectedModel;
@@ -424,13 +427,13 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
         if (IsQwenAudioStreamingModel(selectedModel)) {
             if (!ValidateQwenEndpoint(snap.qwenAudioStreamingBaseUrl, L"wss", L"/api-ws/v1/inference", err)) {
                 SetStatus(parent, err);
-                MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+                MessageBoxW(parent, err.c_str(), text.qwenTestFailedTitle, MB_ICONERROR | MB_OK);
                 return true;
             }
         } else if (IsQwenAudioHttpModel(selectedModel)) {
             if (!ValidateQwenEndpoint(snap.qwenHttpBaseUrl, L"https", L"/api/v1/services/aigc/multimodal-generation/generation", err)) {
                 SetStatus(parent, err);
-                MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+                MessageBoxW(parent, err.c_str(), text.qwenTestFailedTitle, MB_ICONERROR | MB_OK);
                 return true;
             }
         } else {
@@ -438,7 +441,7 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
                 std::wstring wsErr;
                 if (!ValidateQwenEndpoint(snap.qwenBaseUrl, L"ws", L"/api-ws/v1/realtime", wsErr)) {
                     SetStatus(parent, err);
-                    MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+                    MessageBoxW(parent, err.c_str(), text.qwenTestFailedTitle, MB_ICONERROR | MB_OK);
                     return true;
                 }
             }
@@ -449,11 +452,11 @@ bool ProviderQwen::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
         if (qwen_audio_profile::SupportsLanguageHints(selectedModel) &&
             !ValidateQwenHints(QwenControlText(parent, IDC_QWEN_LANGUAGE_HINTS, 1024), err)) {
             SetStatus(parent, err);
-            MessageBoxW(parent, err.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+            MessageBoxW(parent, err.c_str(), text.qwenTestFailedTitle, MB_ICONERROR | MB_OK);
             return true;
         }
 
-        SetStatus(parent, L"Testing Qwen ASR connection...");
+        SetStatus(parent, text.qwenTestingStatus);
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"qwen", snap };
         if (auto* svc = asr_probe::GetProbeService()) {

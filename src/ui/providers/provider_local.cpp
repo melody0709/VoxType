@@ -6,7 +6,9 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "path_service.h"
+#include "app_messages.h"
 
 #include <windowsx.h>
 #include <thread>
@@ -17,25 +19,26 @@ namespace ui_provider {
 
 void LocalProviderPanel::CreateControls(HWND parent) {
     m_controls.clear();
+    const auto& text = ui_strings::UiText();
 
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"ASR model");
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.localAsrModel);
     AddLocalControl(control);
     AddLocalControl(CreateCombo(parent, IDC_MODEL, S(UiStyle::InputLeft), S(UiStyle::RowInputY(1)), S(330), S(180)));
-    AddLocalControl(CreateButton(parent, IDC_DOWNLOAD_MODELS, S(UiStyle::InputLeft) + S(350), S(UiStyle::RowInputY(1)) - S(1), S(220), S(UiStyle::BtnH), L"Download Local Model"));
+    AddLocalControl(CreateButton(parent, IDC_DOWNLOAD_MODELS, S(UiStyle::InputLeft) + S(350), S(UiStyle::RowInputY(1)) - S(1), S(220), S(UiStyle::BtnH), text.localDownloadModel));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Model folder");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.localModelFolder);
     AddLocalControl(control);
     HWND modelDir = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                     S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)), S(UiStyle::InputW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_MODEL_DIR)), GetParentInstance(parent), nullptr);
     ApplyUiFont(modelDir);
     AddLocalControl(modelDir);
-    AddLocalControl(CreateButton(parent, IDC_BROWSE, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(2)) - S(1), S(UiStyle::SideBtnW), S(UiStyle::BtnH), L"Browse..."));
+    AddLocalControl(CreateButton(parent, IDC_BROWSE, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(2)) - S(1), S(UiStyle::SideBtnW), S(UiStyle::BtnH), text.localBrowse));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Threads");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.localThreads);
     AddLocalControl(control);
     AddLocalControl(CreateCombo(parent, IDC_THREADS, S(UiStyle::InputLeft), S(UiStyle::RowInputY(3)), S(130), S(UiStyle::ComboH)));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(4)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Punctuation");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(4)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.localPunctuation);
     AddLocalControl(control);
     AddLocalControl(CreateCombo(parent, IDC_POSTPROCESS, S(UiStyle::InputLeft), S(UiStyle::RowInputY(4)), S(UiStyle::ComboW), S(UiStyle::ComboH)));
 }
@@ -54,6 +57,7 @@ void LocalProviderPanel::Show(bool visible) {
 }
 
 void LocalProviderPanel::LoadControls(HWND parent, const Config& cfg) {
+    const auto& text = ui_strings::UiText();
     HWND model = GetDlgItem(parent, IDC_MODEL);
     if (model) {
         ComboBox_ResetContent(model);
@@ -71,7 +75,7 @@ void LocalProviderPanel::LoadControls(HWND parent, const Config& cfg) {
         int physical = std::thread::hardware_concurrency();
         if (physical < 1) physical = 4;
         int auto_threads = (std::min)(8, physical);
-        std::wstring auto_label = L"auto (" + std::to_wstring(auto_threads) + L")";
+        std::wstring auto_label = ui_strings::Format(text.localThreadsAuto, auto_threads);
         ComboBox_AddString(threads, auto_label.c_str());
         for (int i = 1; i <= 8; i++)
             ComboBox_AddString(threads, std::to_wstring(i).c_str());
@@ -91,14 +95,21 @@ void LocalProviderPanel::LoadControls(HWND parent, const Config& cfg) {
     HWND post = GetDlgItem(parent, IDC_POSTPROCESS);
     if (post) {
         ComboBox_ResetContent(post);
-        ComboBox_AddString(post, L"Auto punctuate");
-        ComboBox_AddString(post, L"ITN only");
-        ComboBox_AddString(post, L"Disabled");
+        ComboBox_AddString(post, text.localPostAutoPunct);
+        ComboBox_AddString(post, text.localPostItnOnly);
+        ComboBox_AddString(post, text.localPostDisabled);
         int sel = 0;
         if (cfg.postprocess == L"itn") sel = 1;
         else if (cfg.postprocess == L"none") sel = 2;
         else if (cfg.postprocess != L"auto") sel = ComboBox_AddString(post, cfg.postprocess.c_str());
         ComboBox_SetCurSel(post, sel);
+    }
+
+    // 下载进行中时按钮必须保持禁用：语言切换/DPI 重建会把按钮重新创建成"可用"，
+    // 不补这一句就能重复启动第二个 2GB 下载。（状态文案不在此处写，避免盖掉保存反馈；
+    // 完成通知到达时会刷新它。）
+    if (IsModelDownloadRunning()) {
+        EnableWindow(GetDlgItem(parent, IDC_DOWNLOAD_MODELS), FALSE);
     }
 }
 
@@ -133,15 +144,15 @@ bool LocalProviderPanel::HandleCommand(HWND parent, WORD notifyCode, WORD contro
         BrowseModelDirectory(parent);
         return true;
     case IDC_DOWNLOAD_MODELS: {
+        const auto& text = ui_strings::UiText();
         int ret = MessageBoxW(parent,
-            L"Download ASR models? (~2.2GB)\n\n"
-            L"This will open a PowerShell window.",
-            L"Download Models",
+            text.localDownloadPrompt,
+            text.localDownloadTitle,
             MB_YESNO | MB_ICONQUESTION);
         if (ret == IDYES) {
             if (RunModelDownloader(parent)) {
                 EnableWindow(GetDlgItem(parent, IDC_DOWNLOAD_MODELS), FALSE);
-                SetStatus(parent, L"Downloading... close PowerShell window when done.");
+                SetStatus(parent, text.localDownloading);
             }
         }
         return true;
@@ -151,22 +162,23 @@ bool LocalProviderPanel::HandleCommand(HWND parent, WORD notifyCode, WORD contro
     }
 }
 
-// Model downloads post WM_APP + 20 to the settings window; the completion handler
-// lives with the controls it updates (IDC_MODEL_DIR / IDC_DOWNLOAD_MODELS), and both
-// keep their parent and control ids so GetDlgItem keeps resolving.
+// 模型下载的完成通知由主窗口转发到当前 Settings 窗口（切换界面语言会重建窗口，
+// 所以不能固定在启动时捕获的句柄上）。完成处理留在控件旁边：IDC_MODEL_DIR /
+// IDC_DOWNLOAD_MODELS 重建后 ID 不变，GetDlgItem 照样能解析。
 bool LocalProviderPanel::HandleMessage(HWND parent, UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)wParam;
-    if (msg != WM_APP + 20) return false;
+    if (msg != kModelDownloadDoneMessage) return false;
     EnableWindow(GetDlgItem(parent, IDC_DOWNLOAD_MODELS), TRUE);
     if (lParam) {
         std::unique_ptr<std::wstring> dir(reinterpret_cast<std::wstring*>(lParam));
         std::wstring newDir = std::move(*dir);
         SetWindowTextW(GetDlgItem(parent, IDC_MODEL_DIR), newDir.c_str());
         g_config.modelDir = newDir;
-        SetStatus(parent, L"Download complete");
-        MessageBoxW(parent, L"Download complete!", L"Success", MB_OK | MB_ICONINFORMATION);
+        const auto& text = ui_strings::UiText();
+        SetStatus(parent, text.localDownloadComplete);
+        MessageBoxW(parent, text.localDownloadCompleteBox, text.localDownloadSuccessTitle, MB_OK | MB_ICONINFORMATION);
     } else {
-        SetStatus(parent, L"Download failed or model directory not found");
+        SetStatus(parent, ui_strings::UiText().localDownloadFailed);
     }
     return true;
 }

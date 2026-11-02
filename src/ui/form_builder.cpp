@@ -7,6 +7,7 @@
 #include "config_store.h"
 #include "ui_theme.h"
 #include "ui_utils.h"
+#include "ui_strings.h"
 #include "hotkey.h"
 #include "utils.h"
 
@@ -56,7 +57,7 @@ HWND FormBinder::AddPasswordRow(HWND parent, LayoutCursor& cursor, int idcEdit, 
         parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(idcEdit)),
         GetParentInstance(parent), nullptr);
     ApplyUiFont(edit);
-    HWND btn = CreateButton(parent, idcToggle, S(UiStyle::SmallBtnX), S(y) - S(1), S(UiStyle::SmallBtnW), S(UiStyle::BtnH), L"Show");
+    HWND btn = CreateButton(parent, idcToggle, S(UiStyle::SmallBtnX), S(y) - S(1), S(UiStyle::SmallBtnW), S(UiStyle::BtnH), ui_strings::UiText().formPasswordShow);
     m_controls.push_back(lbl);
     m_controls.push_back(edit);
     m_controls.push_back(btn);
@@ -126,7 +127,7 @@ void FormBinder::ShowAll(bool visible) {
                         SendMessageW(c, EM_SETPASSWORDCHAR, L'\u25CF', 0);
                         InvalidateRect(c, nullptr, TRUE);
                     } else if (b.idcToggle != 0 && GetDlgCtrlID(c) == b.idcToggle) {
-                        SetWindowTextW(c, L"Show");
+                        SetWindowTextW(c, ui_strings::UiText().formPasswordShow);
                     }
                 }
             }
@@ -149,7 +150,7 @@ void FormBinder::LoadFromConfig(HWND parent, const Config& cfg) {
             SendMessageW(h, EM_SETPASSWORDCHAR, L'\u25CF', 0);
             if (b.idcToggle != 0) {
                 HWND btn = GetDlgItem(parent, b.idcToggle);
-                if (btn) SetWindowTextW(btn, L"Show");
+                if (btn) SetWindowTextW(btn, ui_strings::UiText().formPasswordShow);
             }
             const std::wstring& val = cfg.*(std::get<std::wstring Config::*>(b.member));
             SetWindowTextW(h, val.c_str());
@@ -248,7 +249,7 @@ bool FormBinder::HandlePasswordToggle(HWND parent, WORD controlId) {
             }
             HWND btn = GetDlgItem(parent, b.idcToggle);
             if (btn) {
-                SetWindowTextW(btn, b.passwordVisible ? L"Hide" : L"Show");
+                SetWindowTextW(btn, b.passwordVisible ? ui_strings::UiText().formPasswordHide : ui_strings::UiText().formPasswordShow);
             }
             return true;
         }

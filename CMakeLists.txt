@@ -107,6 +107,7 @@ add_executable(VoxType WIN32
     src/ui/form_builder.cpp
     src/ui/settings.cpp
     src/ui/settings_controls.cpp
+    src/ui/ui_strings.cpp
     src/ui/dialog_positioning.cpp
     src/ui/settings_dialogs.cpp
     src/ui/ui_theme.cpp
@@ -250,6 +251,41 @@ set_target_properties(llm_refine_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
 )
 add_test(NAME llm_refine_test COMMAND llm_refine_test)
+
+# UI bilingual string table completeness: every entry non-empty, en/zh placeholder
+# parity, and language parsing fallbacks.
+add_executable(ui_strings_test
+    tests/ui_strings_test.cpp
+    src/ui/ui_strings.cpp
+)
+target_compile_definitions(ui_strings_test PRIVATE UNICODE _UNICODE)
+target_include_directories(ui_strings_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/ui"
+)
+if(MSVC)
+    target_compile_options(ui_strings_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(ui_strings_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME ui_strings_test COMMAND ui_strings_test)
+
+# Cross-window forwarding of a heap payload must be synchronous: a queued forward lands
+# behind an already-queued destroy message and is silently dropped with its payload.
+add_executable(message_forward_test
+    tests/message_forward_test.cpp
+)
+target_compile_definitions(message_forward_test PRIVATE UNICODE _UNICODE)
+target_include_directories(message_forward_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/core"
+)
+if(MSVC)
+    target_compile_options(message_forward_test PRIVATE /O2 /EHsc /utf-8)
+endif()
+set_target_properties(message_forward_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../../artifacts/tests"
+)
+add_test(NAME message_forward_test COMMAND message_forward_test)
 
 add_executable(audio_diagnostics_test
     tests/audio_diagnostics_test.cpp

@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "asr_probe_service.h"
 
 #include <windowsx.h>
@@ -37,7 +38,7 @@ void RefreshQwenFreeStatus(HWND hwnd) {
     HWND status = GetDlgItem(hwnd, IDC_QWEN_FREE_STATUS);
     if (!status) return;
 
-    SetWindowTextW(status, L"Checking Qwen device identity...");
+    SetWindowTextW(status, ui_strings::UiText().qwenFreeCheckingStatus);
     const uint64_t generation =
         g_qwenFreeStatusGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
     const std::wstring utdidOverride = g_config.qwenFreeUtdidOverride;
@@ -64,14 +65,15 @@ void ProviderQwenFree::RefreshStatus(HWND parent) {
 
 void ProviderQwenFree::CreateControls(HWND parent) {
     m_controls.clear();
+    const auto& text = ui_strings::UiText();
     // Row 4 right side: Test Connection
     m_controls.push_back(CreateButton(
         parent, IDC_QWEN_FREE_TEST, S(500), S(UiStyle::RowInputY(4)),
-        S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection"));
+        S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), text.qwenFreeTestConnectionBtn));
 
     // Row 1: Shell path label + edit + browse
     HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)),
-                               S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Shell Path");
+                               S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenFreeShellPathLabel);
     m_controls.push_back(control);
 
     HWND qwenFreePath = CreateWindowExW(
@@ -87,11 +89,11 @@ void ProviderQwenFree::CreateControls(HWND parent) {
         parent, IDC_QWEN_FREE_BROWSE,
         S(UiStyle::InputLeft + UiStyle::QwenFreeShellPathW + UiStyle::QwenFreeShellBrowseGap),
         S(UiStyle::RowInputY(1)) - S(1), S(UiStyle::SmallBtnW), S(UiStyle::BtnH),
-        L"Browse..."));
+        text.qwenFreeBrowseBtn));
 
     // Row 2: Status
     control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)),
-                          S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Status");
+                          S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.qwenFreeStatusLabel);
     m_controls.push_back(control);
 
     HWND qwenFreeStatus = CreateWindowW(
@@ -107,14 +109,14 @@ void ProviderQwenFree::CreateControls(HWND parent) {
     HWND qwenPolish = CreateCheckBox(
         parent, IDC_QWEN_FREE_POLISH,
         S(UiStyle::ContentLeft), S(UiStyle::RowInputY(3)),
-        S(UiStyle::QwenFreeOptionCheckW), S(UiStyle::CheckH), L"Polish (auto)");
+        S(UiStyle::QwenFreeOptionCheckW), S(UiStyle::CheckH), text.qwenFreePolishCheck);
     m_controls.push_back(qwenPolish);
 
     HWND qwenPunct = CreateCheckBox(
         parent, IDC_QWEN_FREE_PUNCT,
         S(UiStyle::ContentLeft + UiStyle::QwenFreeOptionCheckW + UiStyle::QwenFreeOptionGap),
         S(UiStyle::RowInputY(3)), S(UiStyle::QwenFreeOptionCheckW),
-        S(UiStyle::CheckH), L"Punctuation included");
+        S(UiStyle::CheckH), text.qwenFreePunctCheck);
     EnableWindow(qwenPunct, FALSE);
     m_controls.push_back(qwenPunct);
 
@@ -122,7 +124,7 @@ void ProviderQwenFree::CreateControls(HWND parent) {
         parent, IDC_QWEN_FREE_CORRECT,
         S(UiStyle::ContentLeft + (UiStyle::QwenFreeOptionCheckW + UiStyle::QwenFreeOptionGap) * 2),
         S(UiStyle::RowInputY(3)), S(UiStyle::QwenFreeOptionCheckW),
-        S(UiStyle::CheckH), L"Correction included");
+        S(UiStyle::CheckH), text.qwenFreeCorrectCheck);
     EnableWindow(qwenCorrect, FALSE);
     m_controls.push_back(qwenCorrect);
 
@@ -131,7 +133,7 @@ void ProviderQwenFree::CreateControls(HWND parent) {
         parent, IDC_QWEN_FREE_REWRITE,
         S(UiStyle::ContentLeft), S(UiStyle::RowInputY(4)),
         S(UiStyle::QwenFreeRewriteCheckW), S(UiStyle::CheckH),
-        L"Rewrite selection (experimental)");
+        text.qwenFreeRewriteCheck);
     Button_SetCheck(qwenRewrite, BST_UNCHECKED);
     EnableWindow(qwenRewrite, FALSE);
     m_controls.push_back(qwenRewrite);
@@ -140,13 +142,13 @@ void ProviderQwenFree::CreateControls(HWND parent) {
         parent, IDC_QWEN_FREE_DEBUG,
         S(UiStyle::ContentLeft + UiStyle::QwenFreeRewriteCheckW + UiStyle::QwenFreeOptionGap),
         S(UiStyle::RowInputY(4)), S(UiStyle::QwenFreeDebugCheckW),
-        S(UiStyle::CheckH), L"Debug log");
+        S(UiStyle::CheckH), text.qwenFreeDebugCheck);
     m_controls.push_back(qwenDebug);
 
     // Row 5: Hint label
     control = CreateHint(
         parent, S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)), S(UiStyle::QwenHintW), S(UiStyle::QwenHintH),
-        L"Experimental shell: only Polish is configurable.");
+        text.qwenFreeHint);
     m_controls.push_back(control);
 }
 
@@ -205,7 +207,7 @@ bool ProviderQwenFree::HandleCommand(HWND parent, WORD notifyCode, WORD controlI
         BROWSEINFOW bi{};
         bi.hwndOwner = parent;
         bi.pszDisplayName = buffer;
-        bi.lpszTitle = L"Select Qianwen IME Shell Directory";
+        bi.lpszTitle = ui_strings::UiText().qwenFreeBrowseTitle;
         bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
         LPITEMIDLIST pidl = SHBrowseForFolderW(&bi);
         if (pidl) {
@@ -228,8 +230,8 @@ bool ProviderQwenFree::HandleCommand(HWND parent, WORD notifyCode, WORD controlI
         EnableWindow(GetDlgItem(parent, IDC_QWEN_FREE_TEST), FALSE);
         const bool llmRequired = snap.qwenFreePolishEnabled || snap.qwenFreeRewriteEnabled;
         SetStatus(parent, llmRequired
-            ? L"Testing Qianwen IME (Free) UTDID, ASR and LLM..."
-            : L"Testing Qianwen IME (Free) UTDID and ASR...");
+            ? ui_strings::UiText().qwenFreeTestingFullStatus
+            : ui_strings::UiText().qwenFreeTestingAsrStatus);
         const uint64_t generation =
             g_qwenFreeTestGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
         asr_probe::ProbeRequest req{ L"qwen_free", snap };
@@ -261,12 +263,12 @@ bool ProviderQwenFree::HandleMessage(HWND parent, UINT msg, WPARAM wParam, LPARA
         } else {
             const std::wstring detail = !m->result.message.empty()
                 ? m->result.message
-                : L"Qwen IME ASR connection failed.";
+                : std::wstring(ui_strings::UiText().qwenFreeAsrFailedDetail);
             const bool llmFailure = m->result.asrOk && !m->result.llmOk;
             SetStatus(parent, llmFailure
-                ? L"Connection failed: Qwen IME (Free) LLM"
-                : L"Connection failed: Qwen IME (Free) ASR");
-            MessageBoxW(parent, detail.c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+                ? ui_strings::UiText().qwenFreeLlmFailedStatus
+                : ui_strings::UiText().qwenFreeAsrFailedStatus);
+            MessageBoxW(parent, detail.c_str(), ui_strings::UiText().qwenFreeTestFailedTitle, MB_ICONERROR | MB_OK);
         }
         return true;
     }

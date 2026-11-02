@@ -260,6 +260,7 @@ void InitializeRegistry() {
     reg.Register({"voice_punct_mode", &Config::voicePunctMode});
     reg.Register({"voice_spacing_enabled", &Config::voiceSpacingEnabled, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"hotkey", &Config::hotkey});
+    reg.Register({"ui_language", &Config::uiLanguage});
     reg.Register({"enable_llm", &Config::enableLlm, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"llm_provider", &Config::llmProvider});
     reg.Register({"llm_providers_json", &Config::llmProvidersJson});

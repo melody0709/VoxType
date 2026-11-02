@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "asr_probe_service.h"
 #include "app_messages.h"
 
@@ -16,14 +17,15 @@ namespace ui_provider {
 namespace {
 
 std::wstring DoubaoImeCredentialStatusText() {
+    const auto& text = ui_strings::UiText();
     if (g_config.doubaoImeDeviceId.empty()) {
-        return L"Not registered. First use or Test Connection will register automatically.";
+        return text.doubaoNotRegistered;
     }
     std::wstring id = g_config.doubaoImeDeviceId;
     if (id.size() > 22) {
         id = id.substr(0, 10) + L"..." + id.substr(id.size() - 8);
     }
-    return L"Registered device: " + id;
+    return ui_strings::Format(text.doubaoRegisteredDevice, id);
 }
 
 } // namespace
@@ -41,7 +43,8 @@ void ProviderDoubao::RefreshStatus(HWND parent) {
 
 void ProviderDoubao::CreateControls(HWND parent) {
     m_controls.clear();
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Credentials");
+    const auto& text = ui_strings::UiText();
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.doubaoCredentials);
     m_controls.push_back(control);
 
     HWND doubaoStatus = CreateWindowExW(
@@ -54,14 +57,14 @@ void ProviderDoubao::CreateControls(HWND parent) {
     ApplyUiFont(doubaoStatus);
     m_controls.push_back(doubaoStatus);
 
-    HWND btnTest = CreateButton(parent, IDC_DOUBAO_IME_TEST, S(500), S(UiStyle::RowInputY(4)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_DOUBAO_IME_TEST, S(500), S(UiStyle::RowInputY(4)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), text.doubaoTestConnection);
     m_controls.push_back(btnTest);
 
-    HWND btnReset = CreateButton(parent, IDC_DOUBAO_IME_RESET, S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)), S(170), S(UiStyle::ActionBtnH), L"Reset Credentials");
+    HWND btnReset = CreateButton(parent, IDC_DOUBAO_IME_RESET, S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)), S(170), S(UiStyle::ActionBtnH), text.doubaoResetCredentials);
     m_controls.push_back(btnReset);
 
     HWND hint = CreateLabel(parent, S(UiStyle::InputLeft), S(UiStyle::RowInputY(3)), S(560), S(UiStyle::LabelH),
-                            L"Experimental unofficial Doubao IME endpoint. No API key is required.");
+                            text.doubaoEndpointHint);
     m_controls.push_back(hint);
 
     // Opt-in context upload. Row 5 keeps clear of the Test button, whose row is
@@ -69,7 +72,7 @@ void ProviderDoubao::CreateControls(HWND parent) {
     HWND contextCheck = CreateCheckBox(
         parent, IDC_DOUBAO_CONTEXT_ENABLED, S(UiStyle::ContentLeft), S(UiStyle::RowInputY(5)),
         S(660), S(UiStyle::CheckH),
-        L"Send recent context (dictation history + hotwords) with each session");
+        text.doubaoContextCheck);
     m_controls.push_back(contextCheck);
 }
 
@@ -102,7 +105,7 @@ bool ProviderDoubao::HandleCommand(HWND parent, WORD notifyCode, WORD controlId,
     switch (controlId) {
     case IDC_DOUBAO_IME_TEST: {
         EnableWindow(GetDlgItem(parent, IDC_DOUBAO_IME_TEST), FALSE);
-        SetStatus(parent, L"Testing Doubao IME ASR connection...");
+        SetStatus(parent, ui_strings::UiText().doubaoTesting);
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"doubao_ime", g_config };
         if (auto* svc = asr_probe::GetProbeService()) {
@@ -127,7 +130,7 @@ bool ProviderDoubao::HandleCommand(HWND parent, WORD notifyCode, WORD controlId,
         SaveConfig(g_config);
         RefreshDoubaoImeStatus(parent);
         EnableWindow(GetDlgItem(parent, IDC_DOUBAO_IME_TEST), TRUE);
-        SetStatus(parent, L"Doubao IME credentials reset.");
+        SetStatus(parent, ui_strings::UiText().doubaoResetDone);
         return true;
     default:
         return false;

@@ -36,8 +36,9 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
   守卫脚本里的**基线常量**（`tools/check_architecture.ps1` 的 `$BASELINES`，**decrease-only**）：
   `GlobalsIncluders / GlobalsExterns / GlobalsCrossLayerHeader / MainLines / SettingsLines / LayerViolations`
   = `0 / 0 / 0 / 150 / 400 / 2`。
-  当前**实测值** = `0 / 0 / 0 / 150 / 387 / 1`（`globals.h` 彻底消除；`main.cpp` 150 行，**已顶到上限、余 0 行**；
-  `settings.cpp` 387 行，余 13 行；跨层 include 违规 1 处，余 1 行）。
+  当前**实测值** = `0 / 0 / 0 / 150 / 369 / 1`（`globals.h` 彻底消除；`main.cpp` 150 行，**已顶到上限、余 0 行**；
+  `settings.cpp` 369 行，余 31 行（v0.13.0 把 `LayoutSettingsWindow` 与语言切换重建的窗口摆放/状态补写
+  下放到 `settings_controls.cpp` 给语言切换接线腾预算）；跨层 include 违规 1 处，余 1 行）。
   基线自 P0（`847926b`）建立后从未调整过。**`main.cpp` 现在用满了 150 行**（v0.11.9 为浏览器配套扩展的 host 模式入口
   加了 1 行 include + 1 行调用），因此**下一次动 `main.cpp` 必须先把它瘦身**——例如把启动期的预加载/预热接线
   移进 `src/app/` 的专用模块，而不是提高基线。文档欠账实测 = `DocEntriesMissingEn=27` / `DocEntriesMissingZh=34`
@@ -76,6 +77,7 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
   - 字体应用必须经由 `ApplyUiFont`，且其内部必须保证 `HFONT` 永不为 NULL（默认回退至 Segoe UI 9pt），严禁向控件发送空字体句柄导致 Windows 降级为粗体点阵系统字。
   - UI 修改后必须通过 `build.bat` 构建并在 96/144/192/288 DPI 下执行静态布局校验（`validate_settings_layout.ps1`）。
 - **新增配置项统一注册机制（强类型注册表）**：新增配置项遵循三步规范：1. 在 `src/core/config_store.h` 的 `Config` 声明字段与默认值；2. 在 `src/core/config_registry.cpp` 的 `InitializeRegistry()` 注册字段（绑定 JSON 键名、类型、加密策略与格式，自动实现序列化/反序列化/DPAPI）；3. 在对应模块的 Tab（`src/ui/tabs/`）或 Provider（`src/ui/providers/`）中创建控件并加载/保存（或通过 `FormBinder` 绑定）。
+- **界面文案一律走双语表（v0.13.0 起）**：Settings 界面新增/修改文案必须写进 `src/ui/ui_strings.inc`（`UI_TEXT(字段, L"英文", L"中文")`），代码经 `ui_strings::UiText().字段` 取值；含 `{}` 的格式串用 `ui_strings::Format()`（运行时格式串不能走 `std::format` 的 consteval 通道）。**禁止**在界面代码里新增裸 `L"..."` 显示文案；窗口类名、JSON key、配置值、热键序列化名（`hotkey.cpp` 是配置格式）不进表。语言选择器的自称项（`Follow system / 跟随系统`、`English`、`中文`）固定不翻译。`UiText()` 返回值不得缓存进静态存储——界面语言可在运行时切换（保存后重建 Settings 窗口）。文案完整性由 `tests/ui_strings_test.cpp` 把关（非空 + 英/中占位符数量一致）。界面语言配置 `ui_language`（`auto`/`en`/`zh`，非法回退 `auto`），只影响 UI 文案，与各引擎的识别语言无关。
 - DLL 延迟加载：`onnxruntime.dll`、`sherpa-onnx-cxx-api.dll`、`kaldi-native-fbank-core.dll` 通过 `/DELAYLOAD` 延迟加载，纯云端模式空闲 ~12 MB。`TryLoadAsrDlls()` 用 SEH 安全检测。
 - 本地模式启动时 `PreloadAsrEngine()` 后台线程预加载模型，Save 后 Reload + 预加载。
 
@@ -125,6 +127,8 @@ Windows 11  语音输入法工具：托盘常驻，按住快捷键录音松开�
 | **A · 不变量** | 描述**外部世界的行为**（OS / 协议 / 硬件 / 第三方控件）。语言标准升级、文件搬家都不改变它，违反即 bug。 | **永久保留**，重构中作为"不得破坏"的红线 | WASAPI 生命周期；重采样相位公式；微信必须 `WM_CHAR`；FireRedVAD 的 int16 范围 |
 | **B · 条件约束** | 因为**当前某个前提**才成立（没有测试覆盖 / 还是全局变量 / 还是单文件）。前提一旦解除，约束即失效。 | **必须写明条件与解除条件**；条件解除后重写为"先补测试再重构"，而不是当永久禁令 | "火山协议层不要在无测试覆盖时重写" |
 | **C · 实现现状** | 描述**当前代码长什么样**（某文件里某函数、某签名、某全局变量还在）。 | 重构会让它过期，**每个 Milestone 收尾必须重审**；与现实不符的**立即删除**，不得留作"历史注释" | 「`IVadDetector` / `FireRedVad` 使用 `std::span<const float>`」 |
+
+- **【A】跨窗口转发携带 heap payload 的消息必须同步**：`DestroyWindow` 会连带丢弃该窗口队列里尚未派发的消息，所以 `PostMessage` 的"转发"可能**投递成功却永远没人处理**，payload 既没人消费也没人释放（真实症状：模型下载完成后模型目录不更新、按钮不解锁、内存泄漏）。同线程转发没有额外代价，一律走 `src/core/app_messages.h` 的 `SendToWindow()`（内部 `SendMessage`），并在目标窗口已不在时由调用方回收 payload。`tests/message_forward_test.cpp` 用隐藏窗口钉住这条顺序：把 `SendToWindow` 改回 `PostMessage` 会让它直接失败（实测 3 项 FAIL，含 payload 收支不平衡）。
 
 **元规则（重要）**：规则必须可证伪。凡是描述"当前实现"而非"外部行为"的条目，在对应 Milestone 收尾时逐条重审；**已与现实不符的规则是负资产**——它会让执行者建立错误的前置认知，比没有规则更糟。**禁止**把过期规则保留为"历史说明"或注释掉。
 

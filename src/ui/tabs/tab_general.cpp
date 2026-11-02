@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "hotkey.h"
 #include "injection_ledger.h"
 #include "learning_store.h"
@@ -22,14 +23,10 @@ namespace ui_tab {
 
 namespace {
 
-// Presentation order of the voice-cleanup combo. The persisted values live in
-// voice_text_mode (core layer) so the ASR post-processor parses exactly these
-// strings without ui ever including the asr layer.
-const wchar_t* const kPunctModeLabels[] = {
-    L"Keep all punctuation",
-    L"Replace with spaces",
-    L"No end punctuation",
-};
+// Presentation order of the voice-cleanup combo is fixed by PunctModeValueFromIndex
+// below. The persisted values live in voice_text_mode (core layer) so the ASR
+// post-processor parses exactly these strings without ui ever including the asr
+// layer; the visible labels come from the language table at creation time.
 
 std::wstring PunctModeValueFromIndex(int index) {
     switch (index) {
@@ -50,7 +47,7 @@ std::wstring DescribeWin32Error(DWORD error) {
     const DWORD length = FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         nullptr, error, 0, reinterpret_cast<wchar_t*>(&message), 0, nullptr);
-    std::wstring result = length && message ? std::wstring(message, length) : L"Unknown Windows error";
+    std::wstring result = length && message ? std::wstring(message, length) : ui_strings::UiText().unknownWin32Error;
     if (message) LocalFree(message);
     while (!result.empty() && (result.back() == L'\r' || result.back() == L'\n')) result.pop_back();
     return result;
@@ -63,18 +60,19 @@ void RefreshBrowserBridgeControl(HWND parent) {
     const browser_bridge_registration::BridgeState state =
         browser_bridge_registration::QueryBridgeState();
     const auto connection = browser_bridge::Bridge::Instance().Status();
-    const auto browserState = [](size_t connected, size_t paired,
-                                  browser_bridge_registration::HostState registered) {
-        if (connected) return L"connected";
-        if (paired) return L"paired (offline)";
-        return registered == browser_bridge_registration::HostState::Ready ? L"not paired" : L"setup needed";
+    const auto& text = ui_strings::UiText();
+    const auto browserState = [&text](size_t connected, size_t paired,
+                                      browser_bridge_registration::HostState registered) {
+        if (connected) return text.bridgeConnected;
+        if (paired) return text.bridgePairedOffline;
+        return registered == browser_bridge_registration::HostState::Ready ? text.bridgeNotPaired : text.bridgeSetupNeeded;
     };
-    const std::wstring text = connection.error.empty() ? std::format(L"Chrome: {} / Edge: {}{}",
+    const std::wstring statusText = connection.error.empty() ? ui_strings::Format(text.bridgeStatusFormat,
         browserState(connection.chrome, connection.pairedChrome, state.chrome),
         browserState(connection.edge, connection.pairedEdge, state.edge),
-        connection.legacy ? L" (legacy host active)" : L"") :
-        L"Browser connection unavailable: " + Utf8ToWide(connection.error);
-    SetWindowTextW(statusLabel, text.c_str());
+        connection.legacy ? text.bridgeLegacySuffix : L"") :
+        std::wstring(text.bridgeUnavailablePrefix) + Utf8ToWide(connection.error);
+    SetWindowTextW(statusLabel, statusText.c_str());
 }
 
 // Opens a file or folder and reports the real outcome. The "Opened ..." status
@@ -89,8 +87,8 @@ void OpenWithShell(HWND parent, const std::wstring& target, const wchar_t* succe
     const HINSTANCE result = ShellExecuteW(parent, L"open", target.c_str(), nullptr, nullptr,
                                            SW_SHOWNORMAL);
     if (reinterpret_cast<INT_PTR>(result) <= 32) {
-        SetStatus(parent, std::format(L"Could not open {} (shell error {}).",
-                                      target, reinterpret_cast<INT_PTR>(result)));
+        SetStatus(parent, ui_strings::Format(ui_strings::UiText().shellOpenFailed,
+                                             target, reinterpret_cast<INT_PTR>(result)));
         return;
     }
     SetStatus(parent, successText);
@@ -106,15 +104,15 @@ void RefreshStartupRegistrationControl(HWND hwnd, bool reportError) {
     if (!startup.Succeeded()) {
         Button_SetCheck(checkbox, BST_UNCHECKED);
         if (reportError) {
-            SetStatus(hwnd, L"Could not read Windows startup setting (" +
-                std::to_wstring(startup.error) + L"): " + DescribeWin32Error(startup.error));
+            SetStatus(hwnd, ui_strings::Format(ui_strings::UiText().startupReadError,
+                                               startup.error, DescribeWin32Error(startup.error)));
         }
         return;
     }
 
     Button_SetCheck(checkbox, startup.registered ? BST_CHECKED : BST_UNCHECKED);
     if (reportError && startup.registered && !startup.pointsToCurrentExecutable) {
-        SetStatus(hwnd, L"Startup is enabled for a moved copy. Save will update it to this VoxType folder.");
+        SetStatus(hwnd, ui_strings::UiText().startupMovedCopy);
     }
 }
 
@@ -123,42 +121,49 @@ bool SaveStartupRegistrationControl(HWND hwnd) {
     const DWORD error = SetVoxTypeStartupRegistration(enable);
     if (error == ERROR_SUCCESS) return true;
 
-    const std::wstring detail = L"Windows startup setting was not changed (" +
-        std::to_wstring(error) + L"): " + DescribeWin32Error(error);
+    const std::wstring detail = ui_strings::Format(ui_strings::UiText().startupWriteError,
+                                                   error, DescribeWin32Error(error));
     SetStatus(hwnd, detail);
-    MessageBoxW(hwnd, detail.c_str(), L"VoxType Settings", MB_OK | MB_ICONERROR);
+    MessageBoxW(hwnd, detail.c_str(), ui_strings::UiText().settingsTitle, MB_OK | MB_ICONERROR);
     return false;
 }
 
 void TabGeneral::CreateControls(HWND parent) {
     m_parent = parent;
     m_controls.clear();
-    const int shortcutY = S(UiStyle::GeneralShortcutGroupY);
-    HWND shortcutGroup = CreateWindowW(L"BUTTON", L"Shortcut", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                       S(UiStyle::GeneralGroupX), shortcutY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralShortcutGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
+    const auto& text = ui_strings::UiText();
+    const int shortcutY = S(UiStyle::GeneralShortcutStartupGroupY);
+    HWND shortcutGroup = CreateWindowW(L"BUTTON", text.generalShortcutStartupGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                       S(UiStyle::GeneralGroupX), shortcutY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralShortcutStartupGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(shortcutGroup);
     AddGeneralControl(shortcutGroup);
 
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), shortcutY + S(28), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Hold hotkey");
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), shortcutY + S(UiStyle::GeneralShortcutLabelOffsetY), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.generalHoldHotkey);
     AddGeneralControl(control);
-    AddGeneralControl(CreateHotkeyEdit(parent, IDC_HOTKEY, S(UiStyle::InputLeft), shortcutY + S(20), S(300), S(UiStyle::HotkeyEditH), CurrentConfiguredHotkey()));
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), shortcutY + S(68), S(740), S(UiStyle::LabelH), L"Click the field, then press the key or key combination to use while recording.");
-    AddGeneralControl(control);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), shortcutY + S(98), S(740), S(UiStyle::LabelH), L"Esc cancels recording a shortcut. Backspace/Delete clears it.");
+    AddGeneralControl(CreateHotkeyEdit(parent, IDC_HOTKEY, S(UiStyle::InputLeft), shortcutY + S(UiStyle::GeneralShortcutRowOffsetY), S(300), S(UiStyle::HotkeyEditH), CurrentConfiguredHotkey()));
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), shortcutY + S(UiStyle::GeneralShortcutHintOffsetY),
+                          S(UiStyle::GeneralGroupHintW), S(UiStyle::LabelH), text.generalShortcutHint);
     AddGeneralControl(control);
 
+    // 合并组第三行：开机启动勾选（原独立 Startup 组迁入；Portable 提示已删）。
+    HWND startupCheckbox = CreateWindowW(L"BUTTON", text.generalStartupCheck, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                         S(UiStyle::ContentLeft), shortcutY + S(UiStyle::GeneralStartupCheckInShortcutOffsetY), S(UiStyle::GeneralStartupCheckInShortcutW), S(UiStyle::CheckH), parent,
+                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_START_WITH_WINDOWS)), GetParentInstance(parent), nullptr);
+    ApplyUiFont(startupCheckbox);
+    AddGeneralControl(startupCheckbox);
+
     const int inputY = S(UiStyle::GeneralInputGroupY);
-    HWND inputGroup = CreateWindowW(L"BUTTON", L"Input preview", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+    HWND inputGroup = CreateWindowW(L"BUTTON", text.generalInputPreviewGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                     S(UiStyle::GeneralGroupX), inputY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralInputGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(inputGroup);
     AddGeneralControl(inputGroup);
-    HWND partialCheckbox = CreateWindowW(L"BUTTON", L"Partial result", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+    HWND partialCheckbox = CreateWindowW(L"BUTTON", text.generalPartialResult, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                          S(UiStyle::ContentLeft), inputY + S(UiStyle::GeneralInputCheckOffsetY), S(UiStyle::GeneralInputCheckW), S(UiStyle::CheckH), parent,
                                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PARTIAL)), GetParentInstance(parent), nullptr);
     ApplyUiFont(partialCheckbox);
     AddGeneralControl(partialCheckbox);
 
-    HWND fastPasteCheckbox = CreateWindowW(L"BUTTON", L"Fast paste + clipboard history", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+    HWND fastPasteCheckbox = CreateWindowW(L"BUTTON", text.generalFastPaste, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                   S(UiStyle::ContentLeft + UiStyle::GeneralRestoreClipboardOffsetX), inputY + S(UiStyle::GeneralInputCheckOffsetY), S(UiStyle::GeneralRestoreClipboardW), S(UiStyle::CheckH), parent,
                                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_RESTORE_CLIPBOARD)), GetParentInstance(parent), nullptr);
     ApplyUiFont(fastPasteCheckbox);
@@ -167,12 +172,12 @@ void TabGeneral::CreateControls(HWND parent) {
     // Row 2 of the same group: local voice-cleanup controls (P3).
     const int cleanupY = inputY + S(UiStyle::GeneralCleanupRowOffsetY);
     control = CreateLabel(parent, S(UiStyle::ContentLeft), cleanupY + S(UiStyle::LabelYOffset),
-                          S(UiStyle::GeneralCleanupLabelW), S(UiStyle::LabelH), L"Punctuation");
+                          S(UiStyle::GeneralCleanupLabelW), S(UiStyle::LabelH), text.generalPunctuationLabel);
     AddGeneralControl(control);
     HWND punctCombo = CreateCombo(parent, IDC_VOICE_PUNCT_MODE,
                                   S(UiStyle::ContentLeft + UiStyle::GeneralCleanupComboOffsetX), cleanupY,
                                   S(UiStyle::GeneralCleanupComboW), S(UiStyle::ComboH));
-    for (const wchar_t* label : kPunctModeLabels) {
+    for (const wchar_t* label : {text.generalPunctKeepAll, text.generalPunctSpaceReplace, text.generalPunctNoEnd}) {
         ComboBox_AddString(punctCombo, label);
     }
     ComboBox_SetCurSel(punctCombo, 0);
@@ -182,7 +187,7 @@ void TabGeneral::CreateControls(HWND parent) {
                                           IDC_VOICE_SPACING,
                                           S(UiStyle::ContentLeft + UiStyle::GeneralCleanupCheckOffsetX), cleanupY,
                                           S(UiStyle::GeneralCleanupCheckW), S(UiStyle::CheckH),
-                                          L"Space between Chinese & English");
+                                          text.generalSpacing);
     AddGeneralControl(spacingCheckbox);
 
     // Row 3 of the same group: local learning loop (P2).
@@ -191,40 +196,26 @@ void TabGeneral::CreateControls(HWND parent) {
                                            IDC_LEARNING_ENABLED,
                                            S(UiStyle::ContentLeft), learningY,
                                            S(UiStyle::GeneralLearningCheckW), S(UiStyle::CheckH),
-                                           L"Learn from manual corrections (cloud sync)");
+                                           text.generalLearning);
     AddGeneralControl(learningCheckbox);
     HWND clearLearningBtn = CreateButton(parent,
                                          IDC_LEARNING_CLEAR,
                                          S(UiStyle::ContentLeft + UiStyle::GeneralLearningClearOffsetX), learningY,
                                          S(UiStyle::GeneralLearningClearW), S(UiStyle::ActionBtnH),
-                                         L"Clear learned data");
+                                         text.generalClearLearned);
     AddGeneralControl(clearLearningBtn);
 
-    const int startupY = S(UiStyle::GeneralStartupGroupY);
-    HWND startupGroup = CreateWindowW(L"BUTTON", L"Startup", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                      S(UiStyle::GeneralGroupX), startupY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralStartupGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
-    ApplyUiFont(startupGroup);
-    AddGeneralControl(startupGroup);
-    HWND startupCheckbox = CreateWindowW(L"BUTTON", L"Start VoxType when I sign in to Windows", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                         S(UiStyle::ContentLeft), startupY + S(UiStyle::GeneralStartupCheckOffsetY), S(UiStyle::GeneralStartupCheckW), S(UiStyle::CheckH), parent,
-                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_START_WITH_WINDOWS)), GetParentInstance(parent), nullptr);
-    ApplyUiFont(startupCheckbox);
-    AddGeneralControl(startupCheckbox);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), startupY + S(UiStyle::GeneralStartupHintOffsetY), S(UiStyle::GeneralStartupHintW), S(UiStyle::QwenHint2LineH),
-                          L"Uses your Windows account startup list. Moving a Portable copy is corrected when you save.");
-    AddGeneralControl(control);
-
     const int browserY = S(UiStyle::GeneralBrowserGroupY);
-    HWND browserGroup = CreateWindowW(L"BUTTON", L"Browser integration (Chrome / Edge)", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+    HWND browserGroup = CreateWindowW(L"BUTTON", text.generalBrowserGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       S(UiStyle::GeneralGroupX), browserY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralBrowserGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
     ApplyUiFont(browserGroup);
     AddGeneralControl(browserGroup);
 
     control = CreateLabel(parent, S(UiStyle::ContentLeft), browserY + S(UiStyle::GeneralBrowserHintOffsetY), S(UiStyle::GeneralBrowserHintW), S(UiStyle::LabelH),
-                          L"Load the companion extension, then click its icon to pair with VoxType.");
+                          text.generalBrowserHint);
     AddGeneralControl(control);
 
-    HWND statusLabel = CreateWindowW(L"STATIC", L"Bridge: checking...", WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX,
+    HWND statusLabel = CreateWindowW(L"STATIC", text.generalBrowserStatusChecking, WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX,
                                      S(UiStyle::ContentLeft), browserY + S(UiStyle::GeneralBrowserStatusOffsetY), S(UiStyle::GeneralBrowserStatusW), S(UiStyle::LabelH),
                                      parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_BROWSER_STATUS)), GetParentInstance(parent), nullptr);
     ApplyUiFont(statusLabel);
@@ -232,21 +223,43 @@ void TabGeneral::CreateControls(HWND parent) {
 
     const int browserActionsY = browserY + S(UiStyle::GeneralBrowserActionsOffsetY);
     HWND regBtn = CreateButton(parent, IDC_BROWSER_REGISTER_BRIDGE, S(UiStyle::ContentLeft), browserActionsY,
-                               S(UiStyle::GeneralBrowserBtnW), S(UiStyle::ActionBtnH), L"Pair / Refresh");
+                               S(UiStyle::GeneralBrowserBtnW), S(UiStyle::ActionBtnH), text.generalBrowserPairRefresh);
     AddGeneralControl(regBtn);
 
     const int folderBtnX = UiStyle::ContentLeft + UiStyle::GeneralBrowserBtnW + UiStyle::GeneralBrowserButtonGap;
     HWND folderBtn = CreateButton(parent, IDC_BROWSER_OPEN_FOLDER, S(folderBtnX), browserActionsY,
-                                  S(UiStyle::GeneralBrowserFolderBtnW), S(UiStyle::ActionBtnH), L"Open Extension Folder");
+                                  S(UiStyle::GeneralBrowserFolderBtnW), S(UiStyle::ActionBtnH), text.generalBrowserOpenFolder);
     AddGeneralControl(folderBtn);
 
     const int guideBtnX = folderBtnX + UiStyle::GeneralBrowserFolderBtnW + UiStyle::GeneralBrowserButtonGap;
     HWND guideBtn = CreateButton(parent, IDC_BROWSER_SETUP_GUIDE, S(guideBtnX), browserActionsY,
-                                 S(UiStyle::GeneralBrowserGuideBtnW), S(UiStyle::ActionBtnH), L"Setup Guide");
+                                 S(UiStyle::GeneralBrowserGuideBtnW), S(UiStyle::ActionBtnH), text.generalBrowserSetupGuide);
     AddGeneralControl(guideBtn);
     const int revokeBtnX = guideBtnX + UiStyle::GeneralBrowserGuideBtnW + UiStyle::GeneralBrowserButtonGap;
     AddGeneralControl(CreateButton(parent, IDC_BROWSER_REVOKE, S(revokeBtnX), browserActionsY,
-        S(UiStyle::GeneralBrowserRevokeBtnW), S(UiStyle::ActionBtnH), L"Unpair all"));
+        S(UiStyle::GeneralBrowserRevokeBtnW), S(UiStyle::ActionBtnH), text.generalBrowserUnpair));
+
+    // Language 组：界面语言下拉（保存后重建窗口生效）。
+    const int languageY = S(UiStyle::GeneralLanguageGroupY);
+    HWND languageGroup = CreateWindowW(L"BUTTON", text.generalLanguageGroupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                       S(UiStyle::GeneralGroupX), languageY, S(UiStyle::GeneralGroupW), S(UiStyle::GeneralLanguageGroupH), parent, nullptr, GetParentInstance(parent), nullptr);
+    ApplyUiFont(languageGroup);
+    AddGeneralControl(languageGroup);
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), languageY + S(UiStyle::GeneralLanguageRowOffsetY + UiStyle::LabelYOffset),
+                          S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.generalLanguageLabel);
+    AddGeneralControl(control);
+    HWND languageCombo = CreateCombo(parent, IDC_UI_LANGUAGE,
+                                     S(UiStyle::InputLeft), languageY + S(UiStyle::GeneralLanguageRowOffsetY),
+                                     S(UiStyle::ComboW), S(UiStyle::ComboH));
+    // 语言选择器永远显示自称，不受当前界面语言影响。
+    for (const wchar_t* label : {L"Follow system / 跟随系统", L"English", L"中文"}) {
+        ComboBox_AddString(languageCombo, label);
+    }
+    ComboBox_SetCurSel(languageCombo, 0);
+    AddGeneralControl(languageCombo);
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), languageY + S(UiStyle::GeneralLanguageHintOffsetY),
+                          S(UiStyle::GeneralGroupHintW), S(UiStyle::LabelH), text.generalLanguageHint);
+    AddGeneralControl(control);
 }
 
 void TabGeneral::DestroyControls() {
@@ -286,6 +299,10 @@ void TabGeneral::LoadControls(HWND parent, const Config& cfg) {
     ComboBox_SetCurSel(GetDlgItem(parent, IDC_VOICE_PUNCT_MODE), PunctModeIndexFromValue(cfg.voicePunctMode));
     Button_SetCheck(GetDlgItem(parent, IDC_VOICE_SPACING), cfg.voiceSpacingEnabled ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(GetDlgItem(parent, IDC_LEARNING_ENABLED), cfg.asrLearningEnabled ? BST_CHECKED : BST_UNCHECKED);
+    // 下拉项顺序 Follow system/English/中文 与 UiLanguage 枚举序一致（Auto/En/Zh），
+    // 映射复用 ParseUiLanguage/UiLanguageCode，由 tests/ui_strings_test.cpp 钉住。
+    ComboBox_SetCurSel(GetDlgItem(parent, IDC_UI_LANGUAGE),
+                       static_cast<int>(ui_strings::ParseUiLanguage(cfg.uiLanguage)));
 }
 
 void TabGeneral::SaveControls(HWND parent, Config& cfg) {
@@ -299,6 +316,8 @@ void TabGeneral::SaveControls(HWND parent, Config& cfg) {
     const int punctIndex = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_VOICE_PUNCT_MODE));
     cfg.voicePunctMode = PunctModeValueFromIndex(punctIndex);
     cfg.voiceSpacingEnabled = Button_GetCheck(GetDlgItem(hwnd, IDC_VOICE_SPACING)) == BST_CHECKED;
+    const int languageIndex = ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_UI_LANGUAGE));
+    cfg.uiLanguage = ui_strings::UiLanguageCode(static_cast<ui_strings::UiLanguage>(languageIndex));
 }
 
 bool TabGeneral::SaveStartupRegistration(HWND parent) {
@@ -318,55 +337,47 @@ bool TabGeneral::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWN
             browser_bridge_registration::RegisterHost(manifest);
         if (registered) {
             RefreshBrowserBridgeControl(parent);
-            SetStatus(parent, L"Click the browser extension icon to pair. Normal connections use WebSocket.");
+            SetStatus(parent, ui_strings::UiText().browserPairStatus);
             MessageBoxW(parent,
-                        L"Pairing is ready for Chrome and Edge.\n\n"
-                        L"If the companion extension is not loaded yet, open chrome://extensions "
-                        L"(or edge://extensions), enable Developer mode, and use 'Load unpacked' to "
-                        L"select the extensions\\browser-bridge folder. Reload an older extension.\n\n"
-                        L"Keep VoxType running and click the extension icon once in each browser profile "
-                        L"to pair. The temporary pairing host exits; subsequent connections use WebSocket. "
-                        L"Use Unpair all to revoke credentials. Connection status refreshes here each second.",
-                        L"VoxType Browser Integration", MB_OK | MB_ICONINFORMATION);
+                        ui_strings::UiText().browserPairGuide,
+                        ui_strings::UiText().browserIntegrationTitle, MB_OK | MB_ICONINFORMATION);
         } else {
-            SetStatus(parent, L"Registration failed: " + registered.error());
-            MessageBoxW(parent, registered.error().c_str(), L"VoxType Browser Integration",
+            SetStatus(parent, std::wstring(ui_strings::UiText().browserRegistrationFailed) + registered.error());
+            MessageBoxW(parent, registered.error().c_str(), ui_strings::UiText().browserIntegrationTitle,
                         MB_OK | MB_ICONERROR);
         }
         return true;
     }
     if (controlId == IDC_BROWSER_REVOKE) {
-        if (MessageBoxW(parent, L"Revoke all browser pairings for this VoxType installation?\n"
-            L"Each browser profile will need its extension icon clicked to pair again.",
-            L"VoxType Browser Integration", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return true;
+        if (MessageBoxW(parent, ui_strings::UiText().browserRevokeConfirm,
+            ui_strings::UiText().browserIntegrationTitle, MB_OKCANCEL | MB_ICONQUESTION) != IDOK) return true;
         const auto revoked = browser_bridge::Bridge::Instance().RevokePairings();
         RefreshBrowserBridgeControl(parent);
-        SetStatus(parent, revoked ? L"Browser pairings revoked." : L"Could not revoke pairings: " + Utf8ToWide(revoked.error()));
+        SetStatus(parent, revoked ? ui_strings::UiText().browserPairingsRevoked
+                                  : std::wstring(ui_strings::UiText().browserRevokeFailed) + Utf8ToWide(revoked.error()));
         return true;
     }
     if (controlId == IDC_BROWSER_OPEN_FOLDER) {
         OpenWithShell(parent, browser_bridge_registration::ExtensionDir(),
-                      L"Opened extensions\\browser-bridge folder.",
-                      L"the companion extension folder is missing; run build.bat to install the "
-                      L"runtime payload.");
+                      ui_strings::UiText().openedExtensionFolder,
+                      ui_strings::UiText().extensionFolderMissing);
         return true;
     }
     if (controlId == IDC_BROWSER_SETUP_GUIDE) {
         OpenWithShell(parent,
                       browser_bridge_registration::ExtensionDir() + L"\\README.md",
-                      L"Opened browser companion setup guide.",
-                      L"the companion setup guide is missing; run build.bat to install the runtime "
-                      L"payload.");
+                      ui_strings::UiText().openedSetupGuide,
+                      ui_strings::UiText().setupGuideMissing);
         return true;
     }
     if (controlId != IDC_LEARNING_CLEAR) return false;
     if (MessageBoxW(parent,
-                    L"Delete every correction learned on this PC? The vocabulary file is not touched.",
-                    L"VoxType Settings", MB_OKCANCEL | MB_ICONQUESTION) != IDOK) {
+                    ui_strings::UiText().learningClearConfirm,
+                    ui_strings::UiText().settingsTitle, MB_OKCANCEL | MB_ICONQUESTION) != IDOK) {
         return true;
     }
     if (!learning_store::Clear()) {
-        SetStatus(parent, L"Learned data could not be deleted (file is in use).");
+        SetStatus(parent, ui_strings::UiText().learningClearFailed);
         return true;
     }
     // Drop the pending reflection before reporting success. A worker that already
@@ -376,7 +387,7 @@ bool TabGeneral::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWN
     // a lie. The whole window is reflectionDelayMs (2.5 s by default), so
     // "dictate, then clear" hits it reliably.
     injection_ledger::Invalidate();
-    SetStatus(parent, L"Learned corrections deleted.");
+    SetStatus(parent, ui_strings::UiText().learningCleared);
     return true;
 }
 

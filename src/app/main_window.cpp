@@ -219,6 +219,8 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     switch (msg) {
     case WM_CREATE:
         SetHotkeyTargetWindow(hwnd);
+        // 模型下载完成通知固定投递到主窗口：Settings 窗口会在切换界面语言时被销毁重建。
+        SetModelDownloadNotifyWindow(hwnd);
         AddTrayIcon(hwnd);
         InstallKeyboardHook();
         s_wtsRegistered = WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) != FALSE;
@@ -284,6 +286,14 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 PreloadAsrEngine(cfg);
                 PostMessageW(g_mainWindow, kPreloadDoneMessage, 0, 0);
             }).detach();
+        }
+        return 0;
+    case kModelDownloadDoneMessage:
+        // 下载完成结果同步转给当前 Settings 窗口（语言切换会重建它，句柄会变）。
+        // 必须用 SendToWindow（SendMessage）：转发若排队，就会排在已入队的销毁消息之后，
+        // 窗口一销毁连同 payload 一起被丢弃。回收责任在这里兜底。
+        if (!SendToWindow(g_settingsWindow, kModelDownloadDoneMessage, wParam, lParam)) {
+            delete reinterpret_cast<std::wstring*>(lParam);
         }
         return 0;
     case kPreloadDoneMessage:

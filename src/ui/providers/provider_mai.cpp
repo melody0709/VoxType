@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "ui_utils.h"
 #include "asr_probe_service.h"
 
@@ -18,29 +19,39 @@ namespace {
 
 constexpr int kMaiCloudProviderIndex = 6;
 
-struct MaiLanguageOption {
-    const wchar_t* label;
-    const wchar_t* code;
+// 语言项标签走 ui_strings 双语表（运行时取值），这里只保留配置值 code。
+constexpr const wchar_t* kMaiLanguageCodes[] = {
+    L"auto",
+    L"zh",
+    L"en",
+    L"ja",
+    L"ko",
+    L"yue",
 };
+constexpr int kMaiLanguageCount =
+    static_cast<int>(sizeof(kMaiLanguageCodes) / sizeof(kMaiLanguageCodes[0]));
 
-constexpr MaiLanguageOption kMaiLanguages[] = {
-    {L"Auto", L"auto"},
-    {L"Chinese (zh)", L"zh"},
-    {L"English (en)", L"en"},
-    {L"Japanese (ja)", L"ja"},
-    {L"Korean (ko)", L"ko"},
-    {L"Cantonese (yue)", L"yue"},
-};
+const wchar_t* MaiLanguageLabel(const ui_strings::UiStrings& text, int index) {
+    switch (index) {
+    case 0: return text.maiLangAuto;
+    case 1: return text.maiLangChinese;
+    case 2: return text.maiLangEnglish;
+    case 3: return text.maiLangJapanese;
+    case 4: return text.maiLangKorean;
+    case 5: return text.maiLangCantonese;
+    default: return text.maiLangAuto;
+    }
+}
 
 const wchar_t* MaiLanguageCodeFromIndex(int index) {
-    constexpr int count = static_cast<int>(sizeof(kMaiLanguages) / sizeof(kMaiLanguages[0]));
-    return index >= 0 && index < count ? kMaiLanguages[index].code : L"auto";
+    return index >= 0 && index < kMaiLanguageCount ? kMaiLanguageCodes[index] : L"auto";
 }
 
 bool ValidateAzureEndpoint(const std::wstring& endpoint, std::wstring& error) {
+    const auto& text = ui_strings::UiText();
     std::wstring url = Trim(endpoint);
     if (url.empty()) {
-        error = L"Azure Endpoint cannot be empty.";
+        error = text.maiAzureEndpointEmpty;
         return false;
     }
     URL_COMPONENTSW parts{};
@@ -50,16 +61,16 @@ bool ValidateAzureEndpoint(const std::wstring& endpoint, std::wstring& error) {
     parts.dwUrlPathLength = static_cast<DWORD>(-1);
     parts.dwExtraInfoLength = static_cast<DWORD>(-1);
     if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) {
-        error = L"invalid Azure Endpoint";
+        error = text.maiAzureEndpointInvalid;
         return false;
     }
     std::wstring scheme(parts.lpszScheme, parts.dwSchemeLength);
     if (scheme != L"https" && scheme != L"http") {
-        error = L"Azure Endpoint must start with https:// or http://";
+        error = text.maiAzureEndpointScheme;
         return false;
     }
     if (parts.dwHostNameLength == 0) {
-        error = L"Azure Endpoint host cannot be empty.";
+        error = text.maiAzureEndpointHostEmpty;
         return false;
     }
     return true;
@@ -88,8 +99,8 @@ void ProviderMai::ShowSubPage(HWND hwnd) {
     HWND hint = GetDlgItem(hwnd, IDC_MAI_HINT);
     if (hint) {
         SetWindowTextW(hint, azure
-            ? L"Azure Fast Transcription sends the complete WAV after key release. Final text only; no partial."
-            : L"OpenRouter sends the complete recording after key release. Final text only; no partial.");
+            ? ui_strings::UiText().maiAzureHint
+            : ui_strings::UiText().maiOpenRouterHint);
     }
 }
 
@@ -99,17 +110,18 @@ void ProviderMai::UpdateSubPage(HWND parent) {
 
 void ProviderMai::CreateControls(HWND hwnd) {
     s_maiInstance = this;
+    const auto& text = ui_strings::UiText();
     m_controls.clear();
     m_openRouterControls.clear();
     m_azureControls.clear();
     HWND parent = hwnd;
-    HWND control = CreateLabel(hwnd, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API");
+    HWND control = CreateLabel(hwnd, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.maiApi);
     AddMaiControl(control);
     AddMaiControl(CreateCombo(hwnd, IDC_MAI_API_PROVIDER,
                               S(UiStyle::InputLeft), S(UiStyle::RowInputY(1)),
                               S(UiStyle::ComboW), S(UiStyle::ComboH)));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Key");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.maiApiKey);
     AddMaiOpenRouterControl(control);
     HWND maiOpenRouterApiKey = CreateWindowExW(
         WS_EX_CLIENTEDGE, L"EDIT", nullptr,
@@ -123,9 +135,9 @@ void ProviderMai::CreateControls(HWND hwnd) {
     AddMaiOpenRouterControl(CreateButton(
         parent, IDC_MAI_SHOW_OPENROUTER_KEY, S(UiStyle::SmallBtnX),
         S(UiStyle::RowInputY(2)) - S(1), S(UiStyle::SmallBtnW), S(UiStyle::BtnH),
-        L"Show"));
+        text.maiShow));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Endpoint");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.maiEndpoint);
     AddMaiAzureControl(control);
     HWND maiAzureEndpoint = CreateWindowExW(
         WS_EX_CLIENTEDGE, L"EDIT", nullptr,
@@ -137,7 +149,7 @@ void ProviderMai::CreateControls(HWND hwnd) {
     ApplyUiFont(maiAzureEndpoint);
     AddMaiAzureControl(maiAzureEndpoint);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Key");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.maiApiKey);
     AddMaiAzureControl(control);
     HWND maiAzureApiKey = CreateWindowExW(
         WS_EX_CLIENTEDGE, L"EDIT", nullptr,
@@ -151,9 +163,9 @@ void ProviderMai::CreateControls(HWND hwnd) {
     AddMaiAzureControl(CreateButton(
         parent, IDC_MAI_SHOW_AZURE_KEY, S(UiStyle::SmallBtnX),
         S(UiStyle::RowInputY(3)) - S(1), S(UiStyle::SmallBtnW), S(UiStyle::BtnH),
-        L"Show"));
+        text.maiShow));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(4)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Language");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(4)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.maiLanguage);
     AddMaiControl(control);
     AddMaiControl(CreateCombo(parent, IDC_MAI_LANGUAGE,
                               S(UiStyle::InputLeft), S(UiStyle::RowInputY(4)),
@@ -166,7 +178,7 @@ void ProviderMai::CreateControls(HWND hwnd) {
 
     AddMaiControl(CreateButton(
         parent, IDC_MAI_TEST, S(500), S(UiStyle::RowInputY(4)),
-        S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection"));
+        S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), text.maiTestConnection));
 }
 
 void ProviderMai::DestroyControls() {
@@ -179,6 +191,7 @@ void ProviderMai::DestroyControls() {
 }
 
 void ProviderMai::Show(bool visible) {
+    const auto& text = ui_strings::UiText();
     for (HWND c : m_controls) {
         ShowWindow(c, visible ? SW_SHOW : SW_HIDE);
     }
@@ -191,7 +204,7 @@ void ProviderMai::Show(bool visible) {
         if (parent) {
             m_openRouterKeyVisible = false;
             HWND showMaiOpenRouter = GetDlgItem(parent, IDC_MAI_SHOW_OPENROUTER_KEY);
-            if (showMaiOpenRouter) SetWindowTextW(showMaiOpenRouter, L"Show");
+            if (showMaiOpenRouter) SetWindowTextW(showMaiOpenRouter, text.maiShow);
             HWND maiOpenRouterKey = GetDlgItem(parent, IDC_MAI_OPENROUTER_API_KEY);
             if (maiOpenRouterKey) {
                 SendMessageW(maiOpenRouterKey, EM_SETPASSWORDCHAR, L'\u25CF', 0);
@@ -199,7 +212,7 @@ void ProviderMai::Show(bool visible) {
             }
             m_azureKeyVisible = false;
             HWND showMaiAzure = GetDlgItem(parent, IDC_MAI_SHOW_AZURE_KEY);
-            if (showMaiAzure) SetWindowTextW(showMaiAzure, L"Show");
+            if (showMaiAzure) SetWindowTextW(showMaiAzure, text.maiShow);
             HWND maiAzureKey = GetDlgItem(parent, IDC_MAI_AZURE_API_KEY);
             if (maiAzureKey) {
                 SendMessageW(maiAzureKey, EM_SETPASSWORDCHAR, L'\u25CF', 0);
@@ -210,15 +223,16 @@ void ProviderMai::Show(bool visible) {
 }
 
 void ProviderMai::LoadControls(HWND parent, const Config& cfg) {
+    const auto& text = ui_strings::UiText();
     m_openRouterKeyVisible = false;
     HWND showMaiOpenRouter = GetDlgItem(parent, IDC_MAI_SHOW_OPENROUTER_KEY);
-    if (showMaiOpenRouter) SetWindowTextW(showMaiOpenRouter, L"Show");
+    if (showMaiOpenRouter) SetWindowTextW(showMaiOpenRouter, text.maiShow);
     HWND maiOpenRouterKey = GetDlgItem(parent, IDC_MAI_OPENROUTER_API_KEY);
     if (maiOpenRouterKey) SendMessageW(maiOpenRouterKey, EM_SETPASSWORDCHAR, L'\u25CF', 0);
 
     m_azureKeyVisible = false;
     HWND showMaiAzure = GetDlgItem(parent, IDC_MAI_SHOW_AZURE_KEY);
-    if (showMaiAzure) SetWindowTextW(showMaiAzure, L"Show");
+    if (showMaiAzure) SetWindowTextW(showMaiAzure, text.maiShow);
     HWND maiAzureKey = GetDlgItem(parent, IDC_MAI_AZURE_API_KEY);
     if (maiAzureKey) SendMessageW(maiAzureKey, EM_SETPASSWORDCHAR, L'\u25CF', 0);
 
@@ -237,13 +251,13 @@ void ProviderMai::LoadControls(HWND parent, const Config& cfg) {
     HWND maiLanguage = GetDlgItem(parent, IDC_MAI_LANGUAGE);
     if (maiLanguage) {
         ComboBox_ResetContent(maiLanguage);
-        for (const auto& opt : kMaiLanguages) {
-            ComboBox_AddString(maiLanguage, opt.label);
+        for (int i = 0; i < kMaiLanguageCount; ++i) {
+            ComboBox_AddString(maiLanguage, MaiLanguageLabel(text, i));
         }
         int sel = 0;
-        for (size_t i = 0; i < sizeof(kMaiLanguages) / sizeof(kMaiLanguages[0]); ++i) {
-            if (cfg.maiLanguage == kMaiLanguages[i].code) {
-                sel = static_cast<int>(i);
+        for (int i = 0; i < kMaiLanguageCount; ++i) {
+            if (cfg.maiLanguage == kMaiLanguageCodes[i]) {
+                sel = i;
                 break;
             }
         }
@@ -266,6 +280,7 @@ void ProviderMai::SaveControls(HWND parent, Config& cfg) {
 }
 
 bool ProviderMai::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
+    const auto& text = ui_strings::UiText();
     switch (controlId) {
     case IDC_MAI_API_PROVIDER:
         if (notifyCode == CBN_SELCHANGE) {
@@ -282,7 +297,7 @@ bool ProviderMai::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HW
         }
         HWND button = GetDlgItem(parent, IDC_MAI_SHOW_OPENROUTER_KEY);
         if (button) {
-            SetWindowTextW(button, m_openRouterKeyVisible ? L"Hide" : L"Show");
+            SetWindowTextW(button, m_openRouterKeyVisible ? text.maiHide : text.maiShow);
         }
         return true;
     }
@@ -295,7 +310,7 @@ bool ProviderMai::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HW
         }
         HWND button = GetDlgItem(parent, IDC_MAI_SHOW_AZURE_KEY);
         if (button) {
-            SetWindowTextW(button, m_azureKeyVisible ? L"Hide" : L"Show");
+            SetWindowTextW(button, m_azureKeyVisible ? text.maiHide : text.maiShow);
         }
         return true;
     }
@@ -318,8 +333,8 @@ bool ProviderMai::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HW
             }
         }
         SetStatus(parent,
-            azure ? L"Testing MAI Azure Fast Transcription connection..."
-                  : L"Testing MAI OpenRouter connection...");
+            azure ? text.maiTestingAzure
+                  : text.maiTestingOpenRouter);
 
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"mai", snap };

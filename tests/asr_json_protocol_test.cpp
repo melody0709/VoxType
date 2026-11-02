@@ -490,7 +490,7 @@ int wmain() {
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 110, "registry total entry count is 110");
+        CHECK(reg.GetEntries().size() == 111, "registry total entry count is 111");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -731,6 +731,32 @@ int wmain() {
         }
         CHECK(cfgOld.enableLlm == true, "legacy config migration: enableLlm migrated from postprocess==llm");
         CHECK(cfgOld.postprocess == L"auto", "legacy config migration: postprocess migrated to auto");
+
+        // ui_language：界面语言持久值的 JSON 往返，与 LoadConfig 走的加载归一化
+        // （NormalizeUiLanguage 是生产代码，非本测试复制品）。
+        {
+            Config langCfg;
+            langCfg.uiLanguage = L"zh";
+            const std::string langJson = reg.SaveJson(langCfg);
+            CHECK(langJson.find("\"ui_language\"") != std::string::npos,
+                  "ui_language serialized in json");
+            Config langLoaded;
+            reg.LoadJson(langLoaded, langJson);
+            CHECK(langLoaded.uiLanguage == L"zh", "ui_language roundtrip zh");
+            Config langEn;
+            reg.LoadJson(langEn, "{\"ui_language\":\"en\"}");
+            CHECK(langEn.uiLanguage == L"en", "ui_language loads en");
+            NormalizeUiLanguage(langEn);
+            CHECK(langEn.uiLanguage == L"en", "NormalizeUiLanguage keeps en");
+            NormalizeUiLanguage(langLoaded);
+            CHECK(langLoaded.uiLanguage == L"zh", "NormalizeUiLanguage keeps zh");
+            for (const wchar_t* bad : {L"", L"bogus", L"EN", L"ja"}) {
+                Config badCfg;
+                badCfg.uiLanguage = bad;
+                NormalizeUiLanguage(badCfg);
+                CHECK(badCfg.uiLanguage == L"auto", "NormalizeUiLanguage falls back to auto");
+            }
+        }
 
         // Prompt preset and backup state logic
         std::wstring customBackup = L"My Custom System Prompt";

@@ -78,6 +78,7 @@ flowchart LR
 | `src/ui/hud_pagination.h` / `src/ui/hud_pagination.cpp` | HUD 文本行换行、分页计算与可视范围裁剪 |
 | `src/ui/ui_types.h` | UI 布局度量、颜色常量、控件 ID、DPI 辅助常量 |
 | `src/ui/ui_theme.h` / `src/ui/ui_theme.cpp` | UI 字体与画刷等 GDI/DirectWrite 主题资源生命周期管理 |
+| `src/ui/ui_strings.h` / `src/ui/ui_strings.cpp` | Settings 界面双语文案表（英/中，X-macro 清单 `ui_strings.inc`）与界面语言选择（`ui_language` 配置：auto/en/zh） |
 | `src/ui/hotkey.h` / `src/ui/hotkey.cpp` | 热键配置、CapsLock 长按逻辑、`WH_KEYBOARD_LL` Hook、`HotkeyEdit` 自绘控件 |
 | `src/ui/settings.h` / `src/ui/settings.cpp` | Settings 窗口外壳、Tab 切换器、顶层窗口布局与事件分发 |
 | `src/ui/tabs/` | 模块化 Settings Tab 面板：`tab_general`、`tab_advanced`、`tab_speech_engine`、`tab_vocabulary`、`tab_llm`，共享基类 `settings_tab_base` |

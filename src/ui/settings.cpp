@@ -7,6 +7,7 @@
 #include "app_state.h"
 #include "app_messages.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "ui_theme.h"
 #include "ui_utils.h"
 #include "asr_probe_service.h"
@@ -50,16 +51,6 @@ ui_tab::ISettingsTab* const s_tabs[kTabCount] = {
 
 } // namespace
 
-void SetStatus(HWND hwnd, const std::wstring& text) {
-    HWND status = GetDlgItem(hwnd, IDC_STATUS);
-    if (!status && g_settingsWindow) {
-        status = GetDlgItem(g_settingsWindow, IDC_STATUS);
-    }
-    if (status) {
-        SetWindowTextW(status, text.c_str());
-    }
-}
-
 void ShowSettingsPage(HWND hwnd, int page) {
     for (size_t i = 0; i < kTabCount; ++i) s_tabs[i]->Show(static_cast<int>(i) == page);
     InvalidateRect(hwnd, nullptr, TRUE);
@@ -67,7 +58,7 @@ void ShowSettingsPage(HWND hwnd, int page) {
 
 void LoadSettingsControls(HWND hwnd) {
     for (auto* t : s_tabs) t->LoadControls(hwnd, g_config);
-    SetStatus(hwnd, L"Ready.");
+    SetStatus(hwnd, ui_strings::UiText().statusReady);
 }
 
 void SaveSettingsControls(HWND hwnd) {
@@ -93,32 +84,17 @@ void SaveSettingsControls(HWND hwnd) {
     }
 
     SaveConfig(g_config);
-    SetStatus(hwnd, fallbackAdjusted
-        ? L"Saved. Fallback disabled because it matches ASR Backend."
-        : L"Saved. ASR engine reloaded.");
+    // 语言变更的生效方式是重建整个 Settings 窗口（控件与 Tab 名全部换表）。先切表再取
+    // 状态文案，重建后的新窗口补写它；否则新窗口 WM_CREATE 的 "Ready." 会盖掉保存反馈。
+    const bool languageChanged = ui_strings::ApplyUiLanguageFromConfig(g_config.uiLanguage);
+    if (languageChanged) {
+        PostMessageW(hwnd, kUiLanguageReapplyMessage, fallbackAdjusted ? 1 : 0, 0);
+    } else {
+        SetStatus(hwnd, fallbackAdjusted
+            ? ui_strings::UiText().statusSavedFallbackDisabled
+            : ui_strings::UiText().statusSaved);
+    }
     PostMessageW(g_mainWindow, kReloadMessage, 0, 0);
-}
-
-void LayoutSettingsWindow(HWND hwnd) {
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    const int margin = S(UiStyle::Margin);
-    const int footerHeight = S(UiStyle::FooterHeight);
-    const int footerTop = (rc.bottom - footerHeight > S(UiStyle::FooterMinTop)) ? rc.bottom - footerHeight : S(UiStyle::FooterMinTop);
-    const int tabBottom = footerTop - S(4);
-    HWND tab = GetDlgItem(hwnd, IDC_SETTINGS_TAB);
-    if (tab) {
-        MoveWindow(tab, margin, S(12), rc.right - margin * 2, tabBottom - S(12), TRUE);
-    }
-    const int availableFooterH = rc.bottom - footerTop;
-    const int btnY = footerTop + (availableFooterH - S(UiStyle::ActionBtnH)) / 2;
-    HWND status = GetDlgItem(hwnd, IDC_STATUS);
-    if (status) {
-        MoveWindow(status, margin, btnY + S(4), rc.right - margin * 2 - S(300), S(28), TRUE);
-    }
-    HWND save = GetDlgItem(hwnd, IDC_SAVE), close = GetDlgItem(hwnd, IDC_CANCEL);
-    if (save) MoveWindow(save, rc.right - margin - S(192), btnY, S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
-    if (close) MoveWindow(close, rc.right - margin - S(UiStyle::FooterBtnW), btnY, S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
 }
 
 void CloseSettingsWindow(HWND hwnd) {
@@ -186,7 +162,9 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         ApplyUiFont(tab);
         TCITEMW item = {};
         item.mask = TCIF_TEXT;
-        for (auto* name : {L"General && Input", L"Speech Engine", L"Vocabulary", L"LLM", L"Audio && Advanced"}) {
+        for (auto* name : {ui_strings::UiText().tabGeneral, ui_strings::UiText().tabSpeechEngine,
+                           ui_strings::UiText().tabVocabulary, ui_strings::UiText().tabLlm,
+                           ui_strings::UiText().tabAdvanced}) {
             item.pszText = const_cast<LPWSTR>(name);
             TabCtrl_InsertItem(tab, 100, &item);
         }
@@ -196,8 +174,8 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         HWND status = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                     S(UiStyle::Margin) * 2, S(UiStyle::FooterMinTop) + S(21), S(520), S(UiStyle::LabelH), hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STATUS)), g_instance, nullptr);
         ApplyUiFont(status);
-        CreateButton(hwnd, IDC_SAVE, S(626), S(UiStyle::FooterMinTop) + S(21), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"Save");
-        CreateButton(hwnd, IDC_CANCEL, S(726), S(UiStyle::FooterMinTop) + S(21), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"Close");
+        CreateButton(hwnd, IDC_SAVE, S(626), S(UiStyle::FooterMinTop) + S(21), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), ui_strings::UiText().footerSave);
+        CreateButton(hwnd, IDC_CANCEL, S(726), S(UiStyle::FooterMinTop) + S(21), S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), ui_strings::UiText().footerClose);
 
         LoadSettingsControls(hwnd);
         ShowSettingsPage(hwnd, 0);
@@ -252,13 +230,13 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         }
         const bool ok = (static_cast<uint64_t>(wParam) & 1) == 0;
         if (ok) {
-            SetStatus(hwnd, msg ? msg->c_str() : L"OK");
+            SetStatus(hwnd, msg ? msg->c_str() : ui_strings::UiText().testOk);
         } else {
-            std::wstring shortMsg = L"Connection failed";
+            std::wstring shortMsg = ui_strings::UiText().testFailedShort;
             if (msg) {
                 size_t nl = msg->find(L'\n');
-                shortMsg = L"Connection failed: " + (nl != std::wstring::npos ? msg->substr(0, nl) : *msg);
-                MessageBoxW(hwnd, msg->c_str(), L"Connection Test Failed", MB_ICONERROR | MB_OK);
+                shortMsg = std::wstring(ui_strings::UiText().testFailedPrefix) + (nl != std::wstring::npos ? msg->substr(0, nl) : *msg);
+                MessageBoxW(hwnd, msg->c_str(), ui_strings::UiText().testFailedTitle, MB_ICONERROR | MB_OK);
             }
             SetStatus(hwnd, shortMsg.c_str());
         }
@@ -283,6 +261,9 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     }
     case kDoubaoImeSettingsRefreshMessage:
         ui_provider::RefreshDoubaoImeStatus(hwnd);
+        return 0;
+    case kUiLanguageReapplyMessage:
+        RebuildSettingsWindowForLanguage(hwnd, wParam != 0);
         return 0;
     case WM_DPICHANGED: {
         const int curPage = TabCtrl_GetCurSel(GetDlgItem(hwnd, IDC_SETTINGS_TAB));
@@ -361,22 +342,23 @@ LRESULT CALLBACK SettingsWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 }
 
 void ShowSettingsWindow(HWND owner) {
+    // 已保存的界面语言在创建前应用：重启后首次打开也按配置语言渲染。
+    ui_strings::ApplyUiLanguageFromConfig(g_config.uiLanguage);
+    bool maximized = false;
     if (!g_settingsWindow) {
-        UpdateUiScale(owner);
-        const int w = S(UiStyle::SettingsWindowW);
-        const int h = S(UiStyle::SettingsWindowH);
-        RECT work = GetWorkAreaForWindow(owner);
-        int x = work.left + (work.right - work.left - w) / 2;
-        int y = work.top + (work.bottom - work.top - h) / 2;
+        RECT frame = {};
+        DefaultSettingsWindowRect(owner, frame);
         g_settingsWindow = CreateWindowExW(
-            WS_EX_APPWINDOW, kSettingsClass, L"VoxType Settings",
+            WS_EX_APPWINDOW, kSettingsClass, ui_strings::UiText().settingsTitle,
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
-            x, y, w, h,
+            frame.left, frame.top, frame.right - frame.left, frame.bottom - frame.top,
             owner, nullptr, g_instance, nullptr);
+        // 语言切换重建：恢复销毁前的摆放（坐标换算与最大化态分开处理）。
+        maximized = ApplyCapturedSettingsPlacement(g_settingsWindow, frame);
     }
     if (g_settingsWindow) {
         ui_tab::RefreshStartupRegistrationControl(g_settingsWindow, true);
-        ShowWindow(g_settingsWindow, SW_SHOW);
+        ShowWindow(g_settingsWindow, maximized ? SW_SHOWMAXIMIZED : SW_SHOW);
         SetForegroundWindow(g_settingsWindow);
     }
 }

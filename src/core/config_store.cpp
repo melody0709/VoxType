@@ -166,6 +166,7 @@ void LoadConfig(Config& config) {
         config.maiLanguage != L"yue") {
         config.maiLanguage = L"auto";
     }
+    NormalizeUiLanguage(config);
     if (config.volcEndWindowSize <= 0) config.volcEndWindowSize = 800;
     if (config.volcContextHistory < 1) config.volcContextHistory = 3;
     if (config.volcContextHistory > 20) config.volcContextHistory = 20;

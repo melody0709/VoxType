@@ -66,6 +66,8 @@ struct Config {
     std::wstring voicePunctMode = L"keep_all";
     bool voiceSpacingEnabled = false;
     std::wstring hotkey = L"CapsLock";
+    // Settings 界面语言（auto / en / zh）；只影响 UI 文案，与各引擎的识别语言无关。
+    std::wstring uiLanguage = L"auto";
     bool enableLlm = false;
     std::wstring llmProvider = L"DeepSeek";
     std::wstring llmEndpoint = L"https://api.deepseek.com";
@@ -242,6 +244,13 @@ void SaveCurrentProvider(Config& config);
 bool LoadProviderFromStore(Config& config, const std::wstring& name);
 int FindPresetIndex(const std::wstring& name);
 bool ApplyPreset(Config& config, int index, bool preserveLegacyFields = false);
+// 界面语言持久值的加载归一化：非 en/zh 一律回退 auto。LoadConfig 在 LoadJson 后
+// 调用（唯一生产调用点）；inline 放在头里是为了让离线测试直接覆盖回退语义。
+inline void NormalizeUiLanguage(Config& config) {
+    if (config.uiLanguage != L"en" && config.uiLanguage != L"zh") {
+        config.uiLanguage = L"auto";
+    }
+}
 void LoadConfig(Config& config);
 void SaveConfig(const Config& config);
 

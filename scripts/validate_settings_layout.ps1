@@ -41,6 +41,7 @@ $firstRowY = Get-UiInt 'FirstRowY'
 $rowHeight = Get-UiInt 'RowHeight'
 $labelHeight = Get-UiInt 'LabelH'
 $editHeight = Get-UiInt 'EditH'
+$hotkeyEditH = Get-UiInt 'HotkeyEditH'
 $checkHeight = Get-UiInt 'CheckH'
 $actionButtonH = Get-UiInt 'ActionBtnH'
 $settingsWindowWidth = Get-UiInt 'SettingsWindowW'
@@ -56,13 +57,20 @@ $groupX = Get-UiInt 'GeneralGroupX'
 $groupWidth = Get-UiInt 'GeneralGroupW'
 
 # Tab 1 (General & Input)
-$shortcutHeight = Get-UiInt 'GeneralShortcutGroupH'
+$shortcutHeight = Get-UiInt 'GeneralShortcutStartupGroupH'
+$shortcutRowOffsetY = Get-UiInt 'GeneralShortcutRowOffsetY'
+$shortcutLabelOffsetY = Get-UiInt 'GeneralShortcutLabelOffsetY'
+$shortcutHintOffsetY = Get-UiInt 'GeneralShortcutHintOffsetY'
+$startupCheckOffsetY = Get-UiInt 'GeneralStartupCheckInShortcutOffsetY'
+$startupCheckWidth = Get-UiInt 'GeneralStartupCheckInShortcutW'
+$groupHintWidth = Get-UiInt 'GeneralGroupHintW'
 $inputGroupGap = Get-UiInt 'GeneralInputGroupGap'
 $inputGroupH = Get-UiInt 'GeneralInputGroupH'
-$startupGap = Get-UiInt 'GeneralStartupGroupGap'
-$startupHeight = Get-UiInt 'GeneralStartupGroupH'
-$startupHintOffsetY = Get-UiInt 'GeneralStartupHintOffsetY'
-$hintWidth = Get-UiInt 'GeneralStartupHintW'
+$languageGap = Get-UiInt 'GeneralLanguageGroupGap'
+$languageHeight = Get-UiInt 'GeneralLanguageGroupH'
+$languageRowOffsetY = Get-UiInt 'GeneralLanguageRowOffsetY'
+$languageHintOffsetY = Get-UiInt 'GeneralLanguageHintOffsetY'
+$languageComboWidth = Get-UiInt 'ComboW'
 $browserGap = Get-UiInt 'GeneralBrowserGroupGap'
 $browserHeight = Get-UiInt 'GeneralBrowserGroupH'
 $browserHintOffsetY = Get-UiInt 'GeneralBrowserHintOffsetY'
@@ -244,20 +252,51 @@ $tabContentBottom = $footerMinTop - 4 - $margin
 
 # --- Tab 1: General & Input -------------------------------------------------
 $generalInputY = $firstRowY + $shortcutHeight + $inputGroupGap
-$generalStartupY = $generalInputY + $inputGroupH + $startupGap
-$generalBrowserY = $generalStartupY + $startupHeight + $browserGap
-$generalBottom = $generalBrowserY + $browserHeight
+$generalBrowserY = $generalInputY + $inputGroupH + $browserGap
+$generalLanguageY = $generalBrowserY + $browserHeight + $languageGap
+$generalBottom = $generalLanguageY + $languageHeight
 if ($generalBottom -gt $tabContentBottom) {
     throw "Tab 1 reaches the tab work-area bottom: bottom=$generalBottom, limit=$tabContentBottom"
 }
 if (($groupX + $groupWidth) -gt $workAreaRight) {
     throw 'General group exceeds the Settings design width'
 }
-if (($contentLeft + $hintWidth) -gt ($groupX + $groupWidth)) {
-    throw 'Startup explanatory text exceeds the General group width'
+# Merged "Shortcut & Startup" group stacks three rows (hotkey, single-line hint,
+# startup checkbox). The rows must clear each other and stay inside the group:
+# folding the old standalone Startup group in is what freed the Language group's
+# vertical budget, so a drifting offset here is a silent overlap, not a build error.
+if (($shortcutRowOffsetY + $hotkeyEditH) -gt $shortcutHintOffsetY) {
+    throw "Shortcut hotkey row overlaps the merged-group hint line (row bottom $($shortcutRowOffsetY + $hotkeyEditH), hint top $shortcutHintOffsetY)"
 }
-if (($startupHintOffsetY + $qwenHint2LineHeight) -gt $startupHeight) {
-    throw 'Startup explanatory text keeps a single-line box and would clip its second line'
+if (($shortcutLabelOffsetY + $labelHeight) -gt $shortcutHintOffsetY) {
+    throw "Shortcut row label overlaps the merged-group hint line (label bottom $($shortcutLabelOffsetY + $labelHeight), hint top $shortcutHintOffsetY)"
+}
+if (($shortcutHintOffsetY + $labelHeight) -gt $startupCheckOffsetY) {
+    throw "Shortcut hint box overlaps the startup checkbox (hint bottom $($shortcutHintOffsetY + $labelHeight), checkbox top $startupCheckOffsetY)"
+}
+if (($startupCheckOffsetY + $checkHeight) -gt $shortcutHeight) {
+    throw "Startup checkbox overflows the merged Shortcut & Startup group (bottom $($startupCheckOffsetY + $checkHeight), group height $shortcutHeight)"
+}
+if (($contentLeft + $startupCheckWidth) -gt ($groupX + $groupWidth)) {
+    throw 'Startup checkbox exceeds the merged Shortcut & Startup group width'
+}
+# Both single-line group hints share one width constant; the English sentence is
+# the wide one, so pinning the box against the group right edge is the only
+# static defence available (rendered text width cannot be measured here).
+if (($contentLeft + $groupHintWidth) -gt ($groupX + $groupWidth)) {
+    throw 'Group hint lines exceed the General group width'
+}
+# Language group rows: the combo row must clear the hint line, and the hint must
+# stay inside the group. The language picker label is a privacy-short caption, so
+# only the row geometry is pinned here (text width is checked by eye at 96 DPI).
+if (($languageRowOffsetY + $editHeight) -gt $languageHintOffsetY) {
+    throw "Language combo row overlaps its hint line (row bottom $($languageRowOffsetY + $editHeight), hint top $languageHintOffsetY)"
+}
+if (($languageHintOffsetY + $labelHeight) -gt $languageHeight) {
+    throw "Language hint overflows the language group (hint bottom $($languageHintOffsetY + $labelHeight), group height $languageHeight)"
+}
+if (($inputLeft + $languageComboWidth) -gt ($groupX + $groupWidth)) {
+    throw 'Language picker combo exceeds the General group width'
 }
 if (($contentLeft + $browserHintWidth) -gt ($groupX + $groupWidth)) {
     throw 'Browser explanatory text exceeds the General group width'
@@ -689,7 +728,8 @@ foreach ($required in @(
         'void ShowMaiApiSubPage(HWND hwnd)',
         'ProviderMai::ShowSubPage(',
         'cfg.maiOpenRouterApiKey = QwenControlText(',
-        'L"Input context"',
+        'qwenInputContextLabel',
+        'volcInputContextLabel',
         'mai_transcribe::TestConnection')) {
     if (!$cleanGlobals.Contains($required) -and !$cleanSettingsWithHeaders.Contains($required)) {
         throw "Startup Settings wiring is missing: $required"
@@ -698,7 +738,7 @@ foreach ($required in @(
 
 # --- LLM page: vocabulary injection wiring and Row 0 placement ---------------
 foreach ($required in @(
-        'L"Feed vocabulary to LLM"',
+        'llmFeedVocabularyLabel',
         'S(UiStyle::ContentLeft + UiStyle::LlmVocabularyInjectOffsetX), S(UiStyle::RowInputY(0)),',
         'S(UiStyle::LlmVocabularyInjectW), S(UiStyle::CheckH),',
         'EnableWindow(GetDlgItem(parent, IDC_LLM_VOCAB_INJECT), masterEnabled);',
@@ -752,6 +792,7 @@ foreach ($requiredOwner in @(
         @{ Id = 'IDC_VOICE_SPACING'; File = 'tab_general.cpp' },
         @{ Id = 'IDC_LEARNING_ENABLED'; File = 'tab_general.cpp' },
         @{ Id = 'IDC_LEARNING_CLEAR'; File = 'tab_general.cpp' },
+        @{ Id = 'IDC_UI_LANGUAGE'; File = 'tab_general.cpp' },
         @{ Id = 'IDC_POSTPROCESS'; File = 'provider_local.cpp' },
         @{ Id = 'IDC_MODEL'; File = 'provider_local.cpp' },
         @{ Id = 'IDC_THREADS'; File = 'provider_local.cpp' },

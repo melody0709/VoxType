@@ -11,6 +11,7 @@
 #include "vocabulary_manager.h"
 #include "utils.h"
 #include "llm_refine.h"
+#include "ui_strings.h"
 
 #include <commctrl.h>
 #include <windowsx.h>
@@ -282,17 +283,17 @@ bool ReadQwenAdvancedDialog(HWND hwnd, QwenAdvancedDialogData& data, std::wstrin
 
     const int silenceMs = _wtoi(data.maxSentenceSilence.c_str());
     if (data.streaming && (silenceMs < 200 || silenceMs > 6000)) {
-        error = L"Max sentence silence must be between 200 and 6000 ms.";
+        error = ui_strings::UiText().dlgErrMaxSentenceSilence;
         return false;
     }
     if (data.semanticPunctuation && data.multiThreshold) {
-        error = L"Semantic punctuation and multi-threshold cannot be enabled together.";
+        error = ui_strings::UiText().dlgErrSemanticMultiConflict;
         return false;
     }
     if (data.speechNoiseEnabled) {
         const double threshold = _wtof(data.speechNoiseThreshold.c_str());
         if (threshold < -1.0 || threshold > 1.0) {
-            error = L"Speech noise threshold must be between -1.0 and 1.0.";
+            error = ui_strings::UiText().dlgErrNoiseThresholdRange;
             return false;
         }
     }
@@ -311,15 +312,16 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
     switch (msg) {
     case WM_CREATE: {
         UpdateUiScale(hwnd);
+        const auto& text = ui_strings::UiText();
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
         state = reinterpret_cast<QwenAdvancedDialogState*>(cs->lpCreateParams);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
         data = state ? state->data : nullptr;
-        SetWindowTextW(hwnd, L"Qwen ASR Advanced Settings");
+        SetWindowTextW(hwnd, text.dlgQwenAdvancedTitle);
 
         HINSTANCE hInst = GetParentInstance(hwnd);
         state->controls.vocabIdLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabIdLabelY),
-                    S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), L"Vocabulary ID");
+                    S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), text.dlgQwenVocabIdLabel);
         state->controls.vocabId = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                        S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdY),
@@ -329,17 +331,17 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         ApplyUiFont(state->controls.vocabId);
         state->controls.vocabIdHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabIdHintY),
                     S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH),
-                    L"Optional. Its target model must match the selected ASR model.");
+                    text.dlgQwenVocabIdHint);
 
         state->controls.vocabJsonLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogVocabJsonLabelY),
-                    S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), L"Inline vocabulary");
+                    S(UiStyle::QwenAdvancedDialogTagLabelW), S(UiStyle::LabelH), text.dlgQwenVocabJsonLabel);
         state->controls.vocabJsonHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogInputLeft), S(UiStyle::QwenAdvancedDialogVocabJsonHintY),
                    S(UiStyle::QwenAdvancedDialogInputW), S(UiStyle::QwenHint2LineH),
-                   L"Managed globally in the top-level \"Vocabulary\" tab (%APPDATA%\\VoxType\\vocabulary.json), shared with Volcano Engine.");
+                   text.dlgQwenVocabJsonHint);
 
         const wchar_t* groupTitle = data && data->streaming
-            ? L"Streaming recognition"
-            : L"Streaming recognition (not used by this model)";
+            ? text.dlgQwenStreamingGroup
+            : text.dlgQwenStreamingGroupUnused;
         state->controls.streamingGroup = CreateWindowW(L"BUTTON", groupTitle, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                    S(UiStyle::QwenAdvancedDialogLeft), S(UiStyle::QwenAdvancedDialogStreamingGroupY),
                                    S(UiStyle::QwenAdvancedDialogGroupW), S(UiStyle::QwenAdvancedDialogStreamingGroupH),
@@ -348,9 +350,9 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
         state->controls.semantic = CreateCheckBox(hwnd, IDC_QWEN_SEMANTIC_PUNCTUATION,
                                        S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingRow1Y),
-                                       S(UiStyle::QwenAdvancedDialogSemanticW), S(UiStyle::CheckH), L"Semantic punctuation");
+                                       S(UiStyle::QwenAdvancedDialogSemanticW), S(UiStyle::CheckH), text.dlgQwenSemanticPunctuation);
         state->controls.silenceLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogStreamingRow1Y) + S(4),
-                    S(UiStyle::QwenAdvancedDialogSilenceLabelW), S(UiStyle::LabelH), L"Max silence (ms)");
+                    S(UiStyle::QwenAdvancedDialogSilenceLabelW), S(UiStyle::LabelH), text.dlgQwenMaxSilenceLabel);
         state->controls.silence = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                        S(UiStyle::QwenAdvancedDialogCol2X + UiStyle::QwenAdvancedDialogSilenceEditDx), S(UiStyle::QwenAdvancedDialogStreamingRow1Y), S(UiStyle::QwenAdvancedDialogSilenceEditW), S(UiStyle::EditH),
@@ -359,45 +361,45 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         ApplyUiFont(state->controls.silence);
         state->controls.streamingHint1 = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingHint1Y),
                    S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH),
-                   L"Semantic punctuation splits by meaning. Max silence finalizes after 200–6000 ms.");
+                   text.dlgQwenStreamingHint1);
 
         state->controls.multi = CreateCheckBox(hwnd, IDC_QWEN_MULTI_THRESHOLD,
                                     S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingRow2Y),
-                                    S(UiStyle::QwenAdvancedDialogMultiW), S(UiStyle::CheckH), L"Multi-threshold");
+                                    S(UiStyle::QwenAdvancedDialogMultiW), S(UiStyle::CheckH), text.dlgQwenMultiThreshold);
         state->controls.heartbeat = CreateCheckBox(hwnd, IDC_QWEN_HEARTBEAT,
                                         S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogStreamingRow2Y),
-                                        S(UiStyle::QwenAdvancedDialogHeartbeatW), S(UiStyle::CheckH), L"Heartbeat");
+                                        S(UiStyle::QwenAdvancedDialogHeartbeatW), S(UiStyle::CheckH), text.dlgQwenHeartbeat);
         state->controls.streamingHint2 = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogStreamingHint2Y),
                    S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH),
-                   L"For noisy audio; can't combine with semantic punctuation. Heartbeat keeps the connection alive.");
+                   text.dlgQwenStreamingHint2);
 
         state->controls.noiseEnable = CreateCheckBox(hwnd, IDC_QWEN_SPEECH_NOISE_ENABLE,
                                           S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogNoiseY),
-                                          S(UiStyle::QwenAdvancedDialogNoiseEnableW), S(UiStyle::CheckH), L"Speech noise threshold");
+                                          S(UiStyle::QwenAdvancedDialogNoiseEnableW), S(UiStyle::CheckH), text.dlgQwenNoiseEnable);
         state->controls.noise = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                      S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogNoiseEditDx), S(UiStyle::QwenAdvancedDialogNoiseY), S(UiStyle::QwenAdvancedDialogNoiseEditW), S(UiStyle::EditH),
                                      hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_QWEN_SPEECH_NOISE_THRESHOLD)),
                                      hInst, nullptr);
         ApplyUiFont(state->controls.noise);
-        state->controls.noiseHintUnit = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogNoiseY) + S(4), S(UiStyle::QwenAdvancedDialogNoiseUnitW), S(UiStyle::QwenHintH), L"-1.0 to 1.0");
+        state->controls.noiseHintUnit = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogNoiseY) + S(4), S(UiStyle::QwenAdvancedDialogNoiseUnitW), S(UiStyle::QwenHintH), text.dlgQwenNoiseHintUnit);
         state->controls.noiseHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogNoiseHintY),
-                   S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHintH), L"Only enable for difficult recording environments.");
+                   S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHintH), text.dlgQwenNoiseHint);
 
         state->controls.continueContext = CreateCheckBox(
             hwnd, IDC_QWEN_CONTINUE_CONTEXT,
             S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogContinueY),
-            S(UiStyle::QwenAdvancedDialogContinueW), S(UiStyle::CheckH), L"Refresh context once before finish");
+            S(UiStyle::QwenAdvancedDialogContinueW), S(UiStyle::CheckH), text.dlgQwenContinueContext);
         state->controls.systemFilter = CreateCheckBox(
             hwnd, IDC_QWEN_SYSTEM_FILTER,
             S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogContinueY),
-            S(UiStyle::QwenAdvancedDialogSystemFilterW), S(UiStyle::CheckH), L"System reserved filter");
+            S(UiStyle::QwenAdvancedDialogSystemFilterW), S(UiStyle::CheckH), text.dlgQwenSystemFilter);
         state->controls.continueHint = CreateHint(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogContinueHintY),
                    S(UiStyle::QwenAdvancedDialogHintW), S(UiStyle::QwenHint2LineH),
-                   L"Audio 3 only. Requires focused-field context.\nReads once in the worker thread; no polling.");
+                   text.dlgQwenContinueHint);
 
         state->controls.vadModelLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol1X),
-                    S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(UiStyle::QwenAdvancedDialogVadLabelW), S(UiStyle::LabelH), L"VAD model");
+                    S(UiStyle::QwenAdvancedDialogDialectY) + S(4), S(UiStyle::QwenAdvancedDialogVadLabelW), S(UiStyle::LabelH), text.dlgQwenVadModelLabel);
         state->controls.vadModel = CreateCombo(hwnd, IDC_QWEN_VAD_MODEL,
                     S(UiStyle::QwenAdvancedDialogCol1X + UiStyle::QwenAdvancedDialogVadComboDx), S(UiStyle::QwenAdvancedDialogDialectY), S(UiStyle::QwenAdvancedDialogVadComboW), S(UiStyle::ComboH));
         // The provider default stays first so an untouched 3.1 recording keeps
@@ -406,13 +408,13 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         ComboBox_AddString(state->controls.vadModel, L"near_meeting_16k");
         state->controls.keepDialect = CreateCheckBox(hwnd, IDC_QWEN_KEEP_DIALECT,
                     S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogDialectY), S(UiStyle::QwenAdvancedDialogKeepDialectW), S(UiStyle::CheckH),
-                    L"Keep dialect (3.1)");
+                    text.dlgQwenKeepDialect);
         state->controls.disfluencyRemoval = CreateCheckBox(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL,
                     S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogMessageY),
-                    S(UiStyle::QwenAdvancedDialogDisfluencyW), S(UiStyle::CheckH), L"Filler-word removal / polish (3.1 message)");
+                    S(UiStyle::QwenAdvancedDialogDisfluencyW), S(UiStyle::CheckH), text.dlgQwenDisfluencyRemoval);
 
         state->controls.specialReplaceLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol1X), S(UiStyle::QwenAdvancedDialogSpecialLabelY),
-                    S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH), L"Replace words (*) — one per line:");
+                    S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH), text.dlgQwenSpecialReplaceLabel);
         state->controls.specialReplace = CreateWindowExW(
             WS_EX_CLIENTEDGE, L"EDIT", nullptr,
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
@@ -424,7 +426,7 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 
         state->controls.specialEmptyLabel = CreateLabel(hwnd, S(UiStyle::QwenAdvancedDialogCol2X), S(UiStyle::QwenAdvancedDialogSpecialLabelY),
                     S(UiStyle::QwenAdvancedDialogSpecialW), S(UiStyle::LabelH),
-                    L"Delete words — 32 total max:");
+                    text.dlgQwenSpecialEmptyLabel);
         state->controls.specialEmpty = CreateWindowExW(
             WS_EX_CLIENTEDGE, L"EDIT", nullptr,
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
@@ -435,9 +437,9 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
         ApplyUiFont(state->controls.specialEmpty);
 
         state->controls.okButton = CreateButton(hwnd, IDOK, S(UiStyle::QwenAdvancedDialogOkBtnX), S(UiStyle::QwenAdvancedDialogFooterY),
-                                     S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"OK");
+                                     S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), text.dlgOk);
         state->controls.cancelButton = CreateButton(hwnd, IDCANCEL, S(UiStyle::QwenAdvancedDialogCancelBtnX), S(UiStyle::QwenAdvancedDialogFooterY),
-                                         S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), L"Cancel");
+                                         S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), text.dlgCancel);
         SendMessageW(state->controls.okButton, BM_SETSTYLE, BS_DEFPUSHBUTTON, TRUE);
 
         if (data) {
@@ -515,7 +517,7 @@ LRESULT CALLBACK QwenAdvancedWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             if (state && state->data) {
                 std::wstring error;
                 if (!ReadQwenAdvancedDialog(hwnd, *state->data, error, state->validator)) {
-                    MessageBoxW(hwnd, error.c_str(), L"Invalid Qwen Advanced Settings", MB_OK | MB_ICONERROR);
+                    MessageBoxW(hwnd, error.c_str(), ui_strings::UiText().dlgQwenInvalidTitle, MB_OK | MB_ICONERROR);
                     return 0;
                 }
                 state->data->ok = true;
@@ -677,6 +679,7 @@ LRESULT CALLBACK InputWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_CREATE: {
         UpdateUiScale(hDlg);
+        const auto& text = ui_strings::UiText();
         auto* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
         auto* data = reinterpret_cast<InputDlgData*>(cs->lpCreateParams);
         SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(data));
@@ -687,10 +690,10 @@ LRESULT CALLBACK InputWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
                                     S(18), S(18), S(UiStyle::InputDlgEditW), S(UiStyle::EditH), hDlg,
                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_INPUT_EDIT)),
                                     hInst, nullptr);
-        HWND okBtn = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP,
+        HWND okBtn = CreateWindowW(L"BUTTON", text.dlgOk, WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP,
                                    S(18), S(UiStyle::InputDlgBtnY), S(UiStyle::FooterBtnW), S(UiStyle::BtnH), hDlg,
                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDOK)), hInst, nullptr);
-        HWND cancelBtn = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+        HWND cancelBtn = CreateWindowW(L"BUTTON", text.dlgCancel, WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                        S(18) + S(UiStyle::FooterBtnW) + S(12), S(UiStyle::InputDlgBtnY),
                                        S(UiStyle::FooterBtnW), S(UiStyle::BtnH), hDlg,
                                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)), hInst, nullptr);
@@ -761,56 +764,57 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
     switch (msg) {
     case WM_CREATE: {
         UpdateUiScale(hDlg);
+        const auto& text = ui_strings::UiText();
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
         state = reinterpret_cast<VolcAdvancedDialogState*>(cs->lpCreateParams);
         SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
         if (!state) return -1;
-        SetWindowTextW(hDlg, L"Volcano Engine Advanced Settings");
+        SetWindowTextW(hDlg, text.dlgVolcAdvancedTitle);
 
         const VolcAdvancedDialogData* data = state->data;
         HINSTANCE hInst = GetParentInstance(hDlg);
         const int groupW = S(UiStyle::VolcAdvancedDlgGroupW);
         const int labelW = S(UiStyle::LabelWidth);
 
-        state->group1 = CreateWindowW(L"BUTTON", L"Custom cloud tables", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+        state->group1 = CreateWindowW(L"BUTTON", text.dlgVolcGroupTables, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
         ApplyUiFont(state->group1);
-        state->group2 = CreateWindowW(L"BUTTON", L"Acoustics && context", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+        state->group2 = CreateWindowW(L"BUTTON", text.dlgVolcGroupAcoustics, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
         ApplyUiFont(state->group2);
-        state->group3 = CreateWindowW(L"BUTTON", L"Protocol switches", WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+        state->group3 = CreateWindowW(L"BUTTON", text.dlgVolcGroupProtocol, WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                       0, 0, 0, 0, hDlg, nullptr, hInst, nullptr);
         ApplyUiFont(state->group3);
 
-        HWND label = CreateLabel(hDlg, 0, 0, labelW, S(UiStyle::LabelH), L"Hotwords ID");
+        HWND label = CreateLabel(hDlg, 0, 0, labelW, S(UiStyle::LabelH), text.dlgVolcHotwordsIdLabel);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HOTWORDS_ID_LABEL);
         HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                     0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_HOTWORDS_ID)), hInst, nullptr);
         ApplyUiFont(edit);
-        label = CreateLabel(hDlg, 0, 0, S(48), S(UiStyle::LabelH), L"Name");
+        label = CreateLabel(hDlg, 0, 0, S(48), S(UiStyle::LabelH), text.dlgVolcNameLabel);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HOTWORDS_NAME_LABEL);
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_HOTWORDS_NAME)), hInst, nullptr);
         ApplyUiFont(edit);
 
-        label = CreateLabel(hDlg, 0, 0, labelW, S(UiStyle::LabelH), L"Correct table ID");
+        label = CreateLabel(hDlg, 0, 0, labelW, S(UiStyle::LabelH), text.dlgVolcCorrectTableIdLabel);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_CORRECT_ID_LABEL);
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CORRECT_TABLE_ID)), hInst, nullptr);
         ApplyUiFont(edit);
-        label = CreateLabel(hDlg, 0, 0, S(48), S(UiStyle::LabelH), L"Name");
+        label = CreateLabel(hDlg, 0, 0, S(48), S(UiStyle::LabelH), text.dlgVolcNameLabel);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_CORRECT_NAME_LABEL);
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CORRECT_TABLE_NAME)), hInst, nullptr);
         ApplyUiFont(edit);
 
-        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_CONTEXT, 0, 0, 0, 0, L"Enable history context");
-        label = CreateLabel(hDlg, 0, 0, S(100), S(UiStyle::LabelH), L"History turns");
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_CONTEXT, 0, 0, 0, 0, text.dlgVolcEnableContext);
+        label = CreateLabel(hDlg, 0, 0, S(100), S(UiStyle::LabelH), text.dlgVolcHistoryTurnsLabel);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HISTORY_LABEL);
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_CONTEXT_HISTORY)), hInst, nullptr);
         ApplyUiFont(edit);
-        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), L"turns");
+        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), text.dlgVolcHistoryTurnsUnit);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_HISTORY_UNIT);
 
         label = CreateLabel(hDlg, 0, 0, S(150), S(UiStyle::LabelH), L"end_window_size");
@@ -818,7 +822,7 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_END_WINDOW_SIZE)), hInst, nullptr);
         ApplyUiFont(edit);
-        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), L"ms");
+        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), text.dlgVolcMsUnit);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_END_WINDOW_UNIT);
 
         label = CreateLabel(hDlg, 0, 0, S(150), S(UiStyle::LabelH), L"force_to_speech_time");
@@ -826,27 +830,27 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_FORCE_TO_SPEECH_TIME)), hInst, nullptr);
         ApplyUiFont(edit);
-        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), L"ms");
+        label = CreateLabel(hDlg, 0, 0, S(60), S(UiStyle::LabelH), text.dlgVolcMsUnit);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_FORCE_SPEECH_UNIT);
 
-        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_DDC, 0, 0, 0, 0, L"DDC smoothing (enable_ddc)");
-        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_NONSTREAM, 0, 0, 0, 0, L"Non-stream (enable_nonstream)");
-        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_POI_FC, 0, 0, 0, 0, L"Smart POI filter (enable_poi_fc)");
-        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_MUSIC_FC, 0, 0, 0, 0, L"Smart music filter (enable_music_fc)");
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_DDC, 0, 0, 0, 0, text.dlgVolcEnableDdc);
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_NONSTREAM, 0, 0, 0, 0, text.dlgVolcEnableNonstream);
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_POI_FC, 0, 0, 0, 0, text.dlgVolcEnablePoiFc);
+        CreateCheckBox(hDlg, IDC_VOLC_ENABLE_MUSIC_FC, 0, 0, 0, 0, text.dlgVolcEnableMusicFc);
 
-        label = CreateLabel(hDlg, 0, 0, S(UiStyle::VolcAdvancedDlgJsonLabelW), S(UiStyle::VolcAdvancedDlgJsonLabelH), L"Extra Params (JSON)");
+        label = CreateLabel(hDlg, 0, 0, S(UiStyle::VolcAdvancedDlgJsonLabelW), S(UiStyle::VolcAdvancedDlgJsonLabelH), text.dlgVolcExtraParamsLabel);
         SetWindowLongPtrW(label, GWLP_ID, IDC_VOLC_DLG_JSON_LABEL);
-        CreateButton(hDlg, IDC_VOLC_EXTRA_HOTWORDS, 0, 0, S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), L"Filter");
-        CreateButton(hDlg, IDC_VOLC_EXTRA_CONTEXT, 0, 0, S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), L"Result");
-        CreateButton(hDlg, IDC_VOLC_EXTRA_RESET, 0, 0, S(UiStyle::VolcAdvancedDlgResetBtnW), S(UiStyle::BtnH), L"Reset");
+        CreateButton(hDlg, IDC_VOLC_EXTRA_HOTWORDS, 0, 0, S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), text.dlgVolcBtnFilter);
+        CreateButton(hDlg, IDC_VOLC_EXTRA_CONTEXT, 0, 0, S(UiStyle::VolcAdvancedDlgSnippetBtnW), S(UiStyle::BtnH), text.dlgVolcBtnResult);
+        CreateButton(hDlg, IDC_VOLC_EXTRA_RESET, 0, 0, S(UiStyle::VolcAdvancedDlgResetBtnW), S(UiStyle::BtnH), text.dlgVolcBtnReset);
         edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | WS_TABSTOP,
                                0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VOLC_EXTRA_PARAMS)), hInst, nullptr);
         ApplyUiFont(edit);
 
-        HWND okButton = CreateButton(hDlg, IDOK, 0, 0, S(100), S(UiStyle::ActionBtnH), L"OK");
+        HWND okButton = CreateButton(hDlg, IDOK, 0, 0, S(100), S(UiStyle::ActionBtnH), text.dlgOk);
         SendMessageW(okButton, BM_SETSTYLE, BS_DEFPUSHBUTTON, TRUE);
-        CreateButton(hDlg, IDCANCEL, 0, 0, S(100), S(UiStyle::ActionBtnH), L"Cancel");
+        CreateButton(hDlg, IDCANCEL, 0, 0, S(100), S(UiStyle::ActionBtnH), text.dlgCancel);
 
         if (data) {
             SetWindowTextW(GetDlgItem(hDlg, IDC_VOLC_HOTWORDS_ID), data->hotwordsId.c_str());
@@ -920,7 +924,7 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
             if (state && state->data) {
                 std::wstring error;
                 if (!ReadVolcAdvancedDialog(hDlg, *state->data, error, state->validator)) {
-                    MessageBoxW(hDlg, error.c_str(), L"Invalid Volcano Engine Advanced Settings", MB_OK | MB_ICONERROR);
+                    MessageBoxW(hDlg, error.c_str(), ui_strings::UiText().dlgVolcInvalidTitle, MB_OK | MB_ICONERROR);
                     return 0;
                 }
                 state->data->ok = true;
@@ -970,7 +974,7 @@ LRESULT CALLBACK VolcAdvancedWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
 // Names a built-in preset together with the version it is currently at, so a
 // user whose saved prompt was pinned to Custom can see the built-in text change.
 std::wstring PromptPresetVersionLabel(int index) {
-    return std::wstring(llm::kPromptPresets[index].name) + L" (v" +
+    return std::wstring(ui_strings::LlmPresetDisplayName(index)) + L" (v" +
            std::to_wstring(llm::kPromptPresetVersion) + L")";
 }
 
@@ -1009,12 +1013,13 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
     switch (msg) {
     case WM_CREATE: {
         UpdateUiScale(hDlg);
+        const auto& text = ui_strings::UiText();
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
         auto* data = reinterpret_cast<PromptManageDlgData*>(cs->lpCreateParams);
         SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(data));
         HINSTANCE hInst = cs->hInstance;
 
-        HWND presetLabel = CreateWindowW(L"STATIC", L"Preset", WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
+        HWND presetLabel = CreateWindowW(L"STATIC", text.dlgPromptPresetLabel, WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
                                          0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_LABEL)), hInst, nullptr);
         HWND presetCombo = CreateWindowW(WC_COMBOBOXW, nullptr,
                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
@@ -1024,11 +1029,11 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
         HWND edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN,
                                     0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_EDIT)), hInst, nullptr);
-        HWND resetBtn = CreateWindowW(L"BUTTON", L"Reset to Default", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+        HWND resetBtn = CreateWindowW(L"BUTTON", text.dlgPromptResetBtn, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                       0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PROMPT_DLG_RESET)), hInst, nullptr);
-        HWND okBtn = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+        HWND okBtn = CreateWindowW(L"BUTTON", text.dlgOk, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                    0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDOK)), hInst, nullptr);
-        HWND cancelBtn = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+        HWND cancelBtn = CreateWindowW(L"BUTTON", text.dlgCancel, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                        0, 0, 0, 0, hDlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)), hInst, nullptr);
 
         ApplyUiFont(presetLabel);
@@ -1042,9 +1047,9 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
         MarkSettingsHint(presetDesc);
 
         for (int i = 0; i < llm::kPromptPresetCount; ++i) {
-            ComboBox_AddString(presetCombo, llm::kPromptPresets[i].name);
+            ComboBox_AddString(presetCombo, ui_strings::LlmPresetDisplayName(i));
         }
-        ComboBox_AddString(presetCombo, L"Custom");
+        ComboBox_AddString(presetCombo, text.dlgPromptCustom);
 
         int matchedPreset = -1;
         if (data) {
@@ -1064,7 +1069,7 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
             SendMessageW(edit, EM_SETREADONLY, TRUE, 0);
         } else {
             ComboBox_SetCurSel(presetCombo, llm::kPromptPresetCount);
-            SetWindowTextW(presetDesc, L"Custom prompt");
+            SetWindowTextW(presetDesc, text.dlgPromptCustomDesc);
             if (data) {
                 data->presetId = llm::kPromptPresetCustomId;
                 SetWindowTextW(edit, data->prompt.c_str());
@@ -1153,7 +1158,7 @@ LRESULT CALLBACK PromptManageWndProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM 
                     SetWindowTextW(edit, data->customBackup.c_str());
                     data->presetId = llm::kPromptPresetCustomId;
                 }
-                SetWindowTextW(desc, L"Custom prompt");
+                SetWindowTextW(desc, ui_strings::UiText().dlgPromptCustomDesc);
                 SendMessageW(edit, EM_SETREADONLY, FALSE, 0);
                 SetFocus(edit);
             }
@@ -1279,7 +1284,7 @@ bool ShowVolcAdvancedDialog(HWND parent, VolcAdvancedDialogData& data, VolcAdvan
     state.validator = validator;
 
     HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
-                               L"VoxTypeVolcAdvancedDlg", L"Volcano Engine Advanced Settings",
+                               L"VoxTypeVolcAdvancedDlg", ui_strings::UiText().dlgVolcAdvancedTitle,
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
                                placement.dialogPos.x, placement.dialogPos.y,
                                width, height, parent, nullptr, hInst, &state);
@@ -1316,7 +1321,7 @@ bool ShowQwenAdvancedDialog(HWND parent, QwenAdvancedDialogData& data, QwenAdvan
     state.validator = validator;
 
     HWND dialog = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
-                                  L"VoxTypeQwenAdvancedDlg", L"Qwen ASR Advanced Settings",
+                                  L"VoxTypeQwenAdvancedDlg", ui_strings::UiText().dlgQwenAdvancedTitle,
                                   WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
                                   placement.dialogPos.x, placement.dialogPos.y,
                                   width, height, parent, nullptr, hInst, &state);
@@ -1355,7 +1360,7 @@ bool ShowPromptManageDialog(HWND parent, std::wstring& outPrompt, std::wstring* 
     AnchorShiftGuard anchorGuard(parent, placement.moveAnchor, placement.anchorPos);
 
     HWND dlg = CreateWindowExW(WS_EX_APPWINDOW | WS_EX_DLGMODALFRAME,
-                               L"VoxTypePromptManageDlg", L"System Prompt Management",
+                               L"VoxTypePromptManageDlg", ui_strings::UiText().dlgPromptManageTitle,
                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
                                placement.dialogPos.x, placement.dialogPos.y,
                                width, height, parent, nullptr, hInst, &data);

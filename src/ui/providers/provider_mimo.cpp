@@ -6,6 +6,7 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "asr_probe_service.h"
 #include "utils.h"
 
@@ -17,23 +18,28 @@ namespace {
 constexpr wchar_t kMimoDefaultBaseUrl[] = L"https://api.xiaomimimo.com/v1";
 constexpr wchar_t kMimoDefaultModel[] = L"mimo-v2.5-asr";
 
-struct MimoUrlPreset {
-    const wchar_t* label;
-    const wchar_t* url;
+// 预设 URL 的标签走 ui_strings 双语表（运行时取值），这里只保留匹配用的 URL。
+constexpr const wchar_t* kMimoPresetUrls[] = {
+    L"https://api.xiaomimimo.com/v1",
+    L"https://token-plan-cn.xiaomimimo.com/v1",
+    L"https://token-plan-ams.xiaomimimo.com/v1",
+    L"",
 };
-
-constexpr MimoUrlPreset kMimoUrlPresets[] = {
-    {L"Default API", L"https://api.xiaomimimo.com/v1"},
-    {L"Token Plan (CN)", L"https://token-plan-cn.xiaomimimo.com/v1"},
-    {L"Token Plan (AMS)", L"https://token-plan-ams.xiaomimimo.com/v1"},
-    {L"Custom", L""},
-};
-constexpr int kMimoUrlPresetCount = static_cast<int>(sizeof(kMimoUrlPresets) / sizeof(kMimoUrlPresets[0]));
+constexpr int kMimoUrlPresetCount = static_cast<int>(sizeof(kMimoPresetUrls) / sizeof(kMimoPresetUrls[0]));
 constexpr int kCustomPresetIndex = kMimoUrlPresetCount - 1;
+
+const wchar_t* MimoPresetLabel(const ui_strings::UiStrings& text, int index) {
+    switch (index) {
+    case 0: return text.mimoPresetDefault;
+    case 1: return text.mimoPresetTokenCn;
+    case 2: return text.mimoPresetTokenAms;
+    default: return text.mimoPresetCustom;
+    }
+}
 
 int MatchUrlPresetIndex(const std::wstring& url) {
     for (int i = 0; i < kCustomPresetIndex; ++i) {
-        if (url == kMimoUrlPresets[i].url) {
+        if (url == kMimoPresetUrls[i]) {
             return i;
         }
     }
@@ -44,17 +50,18 @@ int MatchUrlPresetIndex(const std::wstring& url) {
 
 void ProviderMimo::CreateControls(HWND parent) {
     m_extraControls.clear();
+    const auto& text = ui_strings::UiText();
     ui_form::LayoutCursor cursor(UiStyle::RowInputY(1), UiStyle::RowHeight);
 
-    m_binder.AddPasswordRow(parent, cursor, IDC_MIMO_API_KEY, IDC_MIMO_SHOW_KEY, L"API Key", &Config::mimoApiKey, 330);
+    m_binder.AddPasswordRow(parent, cursor, IDC_MIMO_API_KEY, IDC_MIMO_SHOW_KEY, text.mimoApiKey, &Config::mimoApiKey, 330);
 
     const int y = cursor.NextRowY();
-    HWND lblUrl = CreateLabel(parent, S(UiStyle::ContentLeft), S(y + UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Base URL");
+    HWND lblUrl = CreateLabel(parent, S(UiStyle::ContentLeft), S(y + UiStyle::LabelYOffset), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.mimoBaseUrl);
     m_extraControls.push_back(lblUrl);
 
     HWND comboPreset = CreateCombo(parent, IDC_MIMO_BASE_URL_PRESET, S(UiStyle::InputLeft), S(y), S(UiStyle::MimoPresetComboW), S(UiStyle::ComboH));
     for (int i = 0; i < kMimoUrlPresetCount; ++i) {
-        ComboBox_AddString(comboPreset, kMimoUrlPresets[i].label);
+        ComboBox_AddString(comboPreset, MimoPresetLabel(text, i));
     }
     m_extraControls.push_back(comboPreset);
 
@@ -66,19 +73,19 @@ void ProviderMimo::CreateControls(HWND parent) {
     ApplyUiFont(editUrl);
     m_extraControls.push_back(editUrl);
 
-    m_binder.AddEditRow(parent, cursor, IDC_MIMO_MODEL, L"Model", &Config::mimoModel, 330);
+    m_binder.AddEditRow(parent, cursor, IDC_MIMO_MODEL, text.mimoModel, &Config::mimoModel, 330);
 
     const std::pair<std::wstring, std::wstring> langOpts[] = {
-        {L"auto", L"Auto (auto)"},
-        {L"zh", L"Chinese (zh)"},
-        {L"en", L"English (en)"},
-        {L"ja", L"Japanese (ja)"},
-        {L"ko", L"Korean (ko)"},
-        {L"yue", L"Cantonese (yue)"},
+        {L"auto", text.mimoLangAuto},
+        {L"zh", text.mimoLangChinese},
+        {L"en", text.mimoLangEnglish},
+        {L"ja", text.mimoLangJapanese},
+        {L"ko", text.mimoLangKorean},
+        {L"yue", text.mimoLangCantonese},
     };
-    m_binder.AddComboRow(parent, cursor, IDC_MIMO_LANGUAGE, L"Language", &Config::mimoLanguage, langOpts);
+    m_binder.AddComboRow(parent, cursor, IDC_MIMO_LANGUAGE, text.mimoLanguage, &Config::mimoLanguage, langOpts);
 
-    HWND btnTest = CreateButton(parent, IDC_MIMO_TEST, S(500), S(UiStyle::RowInputY(5)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection");
+    HWND btnTest = CreateButton(parent, IDC_MIMO_TEST, S(500), S(UiStyle::RowInputY(5)), S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), text.mimoTestConnection);
     m_extraControls.push_back(btnTest);
 }
 
@@ -122,7 +129,7 @@ bool ProviderMimo::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
     if (controlId == IDC_MIMO_BASE_URL_PRESET && notifyCode == CBN_SELCHANGE) {
         int sel = ComboBox_GetCurSel(control);
         if (sel >= 0 && sel < kCustomPresetIndex) {
-            SetWindowTextW(GetDlgItem(parent, IDC_MIMO_BASE_URL), kMimoUrlPresets[sel].url);
+            SetWindowTextW(GetDlgItem(parent, IDC_MIMO_BASE_URL), kMimoPresetUrls[sel]);
         }
         return true;
     }
@@ -142,7 +149,7 @@ bool ProviderMimo::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, H
     if (controlId == IDC_MIMO_TEST) {
         Config snap = g_config;
         SaveControls(parent, snap);
-        SetStatus(parent, L"Testing MiMo ASR connection...");
+        SetStatus(parent, ui_strings::UiText().mimoTesting);
         const uint64_t testGen = g_sharedTestGeneration.fetch_add(1) + 1;
         asr_probe::ProbeRequest req{ L"mimo", snap };
         if (auto* svc = asr_probe::GetProbeService()) {

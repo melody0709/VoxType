@@ -6,8 +6,10 @@
 #include "settings_controls.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 
 #include <windowsx.h>
+#include <array>
 
 namespace ui_tab {
 
@@ -20,19 +22,23 @@ struct BackendOption {
     bool fallbackSupported;
 };
 
-constexpr BackendOption kBackendOptions[] = {
-    {L"local", L"Local (sherpa-onnx)", true, true},
-    {L"volcengine", L"Volcano Engine", true, false},
-    {L"baidu", L"Baidu Cloud", true, true},
-    {L"qwen", L"Qwen ASR", true, true},
-    {L"mimo", L"MiMo ASR", true, true},
-    {L"mai", L"Microsoft MAI Transcribe 2", true, true},
-    {L"doubao_ime", L"Doubao IME (Free)", true, true},
-    {L"qwen_free", L"Qwen IME (Free)", true, true},
-};
-
-constexpr int kBackendOptionCount = static_cast<int>(sizeof(kBackendOptions) / sizeof(kBackendOptions[0]));
+constexpr int kBackendOptionCount = 8;
 constexpr DWORD_PTR kDisabledBackendItem = static_cast<DWORD_PTR>(-1);
+
+// 下拉项文案随界面语言切换，只能在填充时从文案表取，不得缓存进静态存储。
+std::array<BackendOption, kBackendOptionCount> MakeBackendOptions() {
+    const auto& text = ui_strings::UiText();
+    return {{
+        {L"local", text.speechBackendLocal, true, true},
+        {L"volcengine", text.speechBackendVolc, true, false},
+        {L"baidu", text.speechBackendBaidu, true, true},
+        {L"qwen", text.speechBackendQwen, true, true},
+        {L"mimo", text.speechBackendMimo, true, true},
+        {L"mai", text.speechBackendMai, true, true},
+        {L"doubao_ime", text.speechBackendDoubao, true, true},
+        {L"qwen_free", text.speechBackendQwenFree, true, true},
+    }};
+}
 
 bool BackendSupported(const BackendOption& option, bool fallback) {
     return fallback ? option.fallbackSupported : option.primarySupported;
@@ -41,10 +47,11 @@ bool BackendSupported(const BackendOption& option, bool fallback) {
 void PopulateBackendCombo(HWND combo, const std::wstring& selectedBackend, bool fallback) {
     if (!combo) return;
     ComboBox_ResetContent(combo);
+    const auto options = MakeBackendOptions();
 
     int selectedIndex = -1;
     if (fallback) {
-        int item = ComboBox_AddString(combo, L"Disabled");
+        int item = ComboBox_AddString(combo, ui_strings::UiText().speechFallbackDisabled);
         ComboBox_SetItemData(combo, item, kDisabledBackendItem);
         if (selectedBackend.empty() || selectedBackend == L"none") {
             selectedIndex = item;
@@ -52,7 +59,7 @@ void PopulateBackendCombo(HWND combo, const std::wstring& selectedBackend, bool 
     }
 
     for (int i = 0; i < kBackendOptionCount; ++i) {
-        const BackendOption& option = kBackendOptions[i];
+        const BackendOption& option = options[i];
         if (!BackendSupported(option, fallback)) continue;
         int item = ComboBox_AddString(combo, option.label);
         ComboBox_SetItemData(combo, item, static_cast<DWORD_PTR>(i));
@@ -71,8 +78,9 @@ std::wstring BackendIdFromCombo(HWND combo, bool fallback) {
     if (sel < 0) return fallback ? L"none" : L"local";
     const DWORD_PTR data = ComboBox_GetItemData(combo, sel);
     if (fallback && data == kDisabledBackendItem) return L"none";
+    const auto options = MakeBackendOptions();
     if (data < static_cast<DWORD_PTR>(kBackendOptionCount)) {
-        const BackendOption& option = kBackendOptions[static_cast<int>(data)];
+        const BackendOption& option = options[static_cast<int>(data)];
         if (BackendSupported(option, fallback)) return option.id;
     }
     return fallback ? L"none" : L"local";
@@ -95,10 +103,11 @@ void TabSpeechEngine::ShowBackendPanel(HWND parent, const std::wstring& backendI
 
 void TabSpeechEngine::CreateControls(HWND parent) {
     m_controls.clear();
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(0)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"ASR Backend");
+    const auto& text = ui_strings::UiText();
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(0)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.speechAsrBackendLabel);
     AddEngineControl(control);
     AddEngineControl(CreateCombo(parent, IDC_ASR_BACKEND, S(UiStyle::InputLeft), S(UiStyle::RowInputY(0)), S(UiStyle::PrimaryBackendComboW), S(UiStyle::ComboH)));
-    control = CreateLabel(parent, S(UiStyle::FallbackLabelX), S(UiStyle::RowLabelY(0)), S(68), S(UiStyle::LabelH), L"Fallback");
+    control = CreateLabel(parent, S(UiStyle::FallbackLabelX), S(UiStyle::RowLabelY(0)), S(68), S(UiStyle::LabelH), text.speechFallbackLabel);
     AddEngineControl(control);
     AddEngineControl(CreateCombo(parent, IDC_ASR_FALLBACK_BACKEND, S(UiStyle::FallbackComboX), S(UiStyle::RowInputY(0)), S(UiStyle::FallbackComboW), S(UiStyle::ComboH)));
 
@@ -107,7 +116,7 @@ void TabSpeechEngine::CreateControls(HWND parent) {
     }
 
     m_hintControl = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::CloudAsrHintY), S(UiStyle::CloudAsrHintW), S(UiStyle::LabelH),
-                               L"Cloud ASR sends audio to remote servers. Keys are encrypted with DPAPI locally.");
+                               text.speechCloudAsrHint);
     AddEngineControl(m_hintControl);
 }
 
@@ -166,7 +175,7 @@ bool TabSpeechEngine::HandleCommand(HWND parent, WORD notifyCode, WORD controlId
         const std::wstring fallback = BackendIdFromCombo(GetDlgItem(parent, IDC_ASR_FALLBACK_BACKEND), true);
         if (fallback == primary) {
             PopulateBackendCombo(GetDlgItem(parent, IDC_ASR_FALLBACK_BACKEND), L"none", true);
-            SetStatus(parent, L"Fallback disabled because it matches ASR Backend.");
+            SetStatus(parent, ui_strings::UiText().speechFallbackMatchesStatus);
         }
         ShowBackendPanel(parent, primary);
         return true;

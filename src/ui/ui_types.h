@@ -47,7 +47,19 @@ constexpr int CheckH = 26;
 constexpr int HotkeyEditH = 38;
 constexpr int GeneralGroupX = 30;
 constexpr int GeneralGroupW = 788;
-constexpr int GeneralShortcutGroupH = 144;
+// Merged "Shortcut & Startup" group (variant 2 of the language-switch plan):
+// hotkey row + single-line hint + startup checkbox. Folding the old standalone
+// Startup group in (and dropping its Portable hint) frees the 112 DIP the
+// Language group needs at the bottom of the page.
+constexpr int GeneralShortcutStartupGroupH = 146;
+constexpr int GeneralShortcutRowOffsetY = 20;
+constexpr int GeneralShortcutLabelOffsetY = 28;
+constexpr int GeneralShortcutHintOffsetY = 68;
+constexpr int GeneralStartupCheckInShortcutOffsetY = 104;
+constexpr int GeneralStartupCheckInShortcutW = 430;
+// 组内单行 hint 的宽度：组内可用宽 = GeneralGroupW − (ContentLeft − GeneralGroupX) = 788 − 12
+// = 776，取 770 让英文整句（~82 字符，96 DPI 约 450 px）还留余量；中文更短。
+constexpr int GeneralGroupHintW = 770;
 constexpr int GeneralInputGroupGap = 10;
 // Two rows: the input-preview toggles, then the voice text cleanup row
 // (punctuation mode + spacing). Keeping both inside the existing group lets the
@@ -74,12 +86,6 @@ constexpr int GeneralLearningCheckW = 440;
 // the button at 742, inside the group's ~806 usable right edge.
 constexpr int GeneralLearningClearOffsetX = 480;
 constexpr int GeneralLearningClearW = 220;
-constexpr int GeneralStartupGroupGap = 10;
-constexpr int GeneralStartupGroupH = 104;
-constexpr int GeneralStartupCheckOffsetY = 20;
-constexpr int GeneralStartupHintOffsetY = 52;
-constexpr int GeneralStartupCheckW = 430;
-constexpr int GeneralStartupHintW = 760;
 constexpr int GeneralBrowserGroupGap = 10;
 constexpr int GeneralBrowserGroupH = 118;
 // Rows inside this group are stacked without overlapping: the hint and the status
@@ -98,6 +104,12 @@ constexpr int GeneralBrowserFolderBtnW = 210;
 constexpr int GeneralBrowserGuideBtnW = 140;
 constexpr int GeneralBrowserRevokeBtnW = 150;
 constexpr int GeneralBrowserButtonGap = 16;
+// Language group (bottom of Tab 1): label + combo row, then one hint line.
+// Group bottom = 512 + 102 = 614, inside the 616 work-area hard limit.
+constexpr int GeneralLanguageGroupGap = 10;
+constexpr int GeneralLanguageGroupH = 102;
+constexpr int GeneralLanguageRowOffsetY = 20;
+constexpr int GeneralLanguageHintOffsetY = 56;
 // Tab 5 (Audio & Advanced): VAD group owns the top of the page, the recording
 // diagnostics block moves here from Tab 1 and keeps its internal geometry.
 constexpr int AdvancedVadGroupH = 260;
@@ -351,10 +363,10 @@ constexpr COLORREF DividerColor = RGB(226, 232, 240);
 constexpr COLORREF HintTextColor = RGB(120, 130, 145);
 constexpr int RowInputY(int row) { return FirstRowY + row * RowHeight; }
 constexpr int RowLabelY(int row) { return FirstRowY + LabelYOffset + row * RowHeight; }
-constexpr int GeneralShortcutGroupY = RowInputY(0);
-constexpr int GeneralInputGroupY = GeneralShortcutGroupY + GeneralShortcutGroupH + GeneralInputGroupGap;
-constexpr int GeneralStartupGroupY = GeneralInputGroupY + GeneralInputGroupH + GeneralStartupGroupGap;
-constexpr int GeneralBrowserGroupY = GeneralStartupGroupY + GeneralStartupGroupH + GeneralBrowserGroupGap;
+constexpr int GeneralShortcutStartupGroupY = RowInputY(0);
+constexpr int GeneralInputGroupY = GeneralShortcutStartupGroupY + GeneralShortcutStartupGroupH + GeneralInputGroupGap;
+constexpr int GeneralBrowserGroupY = GeneralInputGroupY + GeneralInputGroupH + GeneralBrowserGroupGap;
+constexpr int GeneralLanguageGroupY = GeneralBrowserGroupY + GeneralBrowserGroupH + GeneralLanguageGroupGap;
 constexpr int AdvancedVadGroupY = RowInputY(0);
 constexpr int AdvancedDiagnosticsGroupY = AdvancedVadGroupY + AdvancedVadGroupH + AdvancedDiagnosticsGroupGap;
 // UiStyle constants are designed for 150% DPI (144 dpi).
@@ -464,6 +476,7 @@ constexpr int IDC_QWEN_KEEP_DIALECT = 2138;
 constexpr int IDC_QWEN_DISFLUENCY_REMOVAL = 2139;
 constexpr int IDC_QWEN_HISTORY_CONTEXT = 2140;
 constexpr int IDC_QWEN_HISTORY_ROUNDS = 2141;
+constexpr int IDC_UI_LANGUAGE = 2142;
 constexpr int IDC_MIMO_API_KEY = 2090;
 constexpr int IDC_MIMO_SHOW_KEY = 2091;
 constexpr int IDC_MIMO_BASE_URL = 2092;

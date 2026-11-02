@@ -8,6 +8,7 @@
 #include "settings_dialogs.h"
 #include "settings.h"
 #include "ui_types.h"
+#include "ui_strings.h"
 #include "ui_utils.h"
 #include "asr_probe_service.h"
 #include "qwen_special_word_filter.h"
@@ -66,9 +67,9 @@ std::wstring NormalizeQwenLanguageHints(const std::wstring& raw) {
 
 void UpdateQwenLanguageEffectiveHint(HWND hwnd, HWND hintControl) {
     if (!hintControl) return;
+    const auto& text = ui_strings::UiText();
     if (!qwen_audio_profile::SupportsLanguageHints(QwenModelFromControl(hwnd))) {
-        SetWindowTextW(hintControl,
-            L"Not used by this model: qwen-audio-3.1-asr-flash-message rejects language_hints.");
+        SetWindowTextW(hintControl, text.helperHintsNotUsedHint);
         return;
     }
     const std::wstring hints = NormalizeQwenLanguageHints(
@@ -76,11 +77,11 @@ void UpdateQwenLanguageEffectiveHint(HWND hwnd, HWND hintControl) {
     const std::wstring fallback = QwenLanguageCodeFromIndex(
         ComboBox_GetCurSel(GetDlgItem(hwnd, IDC_QWEN_LANGUAGE)));
     const std::wstring effective = hints.empty()
-        ? (fallback.empty() ? L"Auto" : fallback)
+        ? (fallback.empty() ? text.helperAutoValue : fallback)
         : hints;
     SetWindowTextW(
         hintControl,
-        (L"Effective language: " + effective).c_str());
+        ui_strings::Format(text.helperEffectiveLanguage, effective).c_str());
 }
 
 bool ValidateQwenHints(const std::wstring& raw, std::wstring& error) {
@@ -92,22 +93,22 @@ bool ValidateQwenHints(const std::wstring& raw, std::wstring& error) {
         const size_t end = text.find_first_of(L",;", start);
         std::wstring item = Trim(text.substr(start, end == std::wstring::npos ? std::wstring::npos : end - start));
         if (item.empty()) {
-            error = L"Language hints must contain 1–4 non-empty language codes.";
+            error = ui_strings::UiText().helperHintsEmptyError;
             return false;
         }
         if (item == L"fil") item = L"tl";
         if (item.size() > 16) {
-            error = L"Each language hint must be at most 16 characters.";
+            error = ui_strings::UiText().helperHintsLengthError;
             return false;
         }
         for (wchar_t ch : item) {
             if (!((ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || ch == L'-')) {
-                error = L"Language hints may contain only letters and hyphens.";
+                error = ui_strings::UiText().helperHintsCharError;
                 return false;
             }
         }
         if (++count > 4) {
-            error = L"Audio 3 supports at most 4 language hints.";
+            error = ui_strings::UiText().helperHintsCountError;
             return false;
         }
         if (end == std::wstring::npos) break;
@@ -127,7 +128,7 @@ bool ValidateQwenEndpoint(const std::wstring& raw,
     parts.dwUrlPathLength = static_cast<DWORD>(-1);
     const std::wstring original = Trim(raw);
     if (original.empty() || original.rfind(scheme + L"://", 0) != 0) {
-        error = L"Qwen Base URL is invalid.";
+        error = ui_strings::UiText().helperBaseUrlInvalidError;
         return false;
     }
     std::wstring url = original;
@@ -135,19 +136,19 @@ bool ValidateQwenEndpoint(const std::wstring& raw,
         (scheme == L"ws" ? L"http" : scheme);
     if (scheme == L"wss" || scheme == L"ws") url.replace(0, scheme.size(), parsedScheme);
     if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) {
-        error = L"Qwen Base URL is invalid.";
+        error = ui_strings::UiText().helperBaseUrlInvalidError;
         return false;
     }
     const std::wstring actualScheme(parts.lpszScheme, parts.dwSchemeLength);
     if (actualScheme != parsedScheme || parts.dwHostNameLength == 0) {
-        error = L"Qwen Base URL must use " + scheme + L" and include a host.";
+        error = ui_strings::Format(ui_strings::UiText().helperBaseUrlSchemeError, scheme);
         return false;
     }
     std::wstring actualPath(parts.lpszUrlPath, parts.dwUrlPathLength);
     if (actualPath.empty() || actualPath == L"/") actualPath = path;
     while (actualPath.size() > 1 && actualPath.back() == L'/') actualPath.pop_back();
     if (actualPath != path) {
-        error = L"Qwen Base URL path must be " + path + L".";
+        error = ui_strings::Format(ui_strings::UiText().helperBaseUrlPathError, path);
         return false;
     }
     return true;
@@ -158,7 +159,7 @@ bool ValidateQwenAdvancedData(QwenAdvancedDialogData& data, std::wstring& error)
     if (!data.vadModel.empty() &&
         data.vadModel != L"far_field_meeting_16k" &&
         data.vadModel != L"near_meeting_16k") {
-        error = L"VAD model must be far_field_meeting_16k or near_meeting_16k.";
+        error = ui_strings::UiText().helperVadModelError;
         return false;
     }
     if (!data.streaming) return true;
@@ -260,7 +261,7 @@ void EditQwenAdvancedSettings(HWND hwnd, QwenProfileState& state, HWND hintContr
     Button_SetCheck(GetDlgItem(hwnd, IDC_QWEN_DISFLUENCY_REMOVAL),
                     data.disfluencyRemoval ? BST_CHECKED : BST_UNCHECKED);
     ApplyQwenModelProfile(hwnd, QwenModelFromControl(hwnd), false, state, hintControl);
-    SetStatus(hwnd, L"Qwen advanced settings updated. Click Save to apply.");
+    SetStatus(hwnd, ui_strings::UiText().helperAdvancedSavedStatus);
 }
 
 } // namespace ui_provider

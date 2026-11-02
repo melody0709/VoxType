@@ -6,13 +6,115 @@
 #include "ui_theme.h"
 #include "hotkey.h"
 #include "ui_utils.h"
+#include "ui_strings.h"
 
 #include <commctrl.h>
 #include <windowsx.h>
 #include <shlobj.h>
+#include <array>
 #include <vector>
 
 HWND g_settingsWindow = nullptr;
+
+namespace {
+
+// 语言切换重建窗口时的一次性摆放快照（重建前写入，新窗口创建后取走并清空）。
+// 必须整份保存 WINDOWPLACEMENT：它的 rcNormalPosition 是**工作区坐标**（不含任务栏），
+// 直接塞进 CreateWindowExW（屏幕坐标）会在任务栏位于顶部/左侧时让窗口每次漂移；
+// SetWindowPlacement 内部完成换算，所以恢复只能走它。
+WINDOWPLACEMENT s_restorePlacement = {};
+bool s_hasRestorePlacement = false;
+
+void CapturePlacement(HWND hwnd) {
+    WINDOWPLACEMENT placement = {};
+    placement.length = sizeof(placement);
+    if (!hwnd || !GetWindowPlacement(hwnd, &placement)) return;
+    s_restorePlacement = placement;
+    s_hasRestorePlacement = true;
+}
+
+} // namespace
+
+// Settings 主窗口的动态布局：Tab 区与底栏按钮随客户区尺寸走，不依赖固定窗口高。
+// （原先在 settings.cpp，为给语言切换接线腾出行数预算移入本模块。）
+void LayoutSettingsWindow(HWND hwnd) {
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    const int margin = S(UiStyle::Margin);
+    const int footerHeight = S(UiStyle::FooterHeight);
+    const int footerTop = (rc.bottom - footerHeight > S(UiStyle::FooterMinTop)) ? rc.bottom - footerHeight : S(UiStyle::FooterMinTop);
+    const int tabBottom = footerTop - S(4);
+    HWND tab = GetDlgItem(hwnd, IDC_SETTINGS_TAB);
+    if (tab) {
+        MoveWindow(tab, margin, S(12), rc.right - margin * 2, tabBottom - S(12), TRUE);
+    }
+    const int availableFooterH = rc.bottom - footerTop;
+    const int btnY = footerTop + (availableFooterH - S(UiStyle::ActionBtnH)) / 2;
+    HWND status = GetDlgItem(hwnd, IDC_STATUS);
+    if (status) {
+        MoveWindow(status, margin, btnY + S(4), rc.right - margin * 2 - S(300), S(28), TRUE);
+    }
+    HWND save = GetDlgItem(hwnd, IDC_SAVE), close = GetDlgItem(hwnd, IDC_CANCEL);
+    if (save) MoveWindow(save, rc.right - margin - S(192), btnY, S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
+    if (close) MoveWindow(close, rc.right - margin - S(UiStyle::FooterBtnW), btnY, S(UiStyle::FooterBtnW), S(UiStyle::ActionBtnH), TRUE);
+}
+
+void DefaultSettingsWindowRect(HWND owner, RECT& frame) {
+    UpdateUiScale(owner);
+    const int w = S(UiStyle::SettingsWindowW);
+    const int h = S(UiStyle::SettingsWindowH);
+    const RECT work = GetWorkAreaForWindow(owner);
+    frame.left = work.left + (work.right - work.left - w) / 2;
+    frame.top = work.top + (work.bottom - work.top - h) / 2;
+    frame.right = frame.left + w;
+    frame.bottom = frame.top + h;
+}
+
+bool ApplyCapturedSettingsPlacement(HWND hwnd, const RECT& fallbackFrame) {
+    if (!s_hasRestorePlacement || !hwnd) return false;
+    s_hasRestorePlacement = false;
+    const bool maximized = s_restorePlacement.showCmd == SW_SHOWMAXIMIZED;
+    WINDOWPLACEMENT placement = s_restorePlacement;
+    placement.length = sizeof(placement);
+    // 位置/尺寸交给系统换算（工作区坐标 → 屏幕坐标）；最大化态留给调用方的 ShowWindow，
+    // 两条路径互不覆盖。
+    placement.showCmd = SW_SHOWNORMAL;
+    SetWindowPlacement(hwnd, &placement);
+    // 旧位置可能落在已断开的显示器上：用窗口矩形（屏幕坐标，隐藏窗口也有效）判定，
+    // 不在任何显示器上就回落到居中，别把窗口创建到屏幕外。
+    RECT placed = {};
+    GetWindowRect(hwnd, &placed);
+    if (!MonitorFromRect(&placed, MONITOR_DEFAULTTONULL)) {
+        SetWindowPos(hwnd, nullptr, fallbackFrame.left, fallbackFrame.top,
+                     fallbackFrame.right - fallbackFrame.left,
+                     fallbackFrame.bottom - fallbackFrame.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    return maximized;
+}
+
+void RebuildSettingsWindowForLanguage(HWND hwnd, bool fallbackAdjusted) {
+    HWND owner = GetWindow(hwnd, GW_OWNER);
+    CapturePlacement(hwnd);
+    if (hwnd && IsWindow(hwnd)) DestroyWindow(hwnd);
+    ShowSettingsWindow(owner);
+    if (g_settingsWindow) {
+        // 新窗口 WM_CREATE 已写过 Ready.，这里补回保存反馈（表已是新语言）。
+        SetStatus(g_settingsWindow, fallbackAdjusted
+            ? ui_strings::UiText().statusSavedFallbackDisabled
+            : ui_strings::UiText().statusSaved);
+    }
+}
+
+void SetStatus(HWND hwnd, const std::wstring& text) {
+    HWND status = GetDlgItem(hwnd, IDC_STATUS);
+    if (!status && g_settingsWindow) {
+        status = GetDlgItem(g_settingsWindow, IDC_STATUS);
+    }
+    if (status) {
+        SetWindowTextW(status, text.c_str());
+    }
+}
 
 namespace {
 
@@ -23,36 +125,41 @@ struct QwenLanguageOption {
     const wchar_t* code;
 };
 
-constexpr QwenLanguageOption kQwenLanguages[] = {
-    {L"Auto", L""},
-    {L"Chinese (zh)", L"zh"},
-    {L"Cantonese (yue)", L"yue"},
-    {L"English (en)", L"en"},
-    {L"Japanese (ja)", L"ja"},
-    {L"German (de)", L"de"},
-    {L"Korean (ko)", L"ko"},
-    {L"Russian (ru)", L"ru"},
-    {L"French (fr)", L"fr"},
-    {L"Portuguese (pt)", L"pt"},
-    {L"Arabic (ar)", L"ar"},
-    {L"Italian (it)", L"it"},
-    {L"Spanish (es)", L"es"},
-    {L"Hindi (hi)", L"hi"},
-    {L"Indonesian (id)", L"id"},
-    {L"Thai (th)", L"th"},
-    {L"Turkish (tr)", L"tr"},
-    {L"Ukrainian (uk)", L"uk"},
-    {L"Vietnamese (vi)", L"vi"},
-    {L"Czech (cs)", L"cs"},
-    {L"Danish (da)", L"da"},
-    {L"Filipino (fil)", L"fil"},
-    {L"Finnish (fi)", L"fi"},
-    {L"Icelandic (is)", L"is"},
-    {L"Malay (ms)", L"ms"},
-    {L"Norwegian (no)", L"no"},
-    {L"Polish (pl)", L"pl"},
-    {L"Swedish (sv)", L"sv"},
-};
+// 语言显示名随界面语言变化，禁止 static 缓存 UiText()，每次调用现取；
+// code 是配置值（参与 cfg.qwenLanguage 比较），保持原样字面量。
+std::array<QwenLanguageOption, 28> QwenLanguages() {
+    const auto& text = ui_strings::UiText();
+    return {{
+        {text.ctlQwenLangAuto, L""},
+        {text.ctlQwenLangZh, L"zh"},
+        {text.ctlQwenLangYue, L"yue"},
+        {text.ctlQwenLangEn, L"en"},
+        {text.ctlQwenLangJa, L"ja"},
+        {text.ctlQwenLangDe, L"de"},
+        {text.ctlQwenLangKo, L"ko"},
+        {text.ctlQwenLangRu, L"ru"},
+        {text.ctlQwenLangFr, L"fr"},
+        {text.ctlQwenLangPt, L"pt"},
+        {text.ctlQwenLangAr, L"ar"},
+        {text.ctlQwenLangIt, L"it"},
+        {text.ctlQwenLangEs, L"es"},
+        {text.ctlQwenLangHi, L"hi"},
+        {text.ctlQwenLangId, L"id"},
+        {text.ctlQwenLangTh, L"th"},
+        {text.ctlQwenLangTr, L"tr"},
+        {text.ctlQwenLangUk, L"uk"},
+        {text.ctlQwenLangVi, L"vi"},
+        {text.ctlQwenLangCs, L"cs"},
+        {text.ctlQwenLangDa, L"da"},
+        {text.ctlQwenLangFil, L"fil"},
+        {text.ctlQwenLangFi, L"fi"},
+        {text.ctlQwenLangIs, L"is"},
+        {text.ctlQwenLangMs, L"ms"},
+        {text.ctlQwenLangNo, L"no"},
+        {text.ctlQwenLangPl, L"pl"},
+        {text.ctlQwenLangSv, L"sv"},
+    }};
+}
 
 }  // namespace
 
@@ -116,10 +223,11 @@ bool IsSettingsHint(HWND hwnd) {
 
 void OpenAsrDebugLog(HWND hwnd, const wchar_t* fileName) {
     if (!fileName || !*fileName) return;
+    const auto& text = ui_strings::UiText();
     wchar_t tempPath[MAX_PATH] = {};
     const DWORD length = GetTempPathW(MAX_PATH, tempPath);
     if (length == 0 || length >= MAX_PATH) {
-        MessageBoxW(hwnd, L"Unable to resolve the temporary log directory.", L"Open log", MB_OK | MB_ICONERROR);
+        MessageBoxW(hwnd, text.ctlTempLogDirFailed, text.ctlOpenLogTitle, MB_OK | MB_ICONERROR);
         return;
     }
     std::wstring path(tempPath, length);
@@ -128,13 +236,13 @@ void OpenAsrDebugLog(HWND hwnd, const wchar_t* fileName) {
                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                               nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
-        MessageBoxW(hwnd, L"Unable to create or open the debug log file.", L"Open log", MB_OK | MB_ICONERROR);
+        MessageBoxW(hwnd, text.ctlDebugLogFileFailed, text.ctlOpenLogTitle, MB_OK | MB_ICONERROR);
         return;
     }
     CloseHandle(file);
     const HINSTANCE result = ShellExecuteW(hwnd, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     if (reinterpret_cast<INT_PTR>(result) <= 32) {
-        MessageBoxW(hwnd, L"No application is associated with the debug log file.", L"Open log", MB_OK | MB_ICONERROR);
+        MessageBoxW(hwnd, text.ctlNoAppForLogFile, text.ctlOpenLogTitle, MB_OK | MB_ICONERROR);
     }
 }
 
@@ -184,7 +292,7 @@ std::wstring ComboText(HWND combo) {
 void BrowseModelDirectory(HWND hwnd) {
     BROWSEINFOW bi = {};
     bi.hwndOwner = hwnd;
-    bi.lpszTitle = L"Select model directory";
+    bi.lpszTitle = ui_strings::UiText().ctlSelectModelDir;
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
     PIDLIST_ABSOLUTE pidl = SHBrowseForFolderW(&bi);
     if (!pidl) return;
@@ -197,24 +305,24 @@ void BrowseModelDirectory(HWND hwnd) {
 }
 
 int QwenLanguageIndexFromCode(const std::wstring& code) {
-    constexpr int count = static_cast<int>(sizeof(kQwenLanguages) / sizeof(kQwenLanguages[0]));
-    for (int i = 0; i < count; ++i) {
-        if (code == kQwenLanguages[i].code) return i;
+    const auto langs = QwenLanguages();
+    for (int i = 0; i < static_cast<int>(langs.size()); ++i) {
+        if (code == langs[i].code) return i;
     }
     return 0;
 }
 
 const wchar_t* QwenLanguageCodeFromIndex(int index) {
-    constexpr int count = static_cast<int>(sizeof(kQwenLanguages) / sizeof(kQwenLanguages[0]));
-    if (index >= 0 && index < count) {
-        return kQwenLanguages[index].code;
+    const auto langs = QwenLanguages();
+    if (index >= 0 && index < static_cast<int>(langs.size())) {
+        return langs[index].code;
     }
     return L"";
 }
 
 void PopulateQwenLanguageCombo(HWND combo) {
     if (!combo) return;
-    for (const auto& lang : kQwenLanguages) {
+    for (const auto& lang : QwenLanguages()) {
         ComboBox_AddString(combo, lang.label);
     }
 }

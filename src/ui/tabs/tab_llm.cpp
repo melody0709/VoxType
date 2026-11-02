@@ -10,6 +10,7 @@
 #include "config_store.h"
 #include "path_service.h"
 #include "llm_refine.h"
+#include "ui_strings.h"
 
 #include <windowsx.h>
 #include <shellapi.h>
@@ -80,12 +81,13 @@ void TestLlmConnection(HWND hwnd) {
     wchar_t extraParams[1024] = {};
     GetWindowTextW(GetDlgItem(hwnd, IDC_LLM_EXTRA), extraParams, 1024);
 
+    const auto& text = ui_strings::UiText();
     if (llm::Trim(endpoint).empty() || llm::Trim(apiKey).empty() || llm::Trim(model).empty()) {
-        SetStatus(hwnd, L"Please fill in all LLM fields.");
+        SetStatus(hwnd, text.llmFillAllFields);
         return;
     }
 
-    SetStatus(hwnd, L"Testing connection...");
+    SetStatus(hwnd, text.llmTestingConnection);
     llm::RequestConfig cfg;
     cfg.endpoint = endpoint;
     cfg.apiKey = apiKey;
@@ -146,8 +148,10 @@ void TabLlm::UpdateControlEnableState(HWND parent) {
 void TabLlm::CreateControls(HWND parent) {
     m_controls.clear();
 
+    const auto& text = ui_strings::UiText();
+
     HWND enableCheck = CreateWindowW(
-        L"BUTTON", L"Enable LLM Refinement",
+        L"BUTTON", text.llmEnableLabel,
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
         S(UiStyle::ContentLeft), S(UiStyle::RowInputY(0)),
         S(320), S(UiStyle::CheckH),
@@ -157,7 +161,7 @@ void TabLlm::CreateControls(HWND parent) {
     AddLlmControl(enableCheck);
 
     HWND vocabInject = CreateWindowW(
-        L"BUTTON", L"Feed vocabulary to LLM",
+        L"BUTTON", text.llmFeedVocabularyLabel,
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
         S(UiStyle::ContentLeft + UiStyle::LlmVocabularyInjectOffsetX), S(UiStyle::RowInputY(0)),
         S(UiStyle::LlmVocabularyInjectW), S(UiStyle::CheckH),
@@ -166,44 +170,44 @@ void TabLlm::CreateControls(HWND parent) {
     ApplyUiFont(vocabInject);
     AddLlmControl(vocabInject);
 
-    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Provider");
+    HWND control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(1)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.llmProviderLabel);
     AddLlmControl(control);
     AddLlmControl(CreateCombo(parent, IDC_LLM_PROVIDER, S(UiStyle::InputLeft), S(UiStyle::RowInputY(1)), S(480), S(400)));
     AddLlmControl(CreateButton(parent, IDC_LLM_PROVIDER_ADD, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(1)) - S(1), S(44), S(UiStyle::BtnH), L"+"));
     AddLlmControl(CreateButton(parent, IDC_LLM_PROVIDER_DEL, S(UiStyle::SideBtnX) + S(48), S(UiStyle::RowInputY(1)) - S(1), S(44), S(UiStyle::BtnH), L"\u2212"));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Base URL");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(2)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.llmApiBaseUrlLabel);
     AddLlmControl(control);
     HWND llmEndpoint = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                        S(UiStyle::InputLeft), S(UiStyle::RowInputY(2)), S(UiStyle::InputWFull), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_ENDPOINT)), GetParentInstance(parent), nullptr);
     ApplyUiFont(llmEndpoint);
     AddLlmControl(llmEndpoint);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"API Key");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(3)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.llmApiKeyLabel);
     AddLlmControl(control);
     HWND llmKey = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_PASSWORD,
                                   S(UiStyle::InputLeft), S(UiStyle::RowInputY(3)), S(UiStyle::InputW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_KEY)), GetParentInstance(parent), nullptr);
     ApplyUiFont(llmKey);
     AddLlmControl(llmKey);
-    AddLlmControl(CreateButton(parent, IDC_LLM_SHOW_KEY, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(3)) - S(1), S(UiStyle::SideBtnW), S(UiStyle::BtnH), L"Show"));
+    AddLlmControl(CreateButton(parent, IDC_LLM_SHOW_KEY, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(3)) - S(1), S(UiStyle::SideBtnW), S(UiStyle::BtnH), text.llmShowKey));
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(4)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Model");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(4)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.llmModelLabel);
     AddLlmControl(control);
     HWND llmModel = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                     S(UiStyle::InputLeft), S(UiStyle::RowInputY(4)), S(UiStyle::InputWFull), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_MODEL)), GetParentInstance(parent), nullptr);
     ApplyUiFont(llmModel);
     AddLlmControl(llmModel);
 
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(5)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Extra Params");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), S(UiStyle::RowLabelY(5)), S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.llmExtraParamsLabel);
     AddLlmControl(control);
     HWND llmExtra = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                     S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)), S(UiStyle::InputW), S(UiStyle::EditH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_EXTRA)), GetParentInstance(parent), nullptr);
     ApplyUiFont(llmExtra);
     AddLlmControl(llmExtra);
-    AddLlmControl(CreateButton(parent, IDC_LLM_EXTRA_RESET, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(5)) - S(1), S(UiStyle::SideBtnW), S(UiStyle::BtnH), L"Reset"));
+    AddLlmControl(CreateButton(parent, IDC_LLM_EXTRA_RESET, S(UiStyle::SideBtnX), S(UiStyle::RowInputY(5)) - S(1), S(UiStyle::SideBtnW), S(UiStyle::BtnH), text.llmExtraReset));
     {
         HWND hint = CreateWindowW(L"STATIC",
-            L"JSON object fields merged into the request body; outer braces are optional.",
+            text.llmExtraParamsHint,
             WS_CHILD | WS_VISIBLE | SS_NOPREFIX, S(UiStyle::InputLeft), S(UiStyle::RowInputY(5)) + S(UiStyle::EditH) + S(2), S(UiStyle::InputW), S(20), parent, nullptr, GetParentInstance(parent), nullptr);
         ApplyUiFont(hint);
         MarkSettingsHint(hint);
@@ -212,24 +216,24 @@ void TabLlm::CreateControls(HWND parent) {
 
     const int promptRowY = S(UiStyle::RowInputY(6)) + S(6);
     const int promptLabelY = S(UiStyle::RowLabelY(6)) + S(6);
-    control = CreateLabel(parent, S(UiStyle::ContentLeft), promptLabelY, S(UiStyle::LabelWidth), S(UiStyle::LabelH), L"Prompt");
+    control = CreateLabel(parent, S(UiStyle::ContentLeft), promptLabelY, S(UiStyle::LabelWidth), S(UiStyle::LabelH), text.llmPromptLabel);
     AddLlmControl(control);
     AddLlmControl(CreateCombo(parent, IDC_LLM_PRESET_COMBO, S(UiStyle::InputLeft), promptRowY, S(320), S(200)));
-    AddLlmControl(CreateButton(parent, IDC_LLM_MANAGE_PROMPT, S(UiStyle::InputLeft) + S(332), promptRowY - S(1), S(136), S(UiStyle::BtnH), L"Manage..."));
+    AddLlmControl(CreateButton(parent, IDC_LLM_MANAGE_PROMPT, S(UiStyle::InputLeft) + S(332), promptRowY - S(1), S(136), S(UiStyle::BtnH), text.llmManagePrompt));
 
     const int actionRowY = S(UiStyle::RowInputY(7)) + S(6);
-    AddLlmControl(CreateButton(parent, IDC_LLM_TEST, S(UiStyle::InputLeft), actionRowY, S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), L"Test Connection"));
-    HWND llmDebug = CreateWindowW(L"BUTTON", L"Log refine before/after", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+    AddLlmControl(CreateButton(parent, IDC_LLM_TEST, S(UiStyle::InputLeft), actionRowY, S(UiStyle::ActionBtnW), S(UiStyle::ActionBtnH), text.llmTestConnection));
+    HWND llmDebug = CreateWindowW(L"BUTTON", text.llmDebugLog, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                   S(348), actionRowY + S(6), S(210), S(UiStyle::CheckH), parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_DEBUG)), GetParentInstance(parent), nullptr);
     ApplyUiFont(llmDebug);
     AddLlmControl(llmDebug);
-    AddLlmControl(CreateButton(parent, IDC_LLM_OPEN_LOG, S(576), actionRowY, S(150), S(UiStyle::ActionBtnH), L"Open Log Folder"));
+    AddLlmControl(CreateButton(parent, IDC_LLM_OPEN_LOG, S(576), actionRowY, S(150), S(UiStyle::ActionBtnH), text.llmOpenLogFolder));
 
     // Row 8: auto-organize (P5a). Off by default - the LLM stays an opt-in
     // corrector, and this switch only selects which prompt the refine path uses.
     const int organizeRowY = S(UiStyle::RowInputY(8));
     HWND organizeCheck = CreateWindowW(
-        L"BUTTON", L"Auto-organize dictation (layout, filler removal, polish)",
+        L"BUTTON", text.llmAutoOrganize,
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
         S(UiStyle::ContentLeft), organizeRowY, S(640), S(UiStyle::CheckH),
         parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LLM_ORGANIZE)),
@@ -254,7 +258,7 @@ void TabLlm::Show(bool visible) {
         if (parent) {
             m_keyVisible = false;
             HWND showKeyBtn = GetDlgItem(parent, IDC_LLM_SHOW_KEY);
-            if (showKeyBtn) SetWindowTextW(showKeyBtn, L"Show");
+            if (showKeyBtn) SetWindowTextW(showKeyBtn, ui_strings::UiText().llmShowKey);
             HWND keyEdit = GetDlgItem(parent, IDC_LLM_KEY);
             if (keyEdit) {
                 SendMessageW(keyEdit, EM_SETPASSWORDCHAR, L'\u25CF', 0);
@@ -276,7 +280,7 @@ void TabLlm::LoadControls(HWND parent, const Config& cfg) {
 
     m_keyVisible = false;
     HWND showKeyBtn = GetDlgItem(parent, IDC_LLM_SHOW_KEY);
-    if (showKeyBtn) SetWindowTextW(showKeyBtn, L"Show");
+    if (showKeyBtn) SetWindowTextW(showKeyBtn, ui_strings::UiText().llmShowKey);
     HWND keyEdit = GetDlgItem(parent, IDC_LLM_KEY);
     if (keyEdit) SendMessageW(keyEdit, EM_SETPASSWORDCHAR, L'\u25CF', 0);
 
@@ -288,11 +292,14 @@ void TabLlm::LoadControls(HWND parent, const Config& cfg) {
 
     HWND presetCombo = GetDlgItem(parent, IDC_LLM_PRESET_COMBO);
     if (presetCombo) {
+        // 显示名走双语表；下标映射必须跟住 kPromptPresets 的三个内置预设。
+        static_assert(llm::kPromptPresetCount == 3,
+                      "ui_strings::LlmPresetDisplayName must track kPromptPresets");
         ComboBox_ResetContent(presetCombo);
         for (int i = 0; i < llm::kPromptPresetCount; ++i) {
-            ComboBox_AddString(presetCombo, llm::kPromptPresets[i].name);
+            ComboBox_AddString(presetCombo, ui_strings::LlmPresetDisplayName(i));
         }
-        ComboBox_AddString(presetCombo, L"Custom");
+        ComboBox_AddString(presetCombo, ui_strings::UiText().llmPromptCustom);
 
         const int matchedPreset =
             llm::ResolvePromptPresetIndex(m_currentPrompt, m_currentPromptPresetId);
@@ -327,6 +334,7 @@ void TabLlm::SaveControls(HWND parent, Config& cfg) {
 }
 
 bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND control) {
+    const auto& text = ui_strings::UiText();
     switch (controlId) {
     case IDC_LLM_ENABLE:
         if (notifyCode == BN_CLICKED) {
@@ -402,7 +410,7 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
     }
     case IDC_LLM_PROVIDER_ADD: {
         std::wstring name;
-        if (ShowInputDialog(parent, L"Add Provider", name)) {
+        if (ShowInputDialog(parent, text.llmAddProviderTitle, name)) {
             bool exists = FindPresetIndex(name) >= 0;
             if (!exists) {
                 std::string json = llm::WideToUtf8(g_config.llmProvidersJson);
@@ -411,7 +419,7 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
                 exists = llm::GetJsonObjectMemberRaw(json, key, stored);
             }
             if (exists) {
-                SetStatus(parent, L"Provider name already exists.");
+                SetStatus(parent, text.llmProviderExists);
             } else {
                 StoreVisibleProvider(parent);
                 g_config.llmEndpoint.clear();
@@ -426,7 +434,7 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
                 SetWindowTextW(GetDlgItem(parent, IDC_LLM_MODEL), L"");
                 SetWindowTextW(GetDlgItem(parent, IDC_LLM_EXTRA), L"");
                 UpdateControlEnableState(parent);
-                SetStatus(parent, (L"Added provider: " + name).c_str());
+                SetStatus(parent, (text.llmProviderAdded + name).c_str());
             }
         }
         return true;
@@ -442,7 +450,7 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
         SetWindowTextW(GetDlgItem(parent, IDC_LLM_MODEL), g_config.llmModel.c_str());
         SetWindowTextW(GetDlgItem(parent, IDC_LLM_EXTRA), g_config.llmExtraParams.c_str());
         UpdateControlEnableState(parent);
-        SetStatus(parent, (L"Deleted provider: " + prov).c_str());
+        SetStatus(parent, (text.llmProviderDeleted + prov).c_str());
         return true;
     }
     case IDC_LLM_SHOW_KEY: {
@@ -453,7 +461,7 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
             InvalidateRect(keyEdit, nullptr, TRUE);
         }
         HWND btn = GetDlgItem(parent, IDC_LLM_SHOW_KEY);
-        if (btn) SetWindowTextW(btn, m_keyVisible ? L"Hide" : L"Show");
+        if (btn) SetWindowTextW(btn, m_keyVisible ? text.llmHideKey : text.llmShowKey);
         return true;
     }
     case IDC_LLM_TEST:
@@ -470,9 +478,9 @@ bool TabLlm::HandleCommand(HWND parent, WORD notifyCode, WORD controlId, HWND co
         const std::wstring logDir = LogDir();
         HINSTANCE res = ShellExecuteW(parent, L"open", logDir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         if (reinterpret_cast<INT_PTR>(res) <= 32) {
-            SetStatus(parent, L"Unable to open log folder.");
+            SetStatus(parent, text.llmOpenLogFailed);
         } else {
-            SetStatus(parent, L"Opened log folder.");
+            SetStatus(parent, text.llmLogFolderOpened);
         }
         return true;
     }

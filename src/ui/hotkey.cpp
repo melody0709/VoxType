@@ -6,6 +6,7 @@
 #include "path_service.h"
 #include "ui_utils.h"
 #include "ui_theme.h"
+#include "ui_strings.h"
 #include "settings.h"
 #include "utils.h"
 #include "config_store.h"
@@ -536,7 +537,7 @@ LRESULT CALLBACK HotkeyEditWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         std::wstring text = L"CapsLock";
         COLORREF color = RGB(25, 31, 40);
         if (state) {
-            text = state->capturing && state->hotkey.IsEmpty() ? L"Press shortcut..." : HotkeyToString(state->hotkey);
+            text = state->capturing && state->hotkey.IsEmpty() ? ui_strings::UiText().hotkeyPressShortcut : HotkeyToString(state->hotkey);
             if (state->capturing) color = RGB(80, 92, 108);
         }
         SetBkMode(hdc, TRANSPARENT);

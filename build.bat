@@ -158,7 +158,7 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     rem replay target from rotting silently. It was unlinkable for a whole
     rem refactor cycle before 2026-09-28 because nothing verified it.
     echo Building offline protocol/request regression tests...
-    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test audio_resampler_test clipboard_test text_post_process_test correction_learning_test browser_bridge_test asr_audio_replay
+    "%CMAKE_EXE%" --build --preset x64-release --target qwen_free_protocol_test qwen_audio_json_test llm_refine_test audio_diagnostics_test asr_json_protocol_test asr_result_classification_test cloud_asr_timeout_test hud_pagination_test dialog_positioning_test audio_resampler_test clipboard_test text_post_process_test correction_learning_test browser_bridge_test ui_strings_test message_forward_test asr_audio_replay
     if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_TEST_EXE=%BUILD_ROOT%\artifacts\tests\qwen_free_protocol_test.exe"
     if not exist "!VOXTYPE_TEST_EXE!" (
@@ -183,6 +183,22 @@ if "!VOXTYPE_TEST_MODE!"=="1" (
     )
     echo Running LLM refine regression tests...
     "!VOXTYPE_LLM_REFINE_TEST_EXE!"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    set "VOXTYPE_UI_STRINGS_TEST_EXE=%BUILD_ROOT%\artifacts\tests\ui_strings_test.exe"
+    if not exist "!VOXTYPE_UI_STRINGS_TEST_EXE!" (
+        echo ERROR: UI strings test executable was not produced: !VOXTYPE_UI_STRINGS_TEST_EXE!
+        exit /b 1
+    )
+    echo Running UI bilingual string table regression tests...
+    "!VOXTYPE_UI_STRINGS_TEST_EXE!"
+    if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
+    set "VOXTYPE_MESSAGE_FORWARD_TEST_EXE=%BUILD_ROOT%\artifacts\tests\message_forward_test.exe"
+    if not exist "!VOXTYPE_MESSAGE_FORWARD_TEST_EXE!" (
+        echo ERROR: Message forwarding test executable was not produced: !VOXTYPE_MESSAGE_FORWARD_TEST_EXE!
+        exit /b 1
+    )
+    echo Running cross-window message forwarding regression tests...
+    "!VOXTYPE_MESSAGE_FORWARD_TEST_EXE!"
     if not "!ERRORLEVEL!"=="0" exit /b !ERRORLEVEL!
     set "VOXTYPE_AUDIO_DIAGNOSTICS_TEST_EXE=%BUILD_ROOT%\artifacts\tests\audio_diagnostics_test.exe"
     if not exist "!VOXTYPE_AUDIO_DIAGNOSTICS_TEST_EXE!" (
