@@ -37,6 +37,8 @@ constexpr UINT kDoubaoImeSettingsCredentialsMessage = WM_APP + 14;
 constexpr UINT kClipboardDiagnosticMessage = WM_APP + 15;
 constexpr WPARAM kClipboardRestoreFailed = 1;
 constexpr WPARAM kClipboardPasteStillPending = 2;
+constexpr WPARAM kClipboardFallbackCopied = 3;
+constexpr WPARAM kClipboardFallbackCancelled = 4;
 // Posted by the injection reflection worker once it has read the focused
 // document back (see learning_intake). lParam owns a heap InjectionReflection;
 // the handler deletes it. The sequence lets a stale read-back be dropped, and
@@ -104,3 +106,4 @@ constexpr UINT ID_TRAY_RELOAD = 1003;
 constexpr UINT ID_TRAY_QUIT = 1004;
 constexpr UINT ID_TRAY_DEBUG_MODE = 1005;
 constexpr UINT ID_TRAY_FORCE_UNICODE = 1006;
+constexpr UINT ID_TRAY_COPY_LAST_TRANSCRIPT = 1007;

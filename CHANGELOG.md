@@ -2,6 +2,17 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.13.1 (2026-11-12)
+
+### Clipboard Fallback on Focus Loss & Pre-Injection Guard
+- **Pre-injection target guard (`src/platform/text_injector.*`)**: Before typing/pasting recognized text into the target app, verifies the active target is still valid and editable across 3 checks: foreground window availability, non-editable Windows shell surfaces (still allowing Explorer/Desktop inline rename `Edit` and `VoxType.Settings`), UIPI integrity/UIAccess boundaries, and disabled or `ES_READONLY` `Edit`/`RichEdit` controls.
+- **Stop-anchor window-switch protection (`src/app/recording_session_controller.*`, `src/app/asr_attempt_manager.*`, `src/asr/asr_dispatcher.*`)**: Captures the foreground top-level window and PID when recording stops (filtering `VoxType.Main`, `VoxType.Hud`, and hidden windows, with cleanup on 150ms repress/watchdog cancel) and detects top-level window switches before delivery.
+- **Automatic clipboard fallback**: When injection is blocked or fails and privacy checks allow (blocking only explicit `t0` sensitive probes or `t3` Win32 password fields), preserves the final transcript on the clipboard (`copy_to_clipboard_on_failure`, `clipboard_fallback_on_window_switch`, both default `true`). Copies wait for older `WM_PASTE` messages to complete; HUD distinguishes waiting from copied. External clipboard changes cancel deferred copying without overwriting the user's content; shutdown leaves pending paste data untouched.
+- **Unicode target binding**: Dictation and both selection-rewrite Unicode paths use the validated target window, refusing input if the foreground switches before or during sending.
+- **Tray menu "Copy Last Transcript" (`ID_TRAY_COPY_LAST_TRANSCRIPT`)**: Keeps the most recent non-sensitive transcript in RAM so users can re-copy it from the system tray menu anytime without re-recording.
+- **LLM HUD timer bugfix (`src/app/main_window.cpp`)**: Fixed `kLlmResultMessage` unconditionally resetting the HUD hide timer to 200ms after branches that set a 2200ms notice duration.
+- **Tests**: Expanded `tests/clipboard_test.cpp` and `tests/asr_json_protocol_test.cpp` (113 config registry entries, guard checks, clipboard fallback, and replacement cases).
+
 ## v0.13.0 (2026-10-30)
 
 ### Interface Language Switch (Chinese / English)

@@ -480,17 +480,18 @@ int wmain() {
                   defaults.qwenKeepDialect && defaults.qwenDisfluencyRemovalEnabled,
               "Qwen context, heartbeat, dialect and polish switches default to on");
     }
-    // 28) 全量 111 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
+    // 28) 全量 113 个持久化字段 Legacy JSON 配置夹具反序列化保真回归测试
     //     条目数在这里是"变更探测器"：任何注册表条目被删/被加都必须同步改这一行。
     //     102 -> 104（P3 voice_punct_mode / voice_spacing_enabled）、
     //     104 -> 109（P2 asr_learning_* 三项 + P6 asr_undo_* 两项）、
     //     109 -> 110（P1 doubao_context_enabled）、110 -> 111（P5 voice_auto_organize_enabled）、
-    //     111 -> 110（移除无消费者的 asr_undo_window_ms，S3 落地时再加回）
-    //     都是 2026-10 的有意上调，不是漂移。
+    //     111 -> 110（移除无消费者的 asr_undo_window_ms，S3 落地时再加回）、
+    //     111 -> 113（新增 copy_to_clipboard_on_failure / clipboard_fallback_on_window_switch）
+    //     都是有意上调，不是漂移。
     {
         config_registry::InitializeRegistry();
         const auto& reg = config_registry::Registry::Instance();
-        CHECK(reg.GetEntries().size() == 111, "registry total entry count is 111");
+        CHECK(reg.GetEntries().size() == 113, "registry total entry count is 113");
 
         const std::string legacyJson = R"({
             "config_version": 15,
@@ -689,6 +690,23 @@ int wmain() {
         CHECK(cfg.enableDebugMode == true, "legacy fixture 90: enableDebugMode");
         CHECK(cfg.forceUnicodeInput == true, "legacy fixture 91: forceUnicodeInput");
         CHECK(cfg.restoreClipboardAfterPaste == true, "legacy fixture 92: restoreClipboardAfterPaste");
+        CHECK(cfg.copyToClipboardOnFailure == true,
+              "legacy fixture missing copy_to_clipboard_on_failure defaults true");
+        CHECK(cfg.clipboardFallbackOnWindowSwitch == true,
+              "legacy fixture missing clipboard_fallback_on_window_switch defaults true");
+
+        Config offCfg;
+        offCfg.copyToClipboardOnFailure = false;
+        offCfg.clipboardFallbackOnWindowSwitch = false;
+        const std::string offJson = reg.SaveJson(offCfg);
+        CHECK(offJson.find("\"copy_to_clipboard_on_failure\": false") != std::string::npos,
+              "copy_to_clipboard_on_failure serialized as literal false");
+        CHECK(offJson.find("\"clipboard_fallback_on_window_switch\": false") != std::string::npos,
+              "clipboard_fallback_on_window_switch serialized as literal false");
+        Config offLoaded;
+        reg.LoadJson(offLoaded, offJson);
+        CHECK(!offLoaded.copyToClipboardOnFailure && !offLoaded.clipboardFallbackOnWindowSwitch,
+              "clipboard fallback toggles round-trip false");
     }
 
     // LLM enable & ShouldRunLlmRefine tests

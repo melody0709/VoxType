@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  当前版本：<code>v0.13.0</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
+  当前版本：<code>v0.13.1</code> &nbsp;|&nbsp; 🇬🇧 <a href="../README.md">English</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -247,7 +247,7 @@ CHANGELOG.md        — 版本变更记录
 <summary><strong>⚠️ 已知限制</strong></summary>
 
 - 本地、百度和 MiMo 在录音结束后输出 final；Qwen、火山引擎和 Doubao IME 可在录音期间显示 partial HUD，最终文本仍在松开后上屏
-- 文本注入以剪贴板 + Ctrl+V 为主，管理员权限窗口可能拦截
+- 文本注入以剪贴板 + Ctrl+V（或保护模式 Unicode）为主；当发生焦点丢失、停录后切窗或只读/桌面 Shell/高权限 UIPI 窗口拦截时，非敏感转写会自动保留到剪贴板并给出 HUD 提示，也可通过托盘菜单「复制上次识别文本」随时二次复制
 - 模型文件较大（约 3GB），首次加载需要几秒
 
 </details>
@@ -259,6 +259,7 @@ CHANGELOG.md        — 版本变更记录
 
 **最近更新：**
 
+- **v0.13.1** — 新增注入前目标就绪校验与停录窗口锚点防误投（`copy_to_clipboard_on_failure`、`clipboard_fallback_on_window_switch`），在焦点丢失、切换窗口或目标不可编辑/提权拦截时自动将非敏感文本保留到剪贴板并提示，新增托盘菜单「复制上次识别文本」，并修复 LLM HUD 提示被 200ms 定时器覆盖的问题
 - **v0.11.9** — 不再向浏览器索取无障碍能力（此前会让浏览器一直变慢，只有重启浏览器才恢复），改用可选的 Chrome/Edge 配套扩展经 Native Messaging 读取浏览器内焦点输入框；浏览器路径现在 fail-closed，绝不回退到 UI Automation
 - **v0.11.8** — 新增可选的语音文本清理（标点模式与中英/数字间空格，默认关闭）、从用户自身修改中本地学习、可选的豆包会话上下文上传（默认关闭）；加固共用文本/词表/提示词路径，保证其余后端在默认配置下逐字节不变
 - **v0.11.7** — 修复热键看门狗反复停录/启动，加固锁屏取消与剪贴板回滚，加入 FIR/Sinc 重采样及静音、录音边界处理，扩充离线回归检查

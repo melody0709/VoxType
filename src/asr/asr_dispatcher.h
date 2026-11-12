@@ -22,6 +22,8 @@ struct AsrFinalMetadata {
     std::wstring primaryError;
     std::wstring fallbackBackend;
     SelectionContext selection;
+    HWND stopRootWindow = nullptr;
+    DWORD stopRootProcessId = 0;
 };
 
 struct AsrFinalMessage {
@@ -35,6 +37,8 @@ struct AsrFinalMessage {
     std::wstring primaryError;
     std::wstring fallbackBackend;
     SelectionContext selection;
+    HWND stopRootWindow = nullptr;
+    DWORD stopRootProcessId = 0;
 };
 
 struct LlmFinalMessage {
@@ -49,6 +53,8 @@ struct LlmFinalMessage {
     std::wstring primaryError;
     std::wstring fallbackBackend;
     SelectionContext selection;
+    HWND stopRootWindow = nullptr;
+    DWORD stopRootProcessId = 0;
 };
 
 using AsrLlmRefineFn = void (*)(const AsrFinalMessage& finalMessage);

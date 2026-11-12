@@ -60,6 +60,9 @@ void SetStopDelayRestoreCapsLock(bool restore);
 bool IsStopDelayHeldForRepress();
 void SetStopDelayHeldForRepress(bool held);
 void SetCaptureConfigStale(bool stale);
+HWND CaptureEffectiveStopRootWindow(DWORD* processId = nullptr);
+void CapturePendingStopAnchor();
+void ClearPendingStopAnchor();
 
 void OnRecordingWatchdogTimer();
 void OnSessionLock();

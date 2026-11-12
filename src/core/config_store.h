@@ -214,6 +214,8 @@ struct Config {
     bool enableDebugMode = false;
     bool forceUnicodeInput = false;
     bool restoreClipboardAfterPaste = false;
+    bool copyToClipboardOnFailure = true;
+    bool clipboardFallbackOnWindowSwitch = true;
     std::wstring audioBackend = L"wasapi";
     std::wstring audioDeviceId;
     std::wstring diagnosticAudioMode = L"off";

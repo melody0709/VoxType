@@ -24,6 +24,7 @@
 #include "injection_ledger.h"
 #include "learning_intake.h"
 #include "ui_utils.h"
+#include "ui_strings.h"
 #include "engine_local.h"
 #include "path_service.h"
 #include "app_state.h"
@@ -46,6 +47,144 @@ static int s_wtsRetryCount = 0;
 static bool s_wtsRegistered = false;
 static bool s_sessionLocked = false;
 static bool s_sessionDisconnected = false;
+static std::wstring s_lastCopyableTranscript;
+
+static bool DeliverFinalTextToTarget(const std::wstring& text,
+                                     const Config& resultConfig,
+                                     const SelectionContext& selection,
+                                     bool hasSelectionRewrite,
+                                     bool llmApplied,
+                                     HWND stopRootWindow,
+                                     DWORD stopRootProcessId,
+                                     uint64_t attemptId,
+                                     double* outPasteMs) {
+    const bool confirmedSensitiveAtStart =
+        (input_context::SensitiveFocusAnswer(resultConfig.asrSensitiveProbe) ==
+         input_context::kSensitiveProbeSensitive);
+
+    InjectionContext injection;
+    injection.sourceText = text;
+    // Same fail-closed answer history uses: unverified focus stays sensitive
+    // for learning_intake, while clipboard fallback only skips explicit passwords.
+    injection.sensitive =
+        input_context::MustSkipHistoryForFocus(resultConfig.asrSensitiveProbe);
+    injection.confirmedSensitiveAtStart = confirmedSensitiveAtStart;
+    injection.llmApplied = llmApplied;
+    injection.capturePreSelection = !hasSelectionRewrite && resultConfig.asrUndoEnabled;
+    injection.reflectionDelayMs =
+        (!hasSelectionRewrite && resultConfig.asrLearningEnabled)
+            ? static_cast<DWORD>((std::max)(0, resultConfig.asrLearningReflectDelayMs))
+            : 0;
+    injection.stopRootWindow = stopRootWindow;
+    injection.stopRootProcessId = stopRootProcessId;
+    injection.copyToClipboardOnFailure = resultConfig.copyToClipboardOnFailure;
+    injection.fallbackOnWindowSwitch = resultConfig.clipboardFallbackOnWindowSwitch;
+
+    HiResTimer tPaste;
+    const InjectionOutcome outcome = hasSelectionRewrite
+        ? ReplaceSelectionTextImeAwareWithOutcome(selection, text, &injection)
+        : PasteTextImeAwareWithOutcome(text, resultConfig.forceUnicodeInput, &injection);
+    if (outPasteMs) {
+        *outPasteMs = tPaste.ElapsedMs();
+    }
+
+    if (!confirmedSensitiveAtStart && !outcome.skippedDueToPassword &&
+        !platform::IsCurrentFocusWin32Password()) {
+        s_lastCopyableTranscript = text;
+    }
+
+    if (outcome.delivered) {
+        if (g_hudWindow) {
+            SetTimer(g_hudWindow, kHudHideTimer, 200, nullptr);
+        }
+        asr_runtime_log::Write(
+            "event=text_delivery attempt=%llu llm=%d rewrite=%d status=delivered",
+            static_cast<unsigned long long>(attemptId),
+            llmApplied ? 1 : 0,
+            hasSelectionRewrite ? 1 : 0);
+        return true;
+    }
+
+    VolcDebugLog("DeliverFinalText: failed (reason=%s, copied=%d, pwd=%d, detail=%ls)",
+                 InjectionFailureReasonName(outcome.reason),
+                 outcome.copiedToClipboard ? 1 : 0,
+                 outcome.skippedDueToPassword ? 1 : 0,
+                 outcome.detail.c_str());
+    asr_runtime_log::Write(
+        "event=text_delivery attempt=%llu llm=%d rewrite=%d status=%s reason=%s",
+        static_cast<unsigned long long>(attemptId),
+        llmApplied ? 1 : 0,
+        hasSelectionRewrite ? 1 : 0,
+        outcome.copiedToClipboard
+            ? "clipboard_fallback"
+            : (outcome.clipboardCopyPending ? "clipboard_pending"
+               : (outcome.skippedDueToPassword ? "skipped_password" : "failed")),
+        InjectionFailureReasonName(outcome.reason));
+
+    const auto& uiText = ui_strings::UiText();
+    std::wstring hudMessage;
+    UINT hideMs = 2200;
+    if (outcome.clipboardCopyPending) {
+        hudMessage = uiText.hudClipboardCopyPending;
+    } else if (outcome.copiedToClipboard) {
+        hideMs = 2500;
+        switch (outcome.reason) {
+        case InjectionFailureReason::WindowSwitchedAfterStop:
+            hudMessage = uiText.hudCopiedWindowSwitched;
+            break;
+        case InjectionFailureReason::BlockedByUipi:
+            hudMessage = uiText.hudCopiedBlockedUipi;
+            break;
+        case InjectionFailureReason::NoForegroundWindow:
+            hudMessage = uiText.hudCopiedNoTarget;
+            break;
+        case InjectionFailureReason::NonEditableShellSurface:
+            hudMessage = uiText.hudCopiedNoTextBox;
+            break;
+        case InjectionFailureReason::DisabledOrReadOnlyControl:
+            hudMessage = uiText.hudCopiedReadOnly;
+            break;
+        case InjectionFailureReason::SelectionRewriteSkipped:
+            hudMessage = uiText.hudCopiedRewriteSkipped;
+            break;
+        default:
+            hudMessage = uiText.hudCopiedInputFailed;
+            break;
+        }
+    } else if (outcome.skippedDueToPassword) {
+        hudMessage = uiText.hudSkippedPassword;
+    } else if (hasSelectionRewrite) {
+        hudMessage = outcome.detail.empty()
+            ? std::wstring(uiText.hudRewriteSkipped)
+            : ui_strings::Format(uiText.hudRewriteSkippedDetail, outcome.detail);
+    } else {
+        switch (outcome.reason) {
+        case InjectionFailureReason::WindowSwitchedAfterStop:
+            hudMessage = uiText.hudSkippedWindowSwitched;
+            break;
+        case InjectionFailureReason::BlockedByUipi:
+            hudMessage = uiText.hudSkippedBlockedUipi;
+            break;
+        case InjectionFailureReason::NoForegroundWindow:
+            hudMessage = uiText.hudSkippedNoTarget;
+            break;
+        case InjectionFailureReason::NonEditableShellSurface:
+            hudMessage = uiText.hudSkippedNoTextBox;
+            break;
+        case InjectionFailureReason::DisabledOrReadOnlyControl:
+            hudMessage = uiText.hudSkippedReadOnly;
+            break;
+        default:
+            hudMessage = uiText.hudTextInputFailed;
+            break;
+        }
+    }
+    ShowHud(hudMessage);
+    if (g_hudWindow) {
+        SetTimer(g_hudWindow, kHudHideTimer, hideMs, nullptr);
+    }
+    return false;
+}
 
 void SetTaskbarCreatedMessage(UINT msg) {
     g_taskbarCreatedMessage = msg;
@@ -191,17 +330,20 @@ static void DebugPrintBatchVadTrim() {
 void ShowTrayMenu(HWND hwnd) {
     POINT pt;
     GetCursorPos(&pt);
+    const auto& uiText = ui_strings::UiText();
     HMENU menu = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING | MF_GRAYED, ID_TRAY_VERSION, APP_VERSION_WSTR);
-    AppendMenuW(menu, MF_STRING, ID_TRAY_SETTINGS, L"Settings...");
-    AppendMenuW(menu, MF_STRING, ID_TRAY_RELOAD, L"Reload ASR Engine");
+    AppendMenuW(menu, MF_STRING, ID_TRAY_SETTINGS, uiText.traySettings);
+    AppendMenuW(menu, MF_STRING, ID_TRAY_RELOAD, uiText.trayReloadEngine);
+    AppendMenuW(menu, MF_STRING | (s_lastCopyableTranscript.empty() ? MF_GRAYED : 0),
+                ID_TRAY_COPY_LAST_TRANSCRIPT, uiText.trayCopyLastTranscript);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | (g_config.enableDebugMode ? MF_CHECKED : 0),
-                ID_TRAY_DEBUG_MODE, L"Debug Mode");
+                ID_TRAY_DEBUG_MODE, uiText.trayDebugMode);
     AppendMenuW(menu, MF_STRING | (g_config.forceUnicodeInput ? MF_CHECKED : 0),
-                ID_TRAY_FORCE_UNICODE, L"Force Unicode Input");
+                ID_TRAY_FORCE_UNICODE, uiText.trayForceUnicode);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, ID_TRAY_QUIT, L"Quit");
+    AppendMenuW(menu, MF_STRING, ID_TRAY_QUIT, uiText.trayQuit);
     SetForegroundWindow(hwnd);
     RECT work;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
@@ -233,13 +375,16 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         // LoadConfig() 之后创建，语义等价，同时避免 main.cpp 的行数棘轮被顶上基线。
         // Settings 保存与托盘 Debug 开关各自另有同步点。
         asr_runtime_log::ApplyRuntimeLogConfig(g_config);
+        ui_strings::ApplyUiLanguageFromConfig(g_config.uiLanguage);
         return 0;
     case WM_WTSSESSION_CHANGE:
         if (wParam == WTS_SESSION_LOCK || wParam == WTS_SESSION_LOGOFF) {
             s_sessionLocked = true;
+            s_lastCopyableTranscript.clear();
             OnSessionLock();
         } else if (wParam == WTS_REMOTE_DISCONNECT || wParam == WTS_CONSOLE_DISCONNECT) {
             s_sessionDisconnected = true;
+            s_lastCopyableTranscript.clear();
             OnSessionLock();
         } else if (wParam == WTS_REMOTE_CONNECT || wParam == WTS_CONSOLE_CONNECT) {
             // Reconnection alone does not unlock a locked session.
@@ -255,6 +400,15 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         } else if (wParam == kClipboardPasteStillPending) {
             asr_runtime_log::WriteIf(true, "event=clipboard_paste_pending elapsed_ms=%llu",
                                     static_cast<unsigned long long>(lParam));
+        } else if (wParam == kClipboardFallbackCopied || wParam == kClipboardFallbackCancelled) {
+            asr_runtime_log::Write("event=clipboard_fallback status=%s",
+                                  wParam == kClipboardFallbackCopied ? "copied" : "clipboard_changed");
+            if (!s_sessionLocked && !s_sessionDisconnected && !g_recording && !g_hudIsRefining) {
+                const auto& uiText = ui_strings::UiText();
+                ShowHud(wParam == kClipboardFallbackCopied ? uiText.hudCopiedLastTranscript
+                                                          : uiText.hudClipboardChangedUseTray);
+                if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2500, nullptr);
+            }
         }
         return 0;
     case kInjectionReflectionMessage: {
@@ -316,10 +470,12 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             s_streamingPartialHudState = {};
             StartRecordingSession();
         } else if (wParam == kHotkeyCapsLockRecordingStop) {
+            CapturePendingStopAnchor();
             SetStopDelayRestoreCapsLock(true);
             SetStopDelayPending(true);
             SetTimer(g_mainWindow, kRecordingStopDelayTimer, kRecordingStopDelayMs, nullptr);
         } else if (wParam == kHotkeyRecordingStop) {
+            CapturePendingStopAnchor();
             SetStopDelayRestoreCapsLock(false);
             SetStopDelayPending(true);
             SetTimer(g_mainWindow, kRecordingStopDelayTimer, kRecordingStopDelayMs, nullptr);
@@ -410,37 +566,17 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             if (!text.empty() && text != L"No speech detected" && !isError) {
                 VolcDebugLog("DeliverFinalText: starting (text=%u chars, selection_rewrite=%d)",
                              (unsigned)text.size(), hasSelectionRewrite ? 1 : 0);
-                HiResTimer tPaste;
-                bool delivered = true;
-                if (hasSelectionRewrite) {
-                    std::wstring replaceError;
-                    delivered = ReplaceSelectionTextImeAware(
-                        result->selection, text, &replaceError);
-                    if (!delivered) {
-                        VolcDebugLog("ReplaceSelectionTextImeAware: skipped (%ls)",
-                                     replaceError.c_str());
-                        ShowHud(L"Rewrite skipped: " + replaceError);
-                        if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
-                    }
-                } else {
-                    InjectionContext injection;
-                    injection.sourceText = text;
-                    // Same fail-closed answer the history already uses: a focus
-                    // we could not verify is treated as sensitive.
-                    injection.sensitive =
-                        input_context::MustSkipHistoryForFocus(resultConfig.asrSensitiveProbe);
-                    injection.capturePreSelection = resultConfig.asrUndoEnabled;
-                    injection.reflectionDelayMs =
-                        resultConfig.asrLearningEnabled
-                            ? static_cast<DWORD>((std::max)(0, resultConfig.asrLearningReflectDelayMs))
-                            : 0;
-                    delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput, &injection);
-                    if (!delivered) {
-                        ShowHud(L"Text input failed");
-                        if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
-                    }
-                }
-                double pasteMs = tPaste.ElapsedMs();
+                double pasteMs = 0.0;
+                const bool delivered = DeliverFinalTextToTarget(
+                    text,
+                    resultConfig,
+                    result ? result->selection : SelectionContext{},
+                    hasSelectionRewrite,
+                    /*llmApplied=*/false,
+                    result ? result->stopRootWindow : nullptr,
+                    result ? result->stopRootProcessId : 0,
+                    result ? result->attemptId : 0,
+                    &pasteMs);
                 VolcDebugLog("DeliverFinalText: done (%.0fms, delivered=%d)",
                              pasteMs, delivered ? 1 : 0);
 
@@ -502,43 +638,25 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         }
         const Config resultConfig = result ? result->resultConfig : g_config;
         const std::wstring text = result ? result->text : L"LLM failed";
+        const bool isLlmError = (text == L"LLM failed" || text.rfind(L"LLM failed:", 0) == 0);
         g_hudIsRefining = false;
         ShowHud(text);
-        if (!text.empty() && text.rfind(L"LLM failed:", 0) != 0) {
-            HiResTimer tPaste;
+        if (!text.empty() && !isLlmError) {
             const bool hasSelectionRewrite = result &&
                 resultConfig.asrBackend == L"qwen_free" &&
                 resultConfig.qwenFreeRewriteEnabled &&
                 result->selection.HasCapturedSelection();
-            bool delivered = true;
-            if (hasSelectionRewrite) {
-                std::wstring replaceError;
-                delivered = ReplaceSelectionTextImeAware(
-                    result->selection, text, &replaceError);
-                if (!delivered) {
-                    VolcDebugLog("ReplaceSelectionTextImeAware (LLM): skipped (%ls)",
-                                 replaceError.c_str());
-                    ShowHud(L"Rewrite skipped: " + replaceError);
-                    if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
-                }
-            } else {
-                InjectionContext injection;
-                injection.sourceText = text;
-                injection.llmApplied = true;
-                injection.sensitive =
-                    input_context::MustSkipHistoryForFocus(resultConfig.asrSensitiveProbe);
-                injection.capturePreSelection = resultConfig.asrUndoEnabled;
-                injection.reflectionDelayMs =
-                    resultConfig.asrLearningEnabled
-                        ? static_cast<DWORD>((std::max)(0, resultConfig.asrLearningReflectDelayMs))
-                        : 0;
-                delivered = PasteTextImeAware(text, resultConfig.forceUnicodeInput, &injection);
-                if (!delivered) {
-                    ShowHud(L"Text input failed");
-                    if (g_hudWindow) SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
-                }
-            }
-            double pasteMs = tPaste.ElapsedMs();
+            double pasteMs = 0.0;
+            const bool delivered = DeliverFinalTextToTarget(
+                text,
+                resultConfig,
+                result ? result->selection : SelectionContext{},
+                hasSelectionRewrite,
+                /*llmApplied=*/true,
+                result ? result->stopRootWindow : nullptr,
+                result ? result->stopRootProcessId : 0,
+                result ? result->attemptId : 0,
+                &pasteMs);
 
             if (resultConfig.enableDebugMode && delivered) {
                 DebugPrintHeader(GetRecordingMs(), GetLastPcmBytes());
@@ -579,9 +697,19 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 DebugPrintTextLine(L"ASR", result ? result->rawAsrText : GetLastRawAsrText());
                 DebugPrintTextLine(L"LLM", text);
             }
-        }
-        if (g_hudWindow) {
-            SetTimer(g_hudWindow, kHudHideTimer, 200, nullptr);
+        } else {
+            const std::wstring fallbackRaw =
+                (result && !result->rawAsrText.empty()) ? result->rawAsrText : GetLastRawAsrText();
+            const bool confirmedSensitiveAtStart =
+                (input_context::SensitiveFocusAnswer(resultConfig.asrSensitiveProbe) ==
+                 input_context::kSensitiveProbeSensitive);
+            if (!fallbackRaw.empty() && !confirmedSensitiveAtStart &&
+                !platform::IsCurrentFocusWin32Password()) {
+                s_lastCopyableTranscript = fallbackRaw;
+            }
+            if (g_hudWindow) {
+                SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
+            }
         }
         return 0;
     }
@@ -705,6 +833,23 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             return 0;
         case ID_TRAY_RELOAD:
             PostMessageW(hwnd, kReloadMessage, 0, 0);
+            return 0;
+        case ID_TRAY_COPY_LAST_TRANSCRIPT:
+            if (!s_lastCopyableTranscript.empty()) {
+                const auto& uiText = ui_strings::UiText();
+                const ClipboardCopyStatus copyStatus = CopyTextToClipboardFallback(
+                    s_lastCopyableTranscript,
+                    g_config.restoreClipboardAfterPaste,
+                    /*confirmedSensitiveAtStart=*/false,
+                    nullptr,
+                    /*checkCurrentFocusPassword=*/false);
+                ShowHud(copyStatus == ClipboardCopyStatus::Pending ? uiText.hudClipboardCopyPending
+                    : (copyStatus == ClipboardCopyStatus::Copied ? uiText.hudCopiedLastTranscript
+                                                                : uiText.hudClipboardCopyFailed));
+                if (g_hudWindow) {
+                    SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
+                }
+            }
             return 0;
         case ID_TRAY_QUIT:
             DestroyWindow(hwnd);

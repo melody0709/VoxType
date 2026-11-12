@@ -57,7 +57,7 @@ flowchart LR
 | `src/core/config_store.h` / `src/core/config_store.cpp` | 配置数据模型（`Config`）、schema 迁移、DPAPI 凭据加密与 JSON 读写 |
 | `src/core/path_service.h` / `src/core/path_service.cpp` | 程序与模型运行目录路径解析、日志与配置文件路径查询 |
 | `src/core/vocabulary_manager.h` / `src/core/vocabulary_manager.cpp` | 通用自定义词汇表管理器：多模式解析（JSON/行格式）、权重比例线性折算与跨 ASR 引擎转译 |
-| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 标准控件粘贴完成回调、Unicode 或微信 WM_CHAR 文本投递，以及有条件的剪贴板回滚 |
+| `src/platform/text_injector.h` / `src/platform/text_injector.cpp` | 标准控件粘贴完成回调、Unicode 或微信 WM_CHAR 文本投递、有条件的剪贴板回滚，以及注入前目标/跨窗守卫（`AssessInjectionTarget`）和带隐私门控的剪贴板兜底（`CopyTextToClipboardFallback`） |
 | `src/core/correction_extractor.h` / `src/core/correction_extractor.cpp` | 学习链路的本地编辑提取器：把"注入文本 + 前台文档读回"变成差异对 `原词 → 改词`（前后缀裁剪、长度/标点/控制字符策略，以及带头/尾锚逐步缩短、折叠换行重试、尾部锚探测区域边界的文档级入口） |
 | `src/core/learning_store.h` / `src/core/learning_store.cpp` | 学习到的纠正对 JSONL 存储（`%LOCALAPPDATA%\VoxType\learning\corrections.json`）：命中/权重强化、(hits, lastMs) 淘汰与供运行时词表合并的 `WeightedWords()`。其中的词会被具备热词通道的云端后端作为热词上传——见头部的隐私说明 |
 | `src/core/injection_ledger.h` / `src/core/injection_ledger.cpp` | 单槽、单调递增的上屏台账（方式、注入文本、目标/焦点窗口、前置选区、敏感标记）与带序列校验的 `Snapshot()` / `Invalidate()` / `Consume()`；反射链路与后续撤销路径对齐所用的共享状态 |
@@ -143,6 +143,7 @@ flowchart LR
 托盘菜单：
 
 - `Settings...`
+- `Copy Last Transcript` / 「复制上次识别文本」（`ID_TRAY_COPY_LAST_TRANSCRIPT`，复制保存在内存中的最近一次非敏感转写）
 - `Reload ASR Worker`
 - `Quit`
 
@@ -340,7 +341,13 @@ models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8/model.
 1. **微信**（`Weixin.exe`）：`WM_CHAR` 逐字符发送（微信自定义 Qt 控件拦截 Ctrl+V）
 2. **标准 Edit/RichEdit/Scintilla 控件**：开启“保留原剪贴板”时通过 `SendMessageCallbackW` 发送 `WM_PASTE`，完成回调后恢复；关闭时写入整段文本并发送 Ctrl+V，并沿用旧版粘贴前临时切换前台 IME 为英文的处理，转写保留在剪贴板历史中。保护模式下粘贴尚未完成时，普通听写输入走 Unicode，避免覆写正在消费的剪贴板；选区改写拒绝第二次编辑。
 3. **其他应用**：默认使用同一套剪贴板、Ctrl+V 与 IME 处理；开启“保留原剪贴板”时改用 `SendInput` + `KEYEVENTF_UNICODE`，不改剪贴板或 IME 状态。
-4. **Force Unicode Input**（可选）：所有目标都走 Unicode。发送失败会反馈；API 发送/完成成功不等于目标接受了文本（例如只读控件可忽略 `WM_PASTE`）。
+4. **Force Unicode Input**（可选）：所有目标都走 Unicode（同样受注入前目标守卫约束）。发送失败会反馈；API 发送/完成成功不等于目标接受了文本（例如只读控件可忽略 `WM_PASTE`）。
+5. **注入前目标守卫与剪贴板兜底**（`AssessInjectionTarget`、`PasteTextImeAwareWithOutcome`、`CopyTextToClipboardFallback`）：
+   - **停录锚点捕获**：`recording_session_controller` / `asr_attempt_manager` / `asr_dispatcher` 在停止录音时记录前台顶层窗口与进程 PID（`stopRootWindow` / `stopRootProcessId`），过滤 `VoxType.Main`、`VoxType.Hud` 与隐藏窗口，并在 150ms 误触重按或看门狗取消时清理过期锚点。
+   - **投递前可输入性校验**：依次检查前台窗口是否存在（`NoForegroundWindow`）、活跃顶层窗口是否已偏离有效 `IsWindow` 停录锚点（`WindowSwitchedAfterStop`，同时校验 `HWND` 与 PID）、是否落在非可编辑 Windows Shell 界面（`NonEditableShellSurface`，放行资源管理器/桌面重命名 `Edit` 与 `VoxType.Settings`）、目标进程完整性级别/UIAccess 是否高于当前进程（`BlockedByUipi`），以及 `GetFocus` 是否指向禁用或带 `ES_READONLY` 的 `Edit`/`RichEdit` 控件（`DisabledOrReadOnlyControl`）。
+   - **自动转存剪贴板**：当注入被拦截或失败且配置允许时（`copy_to_clipboard_on_failure`，以及针对 `WindowSwitchedAfterStop` 的 `clipboard_fallback_on_window_switch`），`main_window::DeliverFinalTextToTarget` 会区分“已复制”和“等待上次粘贴”。`CopyTextToClipboardFallback` 返回 `ClipboardCopyStatus`（`Failed` / `Pending` / `Copied`）。旧 `WM_PASTE` 未完成时始终禁止覆写剪贴板，即使所有者已改变；完成回调仅在原所有者与序列号仍匹配时执行排队复制，否则保留外部复制并提示从托盘找回转写。退出时不改动仍供旧粘贴读取的剪贴板内容。
+   - **隐私边界**：仅 `t0` `kSensitiveProbeSensitive` 与 `t3` `IsCurrentFocusWin32Password()`（仅 Win32 `ES_PASSWORD`，不调用 UIA）会阻止剪贴板兜底与托盘 `s_lastCopyableTranscript`；非明确的 `Unknown` 探针（如未配对的浏览器窗口）有意采用 fail-open 放行剪贴板兜底，因为识别已经发生，切窗或失焦时丢弃普通文本会迫使用户重录。
+   - **手动二次复制**：每次成功投递或兜底保留的非敏感转写还会保存在内存中，供托盘菜单「复制上次识别文本」（`ID_TRAY_COPY_LAST_TRANSCRIPT`）随时再次复制。
 
 保护模式的快照在写入前将各格式实体化到独立的 Shell 数据对象。内存、快照或隐私标记准备失败时不发布正文；恢复失败且临时内容仍属于 VoxType 时持续重试。快速模式为避免富文本或延迟渲染格式拖慢日常粘贴，刻意跳过完整快照；虽然先分配正文并检查 `EmptyClipboard`，但清空成功后若 `SetClipboardData` 罕见失败，旧剪贴板仍可能丢失，快速模式不能承诺回滚。`CloseClipboard` 可能合成格式并提高序列号，因此在关闭后读取最终序列号并再次检查所有者。恢复前发现序列号或所有者改变就放弃；但检查与 OLE 恢复不是对外部同时复制的原子操作。恢复失败首次及随后每分钟、粘贴 10 秒未完成及随后每分钟写一次无正文的有界诊断日志。目标程序始终不完成粘贴时，临时内容可能保留到退出；固定延迟不作为已消费的证明。
 
@@ -422,6 +429,8 @@ Portable 包通过 `<app-root>\portable.flag` 识别，并继续使用解压目�
 - `fallback_asr_backend`：可选串行 fallback（`none`、`local`、`baidu`、`qwen`、`mimo`、`doubao_ime` 或 `qwen_free`），必须与 `asr_backend` 不同；火山引擎不是 fallback target。
 - `diagnostic_audio_mode`：全部 ASR provider/stage 共用的录音诊断策略（`off`、`failures` 或 `all`），默认 `off`。
 - `restore_clipboard_after_paste`：是否保护原剪贴板（默认 `false`）。General 页以相反语义展示“Fast paste + clipboard history”，默认勾选；勾选时优先整段写入剪贴板并发送 Ctrl+V，转写可进入 Win+V；未勾选时对自绘控件使用 Unicode，对标准控件在完成回调后恢复原剪贴板。只有保护模式会对部分写入失败执行回滚，微信始终使用 `WM_CHAR`。已有配置值在界面改名后保持原有含义。
+- `copy_to_clipboard_on_failure`：当文本注入被目标守卫拦截或注入失败时，是否自动将非敏感转写保留到剪贴板（默认 `true`）。
+- `clipboard_fallback_on_window_switch`：是否在停止录音到投递上屏之间检测顶层窗口切换，并在切换后自动改存剪贴板而不误打入新窗口（默认 `true`）。
 - `qwen_*`：Qwen ASR 的三种 profile、北京 Audio 3 HTTP/WSS 地址、语言提示、词汇 JSON、语义标点、句间静音、多阈值、heartbeat、噪声阈值和 chunk 配置。上下文增强是三个相互独立的开关——`qwen_enable_input_context`（焦点输入框）、`qwen_history_context` 与 `qwen_history_context_rounds`（来自 `src/core/asr_history.*` 的最近最终转写，1–5 轮，默认开启），以及火山引擎对应项 `volc_enable_input_context` / `volc_enable_context` + `volc_context_history` / `volc_reuse_vocabulary`。焦点字段快照仅在运行时存在，不持久化。旧 realtime 的 turn detection 仍固定 Manual，不再持久化。
 - `qwen_free_*`：千问 IME Free 启用状态、bundled `VoiceInputWrite` 后处理开关、实验性选区改写、本地协议诊断和可选 shell 目录覆盖。UTDID 通常自动获取，不放入普通示例配置。
 - `mimo_*`：MiMo ASR API key、OpenAI-compatible Base URL、模型和语言（`auto`、`zh`、`en`）；`mimo_api_key` 使用 DPAPI 加密。

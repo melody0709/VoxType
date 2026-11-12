@@ -276,6 +276,8 @@ void InitializeRegistry() {
     reg.Register({"enable_debug_mode", &Config::enableDebugMode, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"force_unicode_input", &Config::forceUnicodeInput, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"restore_clipboard_after_paste", &Config::restoreClipboardAfterPaste, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"copy_to_clipboard_on_failure", &Config::copyToClipboardOnFailure, CryptoPolicy::None, BoolJsonFormat::Literal});
+    reg.Register({"clipboard_fallback_on_window_switch", &Config::clipboardFallbackOnWindowSwitch, CryptoPolicy::None, BoolJsonFormat::Literal});
     reg.Register({"asr_backend", &Config::asrBackend});
     reg.Register({"fallback_asr_backend", &Config::fallbackAsrBackend});
     reg.Register({"baidu_api_key", &Config::baiduApiKey});

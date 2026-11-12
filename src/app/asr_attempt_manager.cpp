@@ -130,6 +130,8 @@ void RefineWithLlmAsync(const AsrFinalMessage& finalMessage) {
         msg->primaryError = finalMessage.primaryError;
         msg->fallbackBackend = finalMessage.fallbackBackend;
         msg->selection = finalMessage.selection;
+        msg->stopRootWindow = finalMessage.stopRootWindow;
+        msg->stopRootProcessId = finalMessage.stopRootProcessId;
         if (!PostMessageW(g_mainWindow, kLlmResultMessage, 0, reinterpret_cast<LPARAM>(msg))) {
             delete msg;
         }
@@ -354,19 +356,24 @@ static void LogAsrResultEvent(const char* event,
 
 void RecognizeAsync(const std::vector<BYTE>& pcm,
                     uint64_t attemptId,
-                    Config config) {
+                    Config config,
+                    HWND stopRootWindow,
+                    DWORD stopRootProcessId) {
     std::vector<float> localStreamingVadSamples;
     if (config.asrBackend == L"local") {
         localStreamingVadSamples = std::move(g_streamingVadSamples);
         g_streamingVadSamples.clear();
     }
 
-    std::thread([attemptId, config, pcm, localStreamingVadSamples = std::move(localStreamingVadSamples)]() mutable {
+    std::thread([attemptId, config, pcm, stopRootWindow, stopRootProcessId,
+                 localStreamingVadSamples = std::move(localStreamingVadSamples)]() mutable {
         const ULONGLONG primaryStartTick = GetTickCount64();
         AsrSessionResult selectedResult = RunBatchAsrOnce(config, pcm, std::move(localStreamingVadSamples));
         Config resultConfig = config;
         AsrFinalMetadata metadata;
         metadata.attemptId = attemptId;
+        metadata.stopRootWindow = stopRootWindow;
+        metadata.stopRootProcessId = stopRootProcessId;
 
         const AsrResultClassification primaryClassification = ClassifyAsrResult(selectedResult.text);
         const bool primaryAccepted = ShouldAcceptFinalMessage(attemptId);
@@ -458,6 +465,8 @@ struct RecognitionAttemptContext {
     bool deferredAllowCancelledAttempt = false;
     bool deferredBundledPostProcessApplied = false;
     SelectionContext selection;
+    HWND stopRootWindow = nullptr;
+    DWORD stopRootProcessId = 0;
 };
 
 static std::atomic<uint64_t> g_asrAttemptSeq{0};
@@ -663,7 +672,9 @@ std::unique_ptr<AsrAttemptFinalMessage> CompleteActiveAttemptRecording(
     uint64_t attemptId,
     const std::vector<BYTE>* pcm,
     double recordingMs,
-    size_t pcmBytes) {
+    size_t pcmBytes,
+    HWND stopRootWindow,
+    DWORD stopRootProcessId) {
     std::unique_ptr<AsrAttemptFinalMessage> deferred;
     std::shared_ptr<const std::vector<BYTE>> capturedPcm;
     bool completed = false;
@@ -672,6 +683,8 @@ std::unique_ptr<AsrAttemptFinalMessage> CompleteActiveAttemptRecording(
         if (g_activeAttempt.id == attemptId && !g_activeAttempt.recordingStopped) {
             g_activeAttempt.recordingStopped = true;
             g_activeAttempt.stoppedTick = GetTickCount64();
+            g_activeAttempt.stopRootWindow = stopRootWindow;
+            g_activeAttempt.stopRootProcessId = stopRootProcessId;
             if (pcm) {
                 capturedPcm = std::make_shared<const std::vector<BYTE>>(*pcm);
                 g_activeAttempt.pcm = capturedPcm;
@@ -760,7 +773,9 @@ static AttemptFinalDisposition PrepareAttemptFinal(
     std::shared_ptr<const std::vector<BYTE>>& pcm,
     bool& fallbackAlreadyStarted,
     ULONGLONG& elapsedStartTick,
-    SelectionContext& selection) {
+    SelectionContext& selection,
+    HWND& stopRootWindow,
+    DWORD& stopRootProcessId) {
     std::lock_guard<std::mutex> lock(g_asrAttemptMutex);
     if (message.attemptId == 0 || g_activeAttempt.id != message.attemptId ||
         g_activeAttempt.finalHandled || g_activeAttempt.invalidated ||
@@ -788,6 +803,8 @@ static AttemptFinalDisposition PrepareAttemptFinal(
     g_activeAttempt.pcm.reset();
     fallbackAlreadyStarted = g_activeAttempt.fallbackStarted;
     selection = g_activeAttempt.selection;
+    stopRootWindow = g_activeAttempt.stopRootWindow;
+    stopRootProcessId = g_activeAttempt.stopRootProcessId;
     elapsedStartTick = g_activeAttempt.stoppedTick != 0
         ? g_activeAttempt.stoppedTick
         : g_activeAttempt.startedTick;
@@ -824,7 +841,9 @@ static void DispatchStreamingFallbackAsync(uint64_t attemptId,
                                            Config primaryConfig,
                                            std::shared_ptr<const std::vector<BYTE>> pcm,
                                            std::wstring primaryError,
-                                           bool allowCancelledAttempt = false) {
+                                           bool allowCancelledAttempt,
+                                           HWND stopRootWindow,
+                                           DWORD stopRootProcessId) {
     if (!IsActiveAsrAttempt(attemptId, allowCancelledAttempt)) {
         asr_runtime_log::Write("event=fallback_discarded_stale attempt=%llu stage=before_start",
                                static_cast<unsigned long long>(attemptId));
@@ -847,7 +866,7 @@ static void DispatchStreamingFallbackAsync(uint64_t attemptId,
     PostFallbackHud(attemptId, fallbackConfig);
     std::thread([attemptId, primaryConfig, fallbackConfig, pcm,
                  primaryError = std::move(primaryError),
-                 allowCancelledAttempt]() {
+                 allowCancelledAttempt, stopRootWindow, stopRootProcessId]() {
         if (!IsActiveAsrAttempt(attemptId, allowCancelledAttempt)) {
             asr_runtime_log::Write("event=fallback_discarded_stale attempt=%llu stage=worker_start",
                                    static_cast<unsigned long long>(attemptId));
@@ -864,6 +883,8 @@ static void DispatchStreamingFallbackAsync(uint64_t attemptId,
         metadata.primaryBackend = primaryConfig.asrBackend;
         metadata.primaryError = NormalizeAsrText(primaryError);
         metadata.fallbackBackend = fallbackConfig.asrBackend;
+        metadata.stopRootWindow = stopRootWindow;
+        metadata.stopRootProcessId = stopRootProcessId;
 
         const AsrResultClassification fallbackClassification = ClassifyAsrResult(selectedResult.text);
         const bool fallbackAccepted = IsActiveAsrAttempt(
@@ -900,10 +921,13 @@ void HandleAsrAttemptFinal(AsrAttemptFinalMessage& msg) {
     bool fallbackAlreadyStarted = false;
     ULONGLONG elapsedStartTick = 0;
     SelectionContext selection;
+    HWND stopRootWindow = nullptr;
+    DWORD stopRootProcessId = 0;
     const bool allowCancelledAttempt = msg.allowCancelledAttempt;
     const AttemptFinalDisposition disposition = PrepareAttemptFinal(
         msg, primaryConfig, resultConfig, pcm,
-        fallbackAlreadyStarted, elapsedStartTick, selection);
+        fallbackAlreadyStarted, elapsedStartTick, selection,
+        stopRootWindow, stopRootProcessId);
     if (disposition == AttemptFinalDisposition::DeferredUntilStop) {
         asr_runtime_log::Write(
             "event=primary_final_deferred attempt=%llu source=%s reason=recording_active",
@@ -956,7 +980,7 @@ void HandleAsrAttemptFinal(AsrAttemptFinalMessage& msg) {
         automaticFallbackConfig.fallbackAsrBackend = L"qwen";
         DispatchStreamingFallbackAsync(
             msg.attemptId, automaticFallbackConfig, pcm, primaryText,
-            allowCancelledAttempt);
+            allowCancelledAttempt, stopRootWindow, stopRootProcessId);
         return;
     }
     if (automaticQwenUtdidFallback) {
@@ -983,7 +1007,8 @@ void HandleAsrAttemptFinal(AsrAttemptFinalMessage& msg) {
     }
     if (canFallback && pcm && pcm->size() >= 8000) {
         DispatchStreamingFallbackAsync(msg.attemptId, primaryConfig, pcm,
-                                        primaryText, allowCancelledAttempt);
+                                        primaryText, allowCancelledAttempt,
+                                        stopRootWindow, stopRootProcessId);
         return;
     }
     if (canFallback) {
@@ -1000,6 +1025,8 @@ void HandleAsrAttemptFinal(AsrAttemptFinalMessage& msg) {
     metadata.allowCancelledAttempt = allowCancelledAttempt;
     metadata.bundledPostProcessApplied = msg.bundledPostProcessApplied;
     metadata.selection = std::move(selection);
+    metadata.stopRootWindow = stopRootWindow;
+    metadata.stopRootProcessId = stopRootProcessId;
     DispatchAsrFinalText(g_mainWindow, primaryText, resultConfig,
                          RefineWithLlmAsync, GetLastRawAsrTextPtr(), metadata);
 }
@@ -1011,7 +1038,10 @@ void HandleStreamingSessionStartFailure(uint64_t attemptId,
     g_recording = false;
     double recordingMs = static_cast<double>(GetTickCount64() - GetSessionStartTick());
     SetLastPcmBytes(pcm.size());
-    CompleteActiveAttemptRecording(attemptId, &pcm, recordingMs, pcm.size());
+    DWORD stopRootPid = 0;
+    HWND stopRootWindow = CaptureEffectiveStopRootWindow(&stopRootPid);
+    CompleteActiveAttemptRecording(attemptId, &pcm, recordingMs, pcm.size(),
+                                   stopRootWindow, stopRootPid);
 
     AsrAttemptFinalMessage message;
     message.attemptId = attemptId;

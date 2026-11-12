@@ -46,6 +46,9 @@ static bool g_stopDelayRestoreCapsLock = false;
 static bool g_stopDelayPending = false;
 static bool g_stopDelayHeldForRepress = false;
 static bool g_captureConfigStale = false;
+static bool s_hasPendingStopAnchor = false;
+static HWND s_pendingStopRootWindow = nullptr;
+static DWORD s_pendingStopRootPid = 0;
 
 bool GetWasapiUsed() { return s_wasapiUsed; }
 const std::wstring& GetWasapiDeviceName() { return s_wasapiDeviceName; }
@@ -61,6 +64,41 @@ void SetStopDelayRestoreCapsLock(bool restore) { g_stopDelayRestoreCapsLock = re
 bool IsStopDelayHeldForRepress() { return g_stopDelayHeldForRepress; }
 void SetStopDelayHeldForRepress(bool held) { g_stopDelayHeldForRepress = held; }
 void SetCaptureConfigStale(bool stale) { g_captureConfigStale = stale; }
+
+HWND CaptureEffectiveStopRootWindow(DWORD* processId) {
+    if (processId) *processId = 0;
+    HWND fg = GetForegroundWindow();
+    if (!fg || !IsWindow(fg)) return nullptr;
+    HWND root = selection_context::TopLevelWindow(fg);
+    if (!root || !IsWindow(root)) return nullptr;
+    if (root == g_mainWindow || root == g_hudWindow) return nullptr;
+    if (!IsWindowVisible(root)) return nullptr;
+    if (processId) {
+        GetWindowThreadProcessId(root, processId);
+    }
+    return root;
+}
+
+void CapturePendingStopAnchor() {
+    s_hasPendingStopAnchor = true;
+    s_pendingStopRootWindow = CaptureEffectiveStopRootWindow(&s_pendingStopRootPid);
+}
+
+void ClearPendingStopAnchor() {
+    s_hasPendingStopAnchor = false;
+    s_pendingStopRootWindow = nullptr;
+    s_pendingStopRootPid = 0;
+}
+
+static void TakeStopAnchor(HWND& outRootWindow, DWORD& outRootPid) {
+    if (s_hasPendingStopAnchor) {
+        outRootWindow = s_pendingStopRootWindow;
+        outRootPid = s_pendingStopRootPid;
+        ClearPendingStopAnchor();
+        return;
+    }
+    outRootWindow = CaptureEffectiveStopRootWindow(&outRootPid);
+}
 
 struct StreamingPartialHudCallbackContext {
     std::mutex mutex;
@@ -330,6 +368,7 @@ void BeginCaptureOnly() {
             g_stopDelayPending = false;
             g_stopDelayHeldForRepress = true;
             g_stopDelayRestoreCapsLock = false;
+            ClearPendingStopAnchor();
         }
         return;
     }
@@ -354,6 +393,7 @@ void DiscardPendingCapture() {
         if (g_stopDelayHeldForRepress) {
             g_stopDelayHeldForRepress = false;
             g_stopDelayPending = true;
+            CapturePendingStopAnchor();
             SetTimer(g_mainWindow, kRecordingStopDelayTimer, kRecordingStopDelayMs, nullptr);
         }
         return;
@@ -374,6 +414,7 @@ void StartRecordingSession() {
     g_stopDelayPending = false;
     g_stopDelayHeldForRepress = false;
     g_stopDelayRestoreCapsLock = false;
+    ClearPendingStopAnchor();
     if (g_recording) return;
 
     const bool resumePendingCapture = g_capturePendingOnly;
@@ -602,7 +643,13 @@ void StartRecordingSession() {
 }
 
 void StopRecordingSession() {
-    if (!g_recording) return;
+    if (!g_recording) {
+        ClearPendingStopAnchor();
+        return;
+    }
+    HWND stopRootWindow = nullptr;
+    DWORD stopRootPid = 0;
+    TakeStopAnchor(stopRootWindow, stopRootPid);
     if (g_mainWindow) {
         KillTimer(g_mainWindow, kRecordingWatchdogTimer);
     }
@@ -652,7 +699,8 @@ void StopRecordingSession() {
     if (IsStreamingCloudBackend(recordingConfig) && hasStreamingSession) {
         std::unique_ptr<AsrAttemptFinalMessage> deferredFinal =
             CompleteActiveAttemptRecording(attemptId, &pcm,
-                                            g_recordingMs, pcm.size());
+                                            g_recordingMs, pcm.size(),
+                                            stopRootWindow, stopRootPid);
         SetLastPcmBytes(pcm.size());
         if (pcm.size() < 8000) {
             KillTimer(g_mainWindow, kStreamingWatchdogTimer);
@@ -724,7 +772,8 @@ void StopRecordingSession() {
         return;
     }
 
-    CompleteActiveAttemptRecording(attemptId, &pcm, g_recordingMs, pcm.size());
+    CompleteActiveAttemptRecording(attemptId, &pcm, g_recordingMs, pcm.size(),
+                                   stopRootWindow, stopRootPid);
     if (pcm.size() < 8000) {
         asr_diagnostics::CompleteIfMissingFromText(
             recordingConfig, L"Too short", "too_short");
@@ -789,7 +838,7 @@ void StopRecordingSession() {
 
     std::wstring name = AsrBackendDisplayName(recordingConfig);
     ShowHud(L"Recognizing... " + name);
-    RecognizeAsync(pcm, attemptId, recordingConfig);
+    RecognizeAsync(pcm, attemptId, recordingConfig, stopRootWindow, stopRootPid);
 }
 
 void OnRecordingWatchdogTimer() {
@@ -824,6 +873,7 @@ void OnSessionLock() {
     SetStopDelayPending(false);
     SetStopDelayHeldForRepress(false);
     SetStopDelayRestoreCapsLock(false);
+    ClearPendingStopAnchor();
 
     // Cancel and invalidate any active ASR/LLM attempt to prevent late messages from injecting text onto lock screen
     const uint64_t attemptId = ActiveAsrAttemptId();

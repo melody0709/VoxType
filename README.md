@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Current version: <code>v0.13.0</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
+  Current version: <code>v0.13.1</code> &nbsp;|&nbsp; 🇨🇳 <a href="doc/README_zh.md">中文版</a>
 </p>
 
 https://github.com/user-attachments/assets/36243dc2-cfc8-41fb-b0cf-6e558f02cd5e
@@ -282,7 +282,7 @@ CHANGELOG.md        — Version change log
 <summary><strong>Known Limitations</strong></summary>
 
 - Local, Baidu, MiMo, and MAI results are finalized after recording; Qwen, Volcano Engine, and Doubao IME can show partial HUD during recording, with final text pasted after release
-- Text injection primarily via clipboard + Ctrl+V, admin privilege windows may block
+- Text injection primarily via clipboard + Ctrl+V (or Unicode in preservation mode); when focus is lost, the foreground window switched after stop, or a read-only/shell/elevated UIPI target blocks injection, non-sensitive transcripts are automatically preserved on the clipboard and available via tray `Copy Last Transcript`
 - Model files are large (~3GB), first load takes a few seconds
 
 </details>
@@ -294,6 +294,7 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 **Recent Updates:**
 
+- **v0.13.1** — Added pre-injection target readiness and stop-anchor window-switch guards (`copy_to_clipboard_on_failure`, `clipboard_fallback_on_window_switch`), automatic clipboard fallback for non-sensitive transcripts when focus is lost/uneditable, tray menu `Copy Last Transcript`, and fixed the LLM HUD notice timer overwrite
 - **v0.11.9** — Stopped asking browsers for accessibility (which permanently slowed them down until a browser restart) and replaced the browser focused-field read with an optional Chrome/Edge companion extension over native messaging; the browser path now fails closed instead of falling back to UI Automation
 - **v0.11.8** — Added opt-in voice text cleanup (punctuation modes and CJK/Latin spacing, off by default), local learning from your own edits, and an off-by-default Doubao session-context upload; hardened the shared text, vocabulary and prompt paths so every other backend stays byte-identical by default
 - **v0.11.7** — Fixed the hotkey watchdog stop/restart loop, hardened lock cancellation and clipboard rollback, added FIR/sinc resampling with silence and utterance boundaries, and expanded offline regression checks

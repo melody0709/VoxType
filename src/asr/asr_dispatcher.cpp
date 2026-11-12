@@ -97,6 +97,8 @@ void DispatchAsrFinalText(HWND targetWindow,
     msg->primaryError = metadata.primaryError;
     msg->fallbackBackend = metadata.fallbackBackend;
     msg->selection = metadata.selection;
+    msg->stopRootWindow = metadata.stopRootWindow;
+    msg->stopRootProcessId = metadata.stopRootProcessId;
 
     if (needLlm) {
         SetLastRawAsrText(text);

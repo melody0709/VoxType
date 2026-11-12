@@ -42,7 +42,11 @@ void ApplyBatchResultMetrics(const Config& config, const AsrSessionResult& resul
 void PostDoubaoImeCredentialsUpdate(const doubao_ime_asr::Credentials& credentials, bool clear);
 void ApplyAsrSessionSideEffects(const AsrSessionResult& result);
 
-void RecognizeAsync(const std::vector<BYTE>& pcm, uint64_t attemptId, Config config);
+void RecognizeAsync(const std::vector<BYTE>& pcm,
+                    uint64_t attemptId,
+                    Config config,
+                    HWND stopRootWindow = nullptr,
+                    DWORD stopRootProcessId = 0);
 
 uint64_t BeginAsrAttempt(const Config& config, SelectionContext selection = {});
 uint64_t RecordCaptureStartFailure(const Config& config, const AudioCaptureStartFailure& failure);
@@ -57,7 +61,9 @@ std::unique_ptr<AsrAttemptFinalMessage> CompleteActiveAttemptRecording(
     uint64_t attemptId,
     const std::vector<BYTE>* pcm,
     double recordingMs,
-    size_t pcmBytes);
+    size_t pcmBytes,
+    HWND stopRootWindow = nullptr,
+    DWORD stopRootProcessId = 0);
 
 void MarkActiveAttemptFinalHandled(uint64_t attemptId);
 void HandleAsrAttemptFinal(AsrAttemptFinalMessage& msg);

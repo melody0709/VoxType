@@ -2,6 +2,17 @@
 
 > 🇬🇧 [English](../CHANGELOG.md)
 
+## v0.13.1（2026-11-12）
+
+### 焦点丢失自动保留剪贴板与注入前目标守卫
+- **注入前目标守卫（`src/platform/text_injector.*`）**：上屏文本前先校验目标焦点是否可输入，覆盖无前台窗口、非可编辑 Windows Shell 界面（保留资源管理器/桌面重命名 `Edit` 与 `VoxType.Settings` 例外）、UIPI 完整性级别/UIAccess 权限隔离，以及禁用或 `ES_READONLY` 的 `Edit`/`RichEdit` 控件。
+- **停录锚点与跨窗口切换检测（`src/app/recording_session_controller.*`、`src/app/asr_attempt_manager.*`、`src/asr/asr_dispatcher.*`）**：停止录音时记录目标顶层窗口与进程 PID（自动过滤 `VoxType.Main`、`VoxType.Hud` 与隐藏窗口，并在 150ms 误触抑制或看门狗取消时清理），在投递上屏前检测是否发生了顶层窗口切换。
+- **失败自动转存剪贴板**：目标不可注入、切窗或注入失败时，在非显式密码控件场景下（拦截 `t0` 明确敏感探针与 `t3` Win32 密码框）自动把结果保留到剪贴板（新增配置 `copy_to_clipboard_on_failure`、`clipboard_fallback_on_window_switch`，默认均开启）。旧 `WM_PASTE` 未完成时延后复制，HUD 区分等待与已复制；期间发生外部复制则取消排队复制、保留用户内容并提示托盘找回。退出时不改动旧粘贴尚未消费的数据。
+- **Unicode 目标绑定**：普通听写和两条选区改写 Unicode 路径均绑定已验证目标，在发送前或逐字发送期间切窗时拒绝继续输入。
+- **托盘菜单「复制上次识别文本」（`ID_TRAY_COPY_LAST_TRANSCRIPT`）**：在内存中保留最近一次非敏感识别文本，可随时从托盘一键重新复制，无需重新录音。
+- **修复 LLM 结果 HUD 提示被 200ms 覆盖的问题（`src/app/main_window.cpp`）**：修复 `kLlmResultMessage` 分支末尾无条件将隐藏定时器重置为 200ms、导致 2200ms 提示一闪而过的问题。
+- **单元测试补充**：扩展 `tests/clipboard_test.cpp` 与 `tests/asr_json_protocol_test.cpp`（113 项配置注册表校验、目标守卫、剪贴板兜底与替换路径测试）。
+
 ## v0.13.0（2026-10-30）
 
 ### 界面语言切换（中文 / English）
