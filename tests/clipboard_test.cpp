@@ -14,6 +14,7 @@
 
 namespace {
 bool failEmpty = false;
+int failEmptyCountdown = 0;
 bool failFlush = false;
 UINT failFormat = 0;
 UINT exclusionFormat = 0;
@@ -156,6 +157,10 @@ BOOL TestCloseClipboard() {
 
 BOOL TestEmptyClipboard() {
     ++emptyCalls;
+    if (failEmptyCountdown > 0) {
+        --failEmptyCountdown;
+        return FALSE;
+    }
     return failEmpty ? FALSE : ::EmptyClipboard();
 }
 
@@ -740,6 +745,52 @@ int main(int argc, char** argv) {
                out.reason == InjectionFailureReason::None);
         assert(pasteShortcuts == beforeSwitchShortcuts + 1);
 
+        // A password answer at delivery blocks both injection and copying even
+        // when the recording started in an ordinary, non-sensitive field.
+        testForeground = testFocus = winB;
+        ctx.stopRootWindow = winB;
+        ctx.stopRootProcessId = pidA;
+        ctx.fallbackOnWindowSwitch = true;
+        assert(selection_context::SetClipboardText(L"before sensitive", owner,
+                                                   GetClipboardSequenceNumber()).written);
+        ctx.confirmedSensitiveAtDelivery = true;
+        out = platform::PasteTextImeAwareWithOutcome(L"browser password", false, &ctx);
+        assert(!out.delivered && !out.copiedToClipboard && out.skippedDueToPassword &&
+               out.reason == InjectionFailureReason::SensitiveTarget);
+        assert(selection_context::ReadClipboardText(text) && text == L"before sensitive");
+        ctx.confirmedSensitiveAtDelivery = false;
+
+        // Clicking browser background keeps the same HWND; no keys may be sent,
+        // and protected clipboard mode must retain the fallback text.
+        g_config.restoreClipboardAfterPaste = true;
+        ctx.confirmedNoTextFocusAtDelivery = true;
+        const UINT beforeBlankUnicode = unicodeCharacters;
+        const UINT beforeBlankShortcuts = pasteShortcuts;
+        for (const bool forceUnicode : {false, true}) {
+            out = platform::PasteTextImeAwareWithOutcome(L"lost browser focus", forceUnicode, &ctx);
+            assert(!out.delivered && out.copiedToClipboard &&
+                   out.reason == InjectionFailureReason::NoTextFocus);
+            assert(selection_context::ReadClipboardText(text) && text == L"lost browser focus");
+            assert(unicodeCharacters == beforeBlankUnicode && pasteShortcuts == beforeBlankShortcuts);
+        }
+        ctx.copyToClipboardOnFailure = false;
+        out = platform::PasteTextImeAwareWithOutcome(L"fallback disabled", false, &ctx);
+        assert(!out.delivered && !out.copiedToClipboard &&
+               out.reason == InjectionFailureReason::NoTextFocus);
+        assert(selection_context::ReadClipboardText(text) && text == L"lost browser focus");
+        ctx.copyToClipboardOnFailure = true;
+        out = platform::ReplaceSelectionTextImeAwareWithOutcome(
+            SelectionContext{}, L"rewrite without browser focus", &ctx);
+        assert(!out.delivered && out.copiedToClipboard &&
+               out.reason == InjectionFailureReason::NoTextFocus);
+        assert(selection_context::ReadClipboardText(text) && text == L"rewrite without browser focus");
+        assert(unicodeCharacters == beforeBlankUnicode && pasteShortcuts == beforeBlankShortcuts);
+        ctx.confirmedSensitiveAtStart = true;
+        out = platform::PasteTextImeAwareWithOutcome(L"sensitive recording", false, &ctx);
+        assert(!out.delivered && !out.copiedToClipboard && out.skippedDueToPassword);
+        ctx.confirmedSensitiveAtStart = false;
+        ctx.confirmedNoTextFocusAtDelivery = false;
+
         testForeground = testFocus = nullptr;
         DestroyWindow(winB);
     }
@@ -859,6 +910,14 @@ int main(int argc, char** argv) {
         assert(platform::CopyTextToClipboardFallback(L"immediate fallback 2", true, false, nullptr, false)
                == ClipboardCopyStatus::Copied);
         assert(selection_context::ReadClipboardText(text) && text == L"immediate fallback 2");
+
+        // The first inner retry budget is exhausted without any sequence
+        // change. The outer fallback must still retry and recover on attempt 7.
+        failEmptyCountdown = 6;
+        assert(platform::CopyTextToClipboardFallback(L"retry after contention", true, false, nullptr, false)
+               == ClipboardCopyStatus::Copied);
+        assert(failEmptyCountdown == 0);
+        assert(selection_context::ReadClipboardText(text) && text == L"retry after contention");
 
         restoreWorker.request_stop();
         restoreWorker.join();

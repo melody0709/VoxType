@@ -18,6 +18,7 @@
 #include "browser_bridge_registration.h"
 #include "browser_target.h"
 #include "accessibility_focus.h"
+#include "input_context.h"
 
 #include <cwchar>
 #include <cwctype>
@@ -88,6 +89,7 @@ void TestFocusClassification() {
     using browser_bridge::FocusState;
     using browser_bridge::FocusStateFromFailure;
     using browser_bridge::kReasonNoWindowMatch;
+    using browser_bridge::kReasonNoFocus;
     using browser_bridge::kReasonNotConnected;
     using browser_bridge::kReasonTimeout;
     using browser_bridge::kReasonWindowAmbiguous;
@@ -117,6 +119,8 @@ void TestFocusClassification() {
 
     Expect(FocusStateFromFailure(kReasonNotConnected) == FocusState::UnknownNotConnected,
            "not_connected maps to its own unknown state");
+    Expect(FocusStateFromFailure(kReasonNoFocus) == FocusState::UnknownFocus,
+           "no_focus stays an unknown state, not a non-editable verdict");
     Expect(FocusStateFromFailure(kReasonTimeout) == FocusState::UnknownTimeout,
            "timeout maps to its own unknown state");
     // "no companion" and "companion present but the window does not line up" must
@@ -136,6 +140,66 @@ void TestFocusClassification() {
         Expect(browser_bridge::FocusStateName(state) != nullptr,
                "every focus state has a diagnostic name");
     }
+
+    using input_context::DeliveryTargetAction;
+    using input_context::DeliveryTargetActionFromProbe;
+    using input_context::SensitiveProbeAnswerFromBrowser;
+    for (const auto state : {FocusState::Safe, FocusState::UnknownNotConnected,
+                             FocusState::UnknownNoWindowMatch, FocusState::UnknownWindowAmbiguous,
+                             FocusState::UnknownQuery, FocusState::UnknownFocus,
+                             FocusState::UnknownIdentity, FocusState::UnknownNotTextInput,
+                             FocusState::UnknownTimeout}) {
+        Expect(DeliveryTargetActionFromProbe(SensitiveProbeAnswerFromBrowser(state)) ==
+                   DeliveryTargetAction::Deliver,
+               "safe and unknown browser states never become a non-editable delivery verdict");
+    }
+    Expect(DeliveryTargetActionFromProbe(
+               SensitiveProbeAnswerFromBrowser(FocusState::Sensitive)) ==
+               DeliveryTargetAction::RejectSensitive,
+           "only an explicit browser password answer rejects delivery");
+
+    browser_bridge::QueryResult blank;
+    blank.ok = blank.hasFocus = blank.identityMatched = blank.noTextFocus = true;
+    const auto blankAction = [&](const browser_bridge::QueryResult& answer) {
+        return DeliveryTargetActionFromProbe(input_context::DeliveryProbeAnswerFromBrowser(answer));
+    };
+    Expect(blankAction(blank) == DeliveryTargetAction::CopyToClipboard,
+           "a corroborated loss of DOM text focus selects clipboard fallback");
+    auto unknown = blank;
+    unknown.noTextFocus = false;
+    Expect(blankAction(unknown) == DeliveryTargetAction::Deliver,
+           "an old extension or unidentified control retains legacy input");
+    unknown = blank;
+    unknown.ok = false;
+    unknown.reason = "no_focus";
+    Expect(blankAction(unknown) == DeliveryTargetAction::Deliver,
+           "an unsuccessful query cannot assert lost text focus");
+    unknown = blank;
+    unknown.hasFocus = false;
+    Expect(blankAction(unknown) == DeliveryTargetAction::Deliver,
+           "a document without focus cannot assert a blank target");
+    unknown = blank;
+    unknown.identityMatched = false;
+    Expect(blankAction(unknown) == DeliveryTargetAction::Deliver,
+           "an unverified window cannot assert a blank target");
+    unknown = blank;
+    unknown.isTextInput = true;
+    Expect(blankAction(unknown) == DeliveryTargetAction::Deliver,
+           "an identified text input outranks contradictory blank-target evidence");
+    blank.isPassword = true;
+    Expect(blankAction(blank) == DeliveryTargetAction::RejectSensitive,
+           "password evidence always outranks lost text focus");
+
+    HWND rootA = reinterpret_cast<HWND>(1);
+    HWND rootB = reinterpret_cast<HWND>(2);
+    Expect(input_context::CanReuseDeliveryProbeAnswer(input_context::kSensitiveProbeSafe, rootA, rootA),
+           "a password probe answer is reusable for the same foreground root");
+    Expect(!input_context::CanReuseDeliveryProbeAnswer(input_context::kSensitiveProbeSafe, rootA, rootB),
+           "a foreground root mismatch invalidates the previous password answer");
+    Expect(!input_context::CanReuseDeliveryProbeAnswer(-1, rootA, rootA),
+           "an unexecuted probe has no reusable answer");
+    Expect(!input_context::CanReuseDeliveryProbeAnswer(input_context::kSensitiveProbeSafe, nullptr, rootA),
+           "an answer without a root cannot be reused");
 }
 
 void TestFramingValidation() {

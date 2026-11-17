@@ -769,6 +769,39 @@ inline int SensitiveProbeAnswerFromBrowser(browser_bridge::FocusState focus) {
     return kSensitiveProbeUnknownBrowserQuery;
 }
 
+enum class DeliveryTargetAction {
+    Deliver,
+    RejectSensitive,
+    CopyToClipboard,
+};
+
+// Delivery-only evidence; it never makes the privacy/history answer Safe.
+inline constexpr int kDeliveryProbeNoTextFocus = 26;
+
+inline int DeliveryProbeAnswerFromBrowser(const browser_bridge::QueryResult& answer) {
+    const auto focus = answer.ok
+        ? browser_bridge::ClassifyFocus(answer.isPassword, true, answer.hasFocus,
+                                       answer.identityMatched, answer.isTextInput)
+        : browser_bridge::FocusStateFromFailure(answer.reason);
+    return focus == browser_bridge::FocusState::UnknownNotTextInput && answer.noTextFocus
+        ? kDeliveryProbeNoTextFocus : SensitiveProbeAnswerFromBrowser(focus);
+}
+
+// Delivery and privacy classification are deliberately separate. Unknown focus,
+// an unrecognized control (including a closed shadow root), and query failures
+// keep the legacy path. Explicit DOM evidence of lost text focus uses fallback.
+inline DeliveryTargetAction DeliveryTargetActionFromProbe(int answer) {
+    if (answer == kSensitiveProbeSensitive) return DeliveryTargetAction::RejectSensitive;
+    if (answer == kDeliveryProbeNoTextFocus) return DeliveryTargetAction::CopyToClipboard;
+    return DeliveryTargetAction::Deliver;
+}
+
+// A password answer is valid only for the same foreground root that produced
+// it. Every actual probe answer is non-negative; -1 means "not run".
+inline bool CanReuseDeliveryProbeAnswer(int answer, HWND answerRoot, HWND currentRoot) {
+    return answer >= 0 && answerRoot && answerRoot == currentRoot;
+}
+
 // Starts a detached UI Automation probe and returns a handle that settles to
 // Sensitive, Safe, or one of the unknown codes. Callers start it when recording
 // starts and read the handle when the transcript arrives, so the probe stays off
@@ -887,6 +920,7 @@ inline const char* SensitiveFocusAnswerName(int answer) {
     case kSensitiveProbeUnknownBrowserNotTextInput: return "unknown_browser_not_text_input";
     case kSensitiveProbeUnknownBrowserNoWindowMatch: return "unknown_browser_no_window_match";
     case kSensitiveProbeUnknownBrowserWindowAmbiguous: return "unknown_browser_window_ambiguous";
+    case kDeliveryProbeNoTextFocus: return "browser_no_text_focus";
     default: return "unknown_not_settled";
     }
 }

@@ -41,6 +41,9 @@ const char* AsrResultKindDebugName(AsrResultKind kind);
 const char* AsrFailureReasonDebugName(AsrFailureReason reason);
 bool IsOperationalAsrError(const std::wstring& text);
 bool IsUsableAsrTextForContext(const std::wstring& text);
+// Recovery caching (including stale results) uses the same text classification
+// as the shared context path, plus the caller's explicit sensitive evidence.
+bool IsTranscriptRecoveryEligible(const std::wstring& text, bool sensitive);
 bool ShouldRunLlmRefine(const Config& config, const std::wstring& text);
 std::wstring AsrBackendDisplayName(const Config& config);
 const char* AsrBackendDebugName(const std::wstring& asrBackend);

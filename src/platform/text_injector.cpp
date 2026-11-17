@@ -290,15 +290,16 @@ bool IsPendingClipboardStillOurs() {
 
 bool WriteClipboardFallbackTextImmediate(const std::wstring& text, bool excludeFromHistory) {
     if (!g_mainWindow || text.empty()) return false;
-    for (int attempt = 0; attempt < 2; ++attempt) {
+    for (int attempt = 0; attempt < 3; ++attempt) {
         const DWORD seq = GetClipboardSequenceNumber();
         if (!seq) return false;
         const auto write = selection_context::SetClipboardText(
             text, g_mainWindow, seq, excludeFromHistory);
         if (write.written) return true;
-        // SetClipboardText already retries OpenClipboard contention internally;
-        // only re-attempt once with a refreshed sequence if another app bumped it.
-        if (GetClipboardSequenceNumber() == seq) break;
+        // An unchanged sequence also covers OpenClipboard/EmptyClipboard
+        // contention. Retrying only after a sequence change abandoned exactly
+        // the transient failures that the fallback is supposed to survive.
+        if (attempt + 1 < 3) Sleep(10);
     }
     return false;
 }
@@ -623,6 +624,8 @@ const char* InjectionFailureReasonName(InjectionFailureReason reason) {
     case InjectionFailureReason::NonEditableShellSurface: return "non_editable_shell_surface";
     case InjectionFailureReason::DisabledOrReadOnlyControl: return "disabled_or_readonly_control";
     case InjectionFailureReason::WindowSwitchedAfterStop: return "window_switched_after_stop";
+    case InjectionFailureReason::SensitiveTarget: return "sensitive_target";
+    case InjectionFailureReason::NoTextFocus: return "no_text_focus";
     case InjectionFailureReason::SelectionRewriteSkipped: return "selection_rewrite_skipped";
     case InjectionFailureReason::DeliveryFailed: return "delivery_failed";
     }
@@ -720,6 +723,16 @@ TargetAssessment AssessInjectionTarget(const InjectionContext* context) {
         return assessment;
     }
 
+    // Unknown focus or editability is not proof of a non-editable target.
+    if (context && context->confirmedSensitiveAtDelivery) {
+        assessment.failure = InjectionFailureReason::SensitiveTarget;
+        return assessment;
+    }
+    if (context && context->confirmedNoTextFocusAtDelivery) {
+        assessment.failure = InjectionFailureReason::NoTextFocus;
+        return assessment;
+    }
+
     HWND focus = GetFocusedWindowForForeground(fg);
     assessment.focus = focus;
 
@@ -748,10 +761,10 @@ void PopulateFallbackOutcome(InjectionOutcome& outcome,
                              const InjectionContext* context) {
     const bool shouldCopy = context ? context->copyToClipboardOnFailure
                                     : g_config.copyToClipboardOnFailure;
-    const bool confirmedSensitiveAtStart =
-        context ? context->confirmedSensitiveAtStart : false;
+    const bool confirmedSensitive =
+        context && (context->confirmedSensitiveAtStart || context->confirmedSensitiveAtDelivery);
     if (!shouldCopy) {
-        if (confirmedSensitiveAtStart || IsCurrentFocusWin32Password()) {
+        if (confirmedSensitive || IsCurrentFocusWin32Password()) {
             outcome.skippedDueToPassword = true;
         }
         return;
@@ -759,7 +772,7 @@ void PopulateFallbackOutcome(InjectionOutcome& outcome,
     const ClipboardCopyStatus copyStatus = CopyTextToClipboardFallback(
         text,
         /*excludeFromHistory=*/g_config.restoreClipboardAfterPaste,
-        confirmedSensitiveAtStart,
+        confirmedSensitive,
         &outcome.skippedDueToPassword,
         /*checkCurrentFocusPassword=*/true);
     outcome.copiedToClipboard = copyStatus == ClipboardCopyStatus::Copied;

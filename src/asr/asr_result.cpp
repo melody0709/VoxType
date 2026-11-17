@@ -107,6 +107,11 @@ bool IsUsableAsrTextForContext(const std::wstring& text) {
     return ClassifyAsrResult(text).kind == AsrResultKind::UsableText;
 }
 
+bool IsTranscriptRecoveryEligible(const std::wstring& text, bool sensitive) {
+    return !sensitive && IsUsableAsrTextForContext(text) &&
+           text.rfind(L"Qwen IME rewrite failed:", 0) != 0;
+}
+
 bool ShouldRunLlmRefine(const Config& config, const std::wstring& text) {
     return config.enableLlm
         && !config.llmEndpoint.empty()

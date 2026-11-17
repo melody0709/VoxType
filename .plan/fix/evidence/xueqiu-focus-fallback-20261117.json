@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-17",
+  "xueqiu": {
+    "blank": {
+      "delegated": false,
+      "dpr": 1.875,
+      "focus": true,
+      "noTextFocus": true,
+      "password": false,
+      "screenLeft": 0,
+      "screenTop": 0,
+      "textInput": false,
+      "value": null
+    },
+    "focused": {
+      "delegated": false,
+      "dpr": 1.875,
+      "focus": true,
+      "noTextFocus": false,
+      "password": false,
+      "screenLeft": 0,
+      "screenTop": 0,
+      "textInput": true,
+      "value": null
+    },
+    "oldBlank": {
+      "delegated": false,
+      "dpr": 1.875,
+      "focus": true,
+      "password": false,
+      "screenLeft": 0,
+      "screenTop": 0,
+      "textInput": false,
+      "value": null
+    },
+    "refocused": {
+      "delegated": false,
+      "dpr": 1.875,
+      "focus": true,
+      "noTextFocus": false,
+      "password": false,
+      "screenLeft": 0,
+      "screenTop": 0,
+      "textInput": true,
+      "value": null
+    }
+  },
+  "routed": {
+    "ok": true,
+    "noTextFocus": true,
+    "password": false
+  },
+  "shadow": {
+    "closedBody": {
+      "focus": true,
+      "delegated": false,
+      "password": false,
+      "textInput": false,
+      "noTextFocus": false,
+      "value": null,
+      "dpr": 2.5,
+      "screenLeft": 0,
+      "screenTop": 0
+    },
+    "bodyFocusWithin": false
+  }
+}

@@ -166,6 +166,20 @@ int main() {
                "self fallback must never run");
     }
 
+    // 5) 过期结果的恢复缓存与正常上下文共用文本分类，显式敏感文本不得恢复。
+    Expect(IsTranscriptRecoveryEligible(L"保留这段识别文本", false),
+           "ordinary transcript text is eligible for stale-result recovery");
+    Expect(!IsTranscriptRecoveryEligible(L"保留这段识别文本", true),
+           "sensitive transcript text is never eligible for recovery");
+    Expect(!IsTranscriptRecoveryEligible(L"", false),
+           "empty text is not cached for recovery");
+    Expect(!IsTranscriptRecoveryEligible(L"No speech detected", false),
+           "the no-speech placeholder is not cached for recovery");
+    Expect(!IsTranscriptRecoveryEligible(L"ASR failed: transport", false),
+           "operational errors are not cached as recognized speech");
+    Expect(!IsTranscriptRecoveryEligible(L"Qwen IME rewrite failed: denied", false),
+           "selection rewrite errors are not cached as recognized speech");
+
     if (g_failures != 0) {
         std::cerr << "asr_result_classification_test: " << g_failures
                   << " failure(s)\n";

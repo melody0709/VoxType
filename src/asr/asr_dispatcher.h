@@ -6,6 +6,10 @@
 #include <cstdint>
 #include <string>
 
+// Delivery-time target answers reuse input_context's probe values without
+// making this result header depend on the accessibility implementation.
+inline constexpr int kDeliveryProbeNotRun = -1;
+
 struct AsrFinalMetadata {
     uint64_t attemptId = 0;
     // Watchdog-driven recovery may continue after the primary streaming
@@ -39,6 +43,8 @@ struct AsrFinalMessage {
     SelectionContext selection;
     HWND stopRootWindow = nullptr;
     DWORD stopRootProcessId = 0;
+    int deliveryProbeAnswer = kDeliveryProbeNotRun;
+    HWND deliveryProbeRootWindow = nullptr;
 };
 
 struct LlmFinalMessage {
@@ -55,6 +61,8 @@ struct LlmFinalMessage {
     SelectionContext selection;
     HWND stopRootWindow = nullptr;
     DWORD stopRootProcessId = 0;
+    int deliveryProbeAnswer = kDeliveryProbeNotRun;
+    HWND deliveryProbeRootWindow = nullptr;
 };
 
 using AsrLlmRefineFn = void (*)(const AsrFinalMessage& finalMessage);

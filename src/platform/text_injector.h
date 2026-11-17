@@ -16,6 +16,8 @@ enum class InjectionFailureReason {
     NonEditableShellSurface,   // desktop / taskbar / Alt+Tab / lock screen / Explorer file list / VoxType HUD
     DisabledOrReadOnlyControl, // !IsWindowEnabled(...) || (Edit/RichEdit && ES_READONLY)
     WindowSwitchedAfterStop,   // t2 (stop) -> t3 (deliver) top-level foreground window changed or destroyed
+    SensitiveTarget,           // t3 probe explicitly reports a password control
+    NoTextFocus,               // browser document is focused, but no element holds text focus
     SelectionRewriteSkipped,   // ReplaceSelectionTextImeAware skipped due to selection/focus change
     DeliveryFailed,            // SendInput / PostMessageW / PasteViaClipboard failed
 };
@@ -46,6 +48,9 @@ struct InjectionContext {
     DWORD stopRootProcessId = 0;          // t2 process ID to guard against HWND reuse
     bool copyToClipboardOnFailure = true;
     bool fallbackOnWindowSwitch = true;
+    // Unknown focus/editability states continue through the legacy input path.
+    bool confirmedSensitiveAtDelivery = false;
+    bool confirmedNoTextFocusAtDelivery = false;
 };
 
 bool SendUnicodeText(const std::wstring& text, HWND expectedForeground = nullptr);

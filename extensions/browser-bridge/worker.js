@@ -199,6 +199,11 @@ function readFocusedField(valueChars) {
     ((tag === "INPUT" && /^(text|search|url|tel|email|number|password)$/.test(inputType)) ||
       tag === "TEXTAREA" ||
       el.isContentEditable === true);
+  // After a background click activeElement falls back to BODY/HTML without
+  // focus-within. A focused closed shadow host still matches :focus-within.
+  const noTextFocus = hasFocus && !editable && !delegated &&
+    (tag === "BODY" || tag === "HTML") && !el.matches(":focus-within") &&
+    document.designMode !== "on";
   let value = null;
   // Structurally guarded: a password control cannot reach the read below, so its
   // value never crosses the boundary into this worker.
@@ -208,7 +213,7 @@ function readFocusedField(valueChars) {
     else text = String(el.innerText || el.textContent || "");
     value = text.length > valueChars ? text.slice(text.length - valueChars) : text;
   }
-  return {focus: hasFocus, delegated, password, textInput: editable, value,
+  return {focus: hasFocus, delegated, password, textInput: editable, noTextFocus, value,
           dpr: devicePixelRatio, screenLeft: screen.availLeft, screenTop: screen.availTop};
 }
 
@@ -278,6 +283,7 @@ async function handleQuery(message) {
       ok: true,
       password: result.password === true,
       textInput: result.textInput === true,
+      noTextFocus: result.noTextFocus === true,
       focus: true,
       value: result.value == null ? "" : String(result.value),
       windowId: message.windowId,

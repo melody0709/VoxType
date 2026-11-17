@@ -74,3 +74,28 @@ worker 的 helloRevision/快速重连/focused 标志均已加载，但重跑矩�
 - 扩展安装仍为手动加载；商店、企业分发与设置页连接状态行不在本轮范围。
 
 参考坐标模型：[Chromium Blink Coordinate Spaces](https://www.chromium.org/developers/design-documents/blink-coordinate-spaces/)。
+
+## 2026-11-17：搜索框失焦后的剪贴板兜底
+
+在已打开的雪球文章页通过 chrome-cdp 将搜索框聚焦后失焦，确认页面仍有焦点，
+但 `activeElement` 回落到 BODY 且 `:focus-within` 为 false。旧 worker 只上报
+`textInput=false`；该状态也可能来自闭合 Shadow DOM，不能直接拒绝输入。
+桌面端因此继续发送 Unicode，SendInput 成功只代表事件入队，空白页面不会接收文字，
+已有兜底被误判的“成功”绕过。
+
+扩展新增可选布尔证据 `noTextFocus`：仅聚焦文档的 BODY/HTML、无 focus-within、
+非可编辑且非 designMode 时为 true。桌面端仅在查询成功、窗口身份匹配、
+文档持有焦点且未识别到文本控件时采纳证据，在输入合成前走已有剪贴板兜底。
+缺字段的旧扩展、闭合 Shadow DOM、断线、查询超时仍保持原投递行为；密码优先拒绝，
+录音起点为密码框时仍禁止兜底复制。历史隐私分类仍只接受明确 Safe。
+
+验证结果：`build.bat --test` 全部通过，包含私有窗口站中的剪贴板回归、浏览器桥
+分类与注册恢复、录音看门狗；24 项架构检查和 worker 契约回归通过。
+Chrome 实机执行新旧 reader，对比搜索框聚焦、失焦、重新聚焦；新路由携带
+`noTextFocus=true`，BODY 闭合 Shadow DOM 输入框不会被误判为空白。
+证据见 `.plan/fix/evidence/xueqiu-focus-fallback-20261117.json`。
+
+本次没有进行麦克风录音至 ASR 结果的完整口述验收；实机验证覆盖 DOM 与 worker 路由，
+实际兜底写入与禁止按键合成由生产 injector 的隔离回归覆盖。
+已通过规范 install 安装运行载荷并启动程序，编译产物与运行 EXE 的 SHA-256 相同；
+当前已加载的配套扩展已重载，连接页确认 `state=connected`。

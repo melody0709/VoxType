@@ -2,6 +2,15 @@
 
 > 🇨🇳 [中文版](doc/CHANGELOG_zh.md)
 
+## v0.13.2 (2026-11-15)
+
+### Delivery Privacy & Clipboard Resilience
+- **Protected clipboard preserved**: Nonstandard controls keep the original Unicode delivery path; successful input no longer overwrites the clipboard. The latest transcript remains available in memory through the tray's Copy Last Transcript action, while automatic clipboard writes remain limited to explicit failure/fallback paths.
+- **Explicit browser evidence only**: Delivery-time companion probes reject only an explicit password answer (`sensitive_target`). `no_focus`, closed Shadow DOM, unidentified controls, and transport failures remain Unknown and continue through the legacy input path rather than being misclassified as non-editable. `no_focus` now has a distinct diagnostic mapping.
+- **Correct target and stale-result recovery**: Password probes bind the current foreground window, not the stop anchor; a foreground-root mismatch invalidates the old answer and triggers a fresh probe. Results superseded by a new recording are never injected, but eligible non-sensitive text is retained for tray recovery.
+- **Clipboard contention retry**: Fallback copying retries even when the clipboard sequence is unchanged, covering transient `OpenClipboard`/`EmptyClipboard` failures instead of abandoning the first retry budget.
+- **Regression coverage**: Tests pin protected-clipboard behavior, delivery-time password refusal, browser-answer-to-delivery mapping, foreground-root invalidation, `no_focus` classification, recovery-text eligibility, and recovery after clipboard contention.
+
 ## v0.13.1 (2026-11-12)
 
 ### Clipboard Fallback on Focus Loss & Pre-Injection Guard

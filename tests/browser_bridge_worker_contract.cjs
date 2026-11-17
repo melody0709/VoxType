@@ -205,6 +205,7 @@ function element(tagName, options) {
     isContentEditable: o.isContentEditable === true,
     value: o.value,
     getAttribute: (name) => (name === "type" ? o.type || null : null),
+    matches: (selector) => selector === ":focus-within" && o.focusWithin === true,
   };
 }
 
@@ -458,6 +459,7 @@ async function testClosedShadowRootCannotBeSeenThrough() {
   expect(result.password === false, "a closed shadow root cannot be inspected");
   expect(result.textInput === false, "so it is reported as an unidentified element");
   expect(result.value === null, "and nothing is read from the host");
+  expect(result.noTextFocus === false, "an unidentified shadow host is not proof of lost text focus");
 
   // The same case through the worker: the answer must carry textInput:false so the
   // fail-closed mapping has something to reject.
@@ -468,6 +470,31 @@ async function testClosedShadowRootCannotBeSeenThrough() {
   const answer = await query(viaWorker, { type: "query", id: 8, need: "probe", windowId: 41, valueChars: 0 });
   expect(!!answer && answer.ok === true, "the message itself is delivered");
   expect(!!answer && answer.textInput === false, "and it advertises the missing identification");
+}
+
+async function testBlankPageFocusIsExplicit() {
+  const harness = loadWorker({});
+  for (const tag of ["BODY", "HTML"]) {
+    harness.context.document = {activeElement: element(tag), hasFocus: () => true};
+    const result = harness.context.readFocusedField(0);
+    expect(result.noTextFocus === true, "a focused document without an active element reports lost text focus");
+    const routed = loadWorker({windowById: WINDOW_BY_ID,
+      inject: () => [{frameId: 0, documentId: "top", result}]});
+    const answer = await query(routed, {type: "query", id: 28, need: "probe", windowId: 41});
+    expect(answer?.ok === true && answer.noTextFocus === true,
+      "the delivery evidence survives the worker reply");
+  }
+  for (const options of [{focusWithin: true}, {isContentEditable: true}]) {
+    harness.context.document = {activeElement: element("BODY", options), hasFocus: () => true};
+    expect(harness.context.readFocusedField(0).noTextFocus === false,
+      "a focused body, including a closed shadow host, or editable body is not a blank target");
+  }
+  harness.context.document = {activeElement: element("BODY"), hasFocus: () => false};
+  expect(harness.context.readFocusedField(0).noTextFocus === false,
+    "an unfocused document remains unknown rather than explicit lost text focus");
+  harness.context.document = {activeElement: element("BODY"), hasFocus: () => true, designMode: "on"};
+  expect(harness.context.readFocusedField(0).noTextFocus === false,
+    "a designMode document is not treated as a blank target");
 }
 
 async function testFrameOwnerInsideShadowRoot() {
@@ -582,6 +609,7 @@ async function testHeartbeatRequiresOpenSocket() {
   await testOpenShadowRootIsDescended();
   await testNestedOpenShadowRootsAreDescended();
   await testClosedShadowRootCannotBeSeenThrough();
+  await testBlankPageFocusIsExplicit();
   await testFrameOwnerInsideShadowRoot();
   await testFocusChangeSendsImmediately();
   await testForcedScaleWithPageZoom();

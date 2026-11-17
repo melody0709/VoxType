@@ -93,6 +93,7 @@ inline constexpr const char* kReasonNoWindowMatch = "no_window_match";   // peer
 inline constexpr const char* kReasonWindowAmbiguous = "window_ambiguous";  // 2+ windows claim the anchor
 inline constexpr const char* kReasonNoAnchor = "no_anchor";              // caller passed no HWND
 inline constexpr const char* kReasonTargetUnavailable = "target_unavailable";
+inline constexpr const char* kReasonNoFocus = "no_focus";
 inline constexpr const char* kReasonTimeout = "timeout";
 inline constexpr const char* kReasonInvalidMessage = "invalid_message";
 inline constexpr const char* kReasonDisconnected = "disconnected";
@@ -597,6 +598,7 @@ inline FocusState FocusStateFromFailure(const std::string& reason) {
     if (reason == kReasonNotConnected) return FocusState::UnknownNotConnected;
     if (reason == kReasonNoWindowMatch) return FocusState::UnknownNoWindowMatch;
     if (reason == kReasonWindowAmbiguous) return FocusState::UnknownWindowAmbiguous;
+    if (reason == kReasonNoFocus) return FocusState::UnknownFocus;
     if (reason == kReasonTimeout) return FocusState::UnknownTimeout;
     return FocusState::UnknownQuery;
 }
@@ -699,6 +701,7 @@ struct QueryResult {
     bool hasFocus = false;
     bool isPassword = false;
     bool isTextInput = false;
+    bool noTextFocus = false;
     bool identityMatched = false;
     std::wstring value;
 };
@@ -893,7 +896,7 @@ public:
             return result;
         }
         if (!detail::JsonBool(reply, "focus").value_or(false)) {
-            result.reason = "no_focus";
+            result.reason = kReasonNoFocus;
             return result;
         }
         if (!ReplyMatchesWindow(reply, anchor)) {
@@ -910,6 +913,8 @@ public:
         result.hasFocus = true;
         result.isPassword = *password;
         result.isTextInput = detail::JsonBool(reply, "textInput").value_or(false);
+        result.noTextFocus = !result.isPassword && !result.isTextInput &&
+            detail::JsonBool(reply, "noTextFocus").value_or(false);
         // A password answer never carries a value; the extension does not send one
         // and this branch guarantees the desktop never looks for one.
         if (need == Need::Field && !result.isPassword) {

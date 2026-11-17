@@ -21,6 +21,8 @@
 #include "settings.h"
 #include "text_injector.h"
 #include "input_context.h"
+#include "browser_bridge.h"
+#include "browser_target.h"
 #include "injection_ledger.h"
 #include "learning_intake.h"
 #include "ui_utils.h"
@@ -49,6 +51,75 @@ static bool s_sessionLocked = false;
 static bool s_sessionDisconnected = false;
 static std::wstring s_lastCopyableTranscript;
 
+// Chromium DOM focus and editability are not equivalent: an unanswered or
+// unrecognized target is not proof of a non-editable control. Recheck through
+// the companion for passwords and explicit lost text focus, then repost.
+// Non-browser/custom controls never use UIA for delivery decisions.
+template<typename Message>
+bool DeferDeliveryTargetProbe(std::unique_ptr<Message>& result,
+                              UINT messageId,
+                              WPARAM wParam) {
+    if (!result) return false;
+    // Password evidence belongs to the CURRENT foreground target. The stop
+    // anchor remains independent and continues to guard window switches. If the
+    // foreground changes during an asynchronous probe, discard that answer and
+    // probe the new target instead of applying it to the wrong window.
+    const HWND probeRoot = selection_context::TopLevelWindow(GetForegroundWindow());
+    if (input_context::CanReuseDeliveryProbeAnswer(result->deliveryProbeAnswer,
+                                                   result->deliveryProbeRootWindow, probeRoot)) {
+        return false;
+    }
+    if (result->deliveryProbeAnswer != kDeliveryProbeNotRun) {
+        result->deliveryProbeAnswer = kDeliveryProbeNotRun;
+        result->deliveryProbeRootWindow = nullptr;
+    }
+    if (browser_target::IdentifyWindow(probeRoot).kind != browser_target::Kind::Chromium) {
+        return false;
+    }
+    result->deliveryProbeRootWindow = probeRoot;
+    const HWND targetWindow = g_mainWindow;
+    if (!targetWindow) return false;
+
+    Message* msg = result.release();
+    try {
+        std::jthread([msg, targetWindow, messageId, wParam, probeRoot]() {
+            const browser_bridge::QueryResult answer = browser_bridge::Bridge::Instance().Query(
+                probeRoot, browser_bridge::Need::Probe, 0, input_context::kBrowserProbeDeadlineMs);
+            msg->deliveryProbeAnswer = input_context::DeliveryProbeAnswerFromBrowser(answer);
+            asr_runtime_log::Write(
+                "event=delivery_target_probe attempt=%llu answer=%s",
+                static_cast<unsigned long long>(msg->attemptId),
+                input_context::SensitiveFocusAnswerName(msg->deliveryProbeAnswer));
+            if (!PostMessageW(targetWindow, messageId, wParam, reinterpret_cast<LPARAM>(msg))) {
+                delete msg;
+            }
+        }).detach();
+    } catch (...) {
+        // No worker owns the message when thread construction itself fails.
+        // Restore it so the caller can continue through the legacy delivery path.
+        result.reset(msg);
+        return false;
+    }
+    return true;
+}
+
+static bool CacheTranscriptForRecovery(const std::wstring& text,
+                                       const Config& resultConfig,
+                                       int deliveryProbeAnswer,
+                                       bool skippedDueToPassword = false) {
+    const bool sensitiveAtStart =
+        input_context::SensitiveFocusAnswer(resultConfig.asrSensitiveProbe) ==
+        input_context::kSensitiveProbeSensitive;
+    const bool sensitiveAtDelivery =
+        input_context::DeliveryTargetActionFromProbe(deliveryProbeAnswer) ==
+        input_context::DeliveryTargetAction::RejectSensitive;
+    const bool sensitive = sensitiveAtStart || sensitiveAtDelivery || skippedDueToPassword ||
+        platform::IsCurrentFocusWin32Password();
+    if (!IsTranscriptRecoveryEligible(text, sensitive)) return false;
+    s_lastCopyableTranscript = text;
+    return true;
+}
+
 static bool DeliverFinalTextToTarget(const std::wstring& text,
                                      const Config& resultConfig,
                                      const SelectionContext& selection,
@@ -57,6 +128,7 @@ static bool DeliverFinalTextToTarget(const std::wstring& text,
                                      HWND stopRootWindow,
                                      DWORD stopRootProcessId,
                                      uint64_t attemptId,
+                                     int deliveryProbeAnswer,
                                      double* outPasteMs) {
     const bool confirmedSensitiveAtStart =
         (input_context::SensitiveFocusAnswer(resultConfig.asrSensitiveProbe) ==
@@ -79,6 +151,11 @@ static bool DeliverFinalTextToTarget(const std::wstring& text,
     injection.stopRootProcessId = stopRootProcessId;
     injection.copyToClipboardOnFailure = resultConfig.copyToClipboardOnFailure;
     injection.fallbackOnWindowSwitch = resultConfig.clipboardFallbackOnWindowSwitch;
+    const auto deliveryAction = input_context::DeliveryTargetActionFromProbe(deliveryProbeAnswer);
+    injection.confirmedSensitiveAtDelivery =
+        deliveryAction == input_context::DeliveryTargetAction::RejectSensitive;
+    injection.confirmedNoTextFocusAtDelivery =
+        deliveryAction == input_context::DeliveryTargetAction::CopyToClipboard;
 
     HiResTimer tPaste;
     const InjectionOutcome outcome = hasSelectionRewrite
@@ -88,20 +165,20 @@ static bool DeliverFinalTextToTarget(const std::wstring& text,
         *outPasteMs = tPaste.ElapsedMs();
     }
 
-    if (!confirmedSensitiveAtStart && !outcome.skippedDueToPassword &&
-        !platform::IsCurrentFocusWin32Password()) {
-        s_lastCopyableTranscript = text;
-    }
+    (void)CacheTranscriptForRecovery(text, resultConfig, deliveryProbeAnswer,
+                                     outcome.skippedDueToPassword);
 
     if (outcome.delivered) {
         if (g_hudWindow) {
             SetTimer(g_hudWindow, kHudHideTimer, 200, nullptr);
         }
         asr_runtime_log::Write(
-            "event=text_delivery attempt=%llu llm=%d rewrite=%d status=delivered",
+            "event=text_delivery attempt=%llu llm=%d rewrite=%d status=delivered backup=%d pending=%d",
             static_cast<unsigned long long>(attemptId),
             llmApplied ? 1 : 0,
-            hasSelectionRewrite ? 1 : 0);
+            hasSelectionRewrite ? 1 : 0,
+            outcome.copiedToClipboard ? 1 : 0,
+            outcome.clipboardCopyPending ? 1 : 0);
         return true;
     }
 
@@ -541,6 +618,11 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         std::unique_ptr<AsrFinalMessage> result(reinterpret_cast<AsrFinalMessage*>(lParam));
         if (result && !ShouldAcceptFinalMessage(
                 result->attemptId, result->allowCancelledAttempt)) {
+            if (CacheTranscriptForRecovery(NormalizeAsrText(result->text), result->resultConfig,
+                                           result->deliveryProbeAnswer)) {
+                asr_runtime_log::Write("event=transcript_recovery_stale attempt=%llu kind=asr",
+                                       static_cast<unsigned long long>(result->attemptId));
+            }
             return 0;
         }
         KillTimer(g_mainWindow, kStreamingWatchdogTimer);
@@ -552,6 +634,11 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             resultConfig.asrBackend == L"qwen_free" &&
             resultConfig.qwenFreeRewriteEnabled &&
             result->selection.HasCapturedSelection() && !isRewriteFailure;
+        if (wParam == 0 && !text.empty() && text != L"No speech detected" &&
+            !isError && !hasSelectionRewrite &&
+            DeferDeliveryTargetProbe(result, kAsrResultMessage, wParam)) {
+            return 0;
+        }
         if (wParam == 1 && !text.empty() && !isError) {
             g_hudIsRefining = true;
             ShowHud(L"Refining...");
@@ -576,6 +663,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                     result ? result->stopRootWindow : nullptr,
                     result ? result->stopRootProcessId : 0,
                     result ? result->attemptId : 0,
+                    result ? result->deliveryProbeAnswer : kDeliveryProbeNotRun,
                     &pasteMs);
                 VolcDebugLog("DeliverFinalText: done (%.0fms, delivered=%d)",
                              pasteMs, delivered ? 1 : 0);
@@ -634,6 +722,15 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         std::unique_ptr<LlmFinalMessage> result(reinterpret_cast<LlmFinalMessage*>(lParam));
         if (result && !ShouldAcceptFinalMessage(
                 result->attemptId, result->allowCancelledAttempt)) {
+            const bool isLlmError = result->text == L"LLM failed" ||
+                result->text.rfind(L"LLM failed:", 0) == 0;
+            const std::wstring& recoveryText =
+                isLlmError && !result->rawAsrText.empty() ? result->rawAsrText : result->text;
+            if (CacheTranscriptForRecovery(recoveryText, result->resultConfig,
+                                           result->deliveryProbeAnswer)) {
+                asr_runtime_log::Write("event=transcript_recovery_stale attempt=%llu kind=llm",
+                                       static_cast<unsigned long long>(result->attemptId));
+            }
             return 0;
         }
         const Config resultConfig = result ? result->resultConfig : g_config;
@@ -646,6 +743,10 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 resultConfig.asrBackend == L"qwen_free" &&
                 resultConfig.qwenFreeRewriteEnabled &&
                 result->selection.HasCapturedSelection();
+            if (!hasSelectionRewrite &&
+                DeferDeliveryTargetProbe(result, kLlmResultMessage, 0)) {
+                return 0;
+            }
             double pasteMs = 0.0;
             const bool delivered = DeliverFinalTextToTarget(
                 text,
@@ -656,6 +757,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 result ? result->stopRootWindow : nullptr,
                 result ? result->stopRootProcessId : 0,
                 result ? result->attemptId : 0,
+                result ? result->deliveryProbeAnswer : kDeliveryProbeNotRun,
                 &pasteMs);
 
             if (resultConfig.enableDebugMode && delivered) {
@@ -700,13 +802,9 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
         } else {
             const std::wstring fallbackRaw =
                 (result && !result->rawAsrText.empty()) ? result->rawAsrText : GetLastRawAsrText();
-            const bool confirmedSensitiveAtStart =
-                (input_context::SensitiveFocusAnswer(resultConfig.asrSensitiveProbe) ==
-                 input_context::kSensitiveProbeSensitive);
-            if (!fallbackRaw.empty() && !confirmedSensitiveAtStart &&
-                !platform::IsCurrentFocusWin32Password()) {
-                s_lastCopyableTranscript = fallbackRaw;
-            }
+            (void)CacheTranscriptForRecovery(
+                fallbackRaw, resultConfig,
+                result ? result->deliveryProbeAnswer : kDeliveryProbeNotRun);
             if (g_hudWindow) {
                 SetTimer(g_hudWindow, kHudHideTimer, 2200, nullptr);
             }
